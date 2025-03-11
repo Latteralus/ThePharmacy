@@ -1,0 +1,55 @@
+{
+  "name": "thepharmacy",
+  "version": "1.0.0",
+  "main": "electron-main.js",
+  "description": "Pharmacy management simulation game",
+  "author": "",
+  "license": "ISC",
+  "homepage": "https://github.com/Latteralus/ThePharmacy#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Latteralus/ThePharmacy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Latteralus/ThePharmacy/issues"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "dist": "electron-builder --win --x64",
+    "publish": "electron-builder --publish always"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.1"
+  },
+  "dependencies": {
+    "electron-log": "^5.3.2",
+    "electron-updater": "^6.3.9"
+  },
+  "build": {
+    "appId": "com.yourcompany.thepharmacy",
+    "productName": "ThePharmacy",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Latteralus",
+        "repo": "ThePharmacy",
+        "releaseType": "release"
+      }
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    }
+  }
+}

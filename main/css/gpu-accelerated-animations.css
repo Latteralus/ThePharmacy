@@ -1,0 +1,489 @@
+/* gpu-accelerated-animations.css */
+/* High-performance animations using GPU acceleration */
+
+/* Base styles for elements that will be animated */
+.animated-element {
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    will-change: transform, opacity, width;
+}
+
+/* Progress bar base */
+.progress-container {
+    position: relative;
+    width: 100%;
+    height: 12px;
+    background-color: #f0f0f0;
+    border-radius: 6px;
+    overflow: hidden;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* Progress bar fill with GPU acceleration */
+.progress-fill {
+    position: absolute;
+    height: 100%;
+    left: 0;
+    top: 0;
+    background-color: #4caf50;
+    border-radius: 6px;
+    /* Use transform instead of width for better performance */
+    transform-origin: left center;
+    transform: scaleX(0);
+    will-change: transform;
+    transition: transform 0.3s linear;
+}
+
+/* Progress bar container with percentage */
+.progress-bar-container {
+    position: relative;
+    width: 100%;
+    margin: 10px 0;
+}
+
+/* Progress bar percentage */
+.progress-percentage {
+    position: absolute;
+    right: 0;
+    top: -18px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Time remaining counter */
+.time-remaining {
+    margin-top: 5px;
+    font-size: 11px;
+    color: #666;
+    text-align: right;
+}
+
+/* Task status indicator */
+.task-status {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.task-status.pending {
+    background-color: #ff9800;
+}
+
+.task-status.in-progress {
+    background-color: #2196f3;
+    animation: pulse 2s infinite;
+}
+
+.task-status.completed {
+    background-color: #4caf50;
+}
+
+/* Smooth pulse animation for active tasks */
+@keyframes pulse {
+    0% {
+        opacity: 0.7;
+        transform: scale(0.95);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    100% {
+        opacity: 0.7;
+        transform: scale(0.95);
+    }
+}
+
+/* Timer/clock animation */
+.countdown-timer {
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    display: inline-flex;
+    align-items: center;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: content;
+}
+
+.countdown-timer::before {
+    content: "⏱️";
+    margin-right: 5px;
+    animation: tick 1s infinite steps(1);
+}
+
+@keyframes tick {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Customer status transitions */
+.customer-status {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: background-color;
+    transition: background-color 0.5s ease;
+}
+
+.customer-status.waiting {
+    background-color: #ff9800;
+}
+
+.customer-status.in-progress {
+    background-color: #2196f3;
+}
+
+.customer-status.completed {
+    background-color: #4caf50;
+}
+
+/* Smooth transition for employee status changes */
+.employee-status {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: background-color, color;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.employee-status.busy {
+    background-color: #fff3e0;
+    color: #ff9800;
+}
+
+.employee-status.available {
+    background-color: #e8f5e9;
+    color: #4caf50;
+}
+
+/* Smoother scrolling for lists */
+.scrollable-list {
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* For task cards that appear/disappear */
+.task-card {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform, opacity;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.task-card.new {
+    animation: slide-in 0.3s ease forwards;
+}
+
+.task-card.removing {
+    animation: slide-out 0.3s ease forwards;
+}
+
+@keyframes slide-in {
+    0% {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slide-out {
+    0% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+}
+
+/* Efficient opacity transitions */
+.fade-element {
+    opacity: 1;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: opacity;
+    transition: opacity 0.3s ease;
+}
+
+.fade-element.fading {
+    opacity: 0;
+}
+
+/* Progress bar with transform-based animation */
+.transform-progress-bar {
+    width: 100%;
+    height: 10px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+.transform-progress-fill {
+    height: 100%;
+    background-color: #4caf50;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    /* Use transform instead of width for better performance */
+    transform-origin: left;
+    transform: scaleX(0);
+    will-change: transform;
+    transition: transform 0.3s linear;
+}
+
+/* Task progress bar styles */
+.task-progress-bar {
+    margin: 10px 0;
+    position: relative;
+    font-size: 12px;
+}
+
+.progress-track {
+    height: 10px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+}
+
+.progress-track .progress-fill {
+    height: 100%;
+    background-color: #4caf50;
+    width: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Use transform for hardware acceleration */
+    transform-origin: left;
+    will-change: transform;
+    /* Use transform-based transitions instead of width */
+    transition: transform 0.3s linear;
+}
+
+/* Customer countdown timer */
+.patience-timer {
+    position: relative;
+    width: 100%;
+    height: 4px;
+    background-color: #e0e0e0;
+    margin-top: 5px;
+    overflow: hidden;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+}
+
+.patience-timer-fill {
+    position: absolute;
+    height: 100%;
+    width: 100%;
+    background-color: #f44336;
+    transform-origin: left;
+    /* Start full width and shrink */
+    transform: scaleX(1);
+    will-change: transform;
+    transition: transform 1s linear;
+}
+
+/* Employee mood indicator with smooth transitions */
+.mood-indicator {
+    font-size: 18px;
+    transition: transform 0.3s ease;
+    display: inline-block;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+.mood-indicator:hover {
+    transform: scale(1.2);
+}
+
+/* Real-time notification badges */
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 18px;
+    height: 18px;
+    background-color: #f44336;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: bold;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform, opacity;
+    /* Animation for new notifications */
+    animation: badge-pulse 0.3s ease;
+}
+
+@keyframes badge-pulse {
+    0% {
+        transform: scale(0);
+    }
+    80% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Real-time game clock with smooth animation */
+.game-time {
+    font-weight: bold;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: content;
+}
+
+/* Smooth transitions for financial values */
+.financial-value {
+    transition: color 0.3s ease;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: color, content;
+}
+
+.financial-value.increasing {
+    color: #4caf50;
+}
+
+.financial-value.decreasing {
+    color: #f44336;
+}
+
+/* Optimized spinner for loading states */
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    /* Hardware acceleration */
+    transform: translateZ(0);
+    will-change: transform;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Helper classes for transform-based animations */
+.gpu-animated {
+    /* Enable GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+}
+
+.gpu-scale {
+    transition: transform 0.3s ease;
+    will-change: transform;
+}
+
+.gpu-scale:hover {
+    transform: scale(1.05);
+}
+
+.gpu-slide {
+    transition: transform 0.3s ease;
+    will-change: transform;
+}
+
+.gpu-slide.slide-left {
+    transform: translateX(-100%);
+}
+
+.gpu-slide.slide-right {
+    transform: translateX(100%);
+}
+
+.gpu-fade {
+    transition: opacity 0.3s ease;
+    will-change: opacity;
+}
+
+.gpu-fade.fade-out {
+    opacity: 0;
+}
+
+/* Special effects for customer arrival/departure */
+.customer-enter {
+    animation: customer-enter 0.5s ease forwards;
+}
+
+.customer-leave {
+    animation: customer-leave 0.5s ease forwards;
+}
+
+@keyframes customer-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes customer-leave {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+}
+
+/* Utility class to apply GPU acceleration to any element */
+.gpu-accelerated {
+    /* Force GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    will-change: transform, opacity;
+}

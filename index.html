@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';">
+  <title>The Pharmacy Sim</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #1a237e;
+      color: white;
+    }
+    
+    .container {
+      text-align: center;
+      padding: 2rem;
+      border-radius: 8px;
+      background-color: #283593;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+    }
+    
+    h1 {
+      margin-bottom: 1.5rem;
+      font-size: 2.5rem;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: white;
+      font-size: 1.5rem;
+    }
+    
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    button {
+      padding: 1rem 2rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      background-color: #4051b5;
+      color: white;
+    }
+    
+    button:hover {
+      background-color: #5c6bc0;
+    }
+    
+    button.new-game {
+      background-color: #4caf50;
+    }
+    
+    button.new-game:hover {
+      background-color: #66bb6a;
+    }
+    
+    button.load-game {
+      background-color: #2196f3;
+    }
+    
+    button.load-game:hover {
+      background-color: #42a5f5;
+    }
+    
+    .version {
+      margin-top: 2rem;
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+
+    /* Panel Styles */
+    .game-panel {
+      display: none;
+      background-color: #3949ab;
+      padding: 1.5rem;
+      border-radius: 6px;
+      margin-top: 1.5rem;
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+
+    .panel-visible {
+      display: block;
+    }
+
+    .back-button {
+      background-color: #f44336;
+      margin-top: 1rem;
+    }
+
+    .back-button:hover {
+      background-color: #e57373;
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+
+    input[type="text"], 
+    select {
+      width: 100%;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 4px;
+      background-color: #e8eaf6;
+      color: #424242;
+      font-size: 1rem;
+    }
+
+    .save-list {
+      background-color: #e8eaf6;
+      border-radius: 4px;
+      color: #424242;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+
+    .save-item {
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      border-bottom: 1px solid #c5cae9;
+    }
+
+    .save-item:hover {
+      background-color: #c5cae9;
+    }
+
+    .save-meta {
+      font-size: 0.8rem;
+      color: #757575;
+      margin-top: 0.25rem;
+    }
+
+    .no-saves {
+      padding: 1rem;
+      text-align: center;
+      color: #757575;
+    }
+
+    .start-button {
+      width: 100%;
+      background-color: #4caf50;
+      margin-top: 1rem;
+    }
+
+    .start-button:hover {
+      background-color: #66bb6a;
+    }
+
+    .delete-button {
+      background-color: #f44336;
+      padding: 0.5rem 1rem;
+      font-size: 0.9rem;
+      margin-left: 0.5rem;
+      float: right;
+    }
+
+    .delete-button:hover {
+      background-color: #e57373;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>The Pharmacy Simulator</h1>
+    
+    <div id="main-menu" class="buttons">
+      <button class="new-game" id="newGameBtn">New Game</button>
+      <button class="load-game" id="loadGameBtn">Load Game</button>
+      <button id="settingsBtn">Settings</button>
+      <button id="exitBtn">Exit</button>
+    </div>
+
+    <!-- New Game Panel -->
+    <div id="new-game-panel" class="game-panel">
+      <h2>Start New Game</h2>
+      <form id="new-game-form">
+        <div class="form-group">
+          <label for="pharmacy-name">Pharmacy Name:</label>
+          <input type="text" id="pharmacy-name" placeholder="Enter pharmacy name" required>
+        </div>
+        <div class="form-group">
+          <label for="difficulty">Difficulty:</label>
+          <select id="difficulty">
+            <option value="easy">Easy</option>
+            <option value="normal" selected>Normal</option>
+            <option value="hard">Hard</option>
+            <option value="expert">Expert</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="starting-capital">Starting Capital:</label>
+          <select id="starting-capital">
+            <option value="low">Low ($50,000)</option>
+            <option value="medium" selected>Medium ($100,000)</option>
+            <option value="high">High ($200,000)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="location">Location:</label>
+          <select id="location">
+            <option value="urban">Urban Center</option>
+            <option value="suburban" selected>Suburban Area</option>
+            <option value="rural">Rural Community</option>
+          </select>
+        </div>
+        <button type="submit" class="start-button">Start Game</button>
+        <button type="button" class="back-button" id="new-game-back">Back to Main Menu</button>
+      </form>
+    </div>
+
+    <!-- Load Game Panel -->
+    <div id="load-game-panel" class="game-panel">
+      <h2>Load Saved Game</h2>
+      <div class="save-list" id="save-list">
+        <!-- Saved games will be populated dynamically -->
+        <div class="no-saves">No saved games found</div>
+      </div>
+      <button class="back-button" id="load-game-back">Back to Main Menu</button>
+    </div>
+    
+    <div class="version">
+      Version 1.0.0
+    </div>
+  </div>
+
+  <script>
+    // Get references to elements
+    const mainMenu = document.getElementById('main-menu');
+    const newGamePanel = document.getElementById('new-game-panel');
+    const loadGamePanel = document.getElementById('load-game-panel');
+    const saveList = document.getElementById('save-list');
+    
+    // Button event handlers for main menu
+    document.getElementById('newGameBtn').addEventListener('click', () => {
+      mainMenu.style.display = 'none';
+      newGamePanel.classList.add('panel-visible');
+    });
+    
+    document.getElementById('loadGameBtn').addEventListener('click', () => {
+      mainMenu.style.display = 'none';
+      loadGamePanel.classList.add('panel-visible');
+      loadSavedGames();
+    });
+    
+    document.getElementById('settingsBtn').addEventListener('click', () => {
+      window.location.href = 'settings.html';
+    });
+    
+    document.getElementById('exitBtn').addEventListener('click', () => {
+      // Send message to main process to quit the app
+      window.gameAPI.quit();
+    });
+
+    // Back buttons
+    document.getElementById('new-game-back').addEventListener('click', () => {
+      newGamePanel.classList.remove('panel-visible');
+      mainMenu.style.display = 'flex';
+    });
+
+    document.getElementById('load-game-back').addEventListener('click', () => {
+      loadGamePanel.classList.remove('panel-visible');
+      mainMenu.style.display = 'flex';
+    });
+
+    // New game form submission
+    document.getElementById('new-game-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      
+      const gameData = {
+        pharmacyName: document.getElementById('pharmacy-name').value,
+        difficulty: document.getElementById('difficulty').value,
+        startingCapital: document.getElementById('starting-capital').value,
+        location: document.getElementById('location').value,
+        dateCreated: new Date().toISOString()
+      };
+      
+      // Start new game with this data
+      startGame(gameData);
+    });
+
+    // Function to load saved games
+    async function loadSavedGames() {
+      try {
+        // Load saved games using Electron's gameAPI
+        const savedGames = await window.gameAPI.getSavedGames();
+        
+        // Render saved games list
+        if (savedGames.length > 0) {
+          saveList.innerHTML = '';
+          
+          savedGames.forEach((save, index) => {
+            const saveDate = new Date(save.lastSaved || save.dateCreated);
+            const formattedDate = saveDate.toLocaleDateString() + ' ' + saveDate.toLocaleTimeString();
+            
+            const saveItem = document.createElement('div');
+            saveItem.className = 'save-item';
+            saveItem.innerHTML = `
+              <div>${save.pharmacyName || 'Unnamed Pharmacy'}</div>
+              <div class="save-meta">
+                ${formattedDate} • ${save.difficulty || 'Normal'} • $${formatMoney(save.cash || 0)}
+                <button class="delete-button" data-index="${index}">Delete</button>
+              </div>
+            `;
+            
+            // Add click handler for loading the game
+            saveItem.addEventListener('click', (event) => {
+              // Ignore clicks on the delete button
+              if (event.target.classList.contains('delete-button')) {
+                return;
+              }
+              
+              loadGame(save);
+            });
+            
+            saveList.appendChild(saveItem);
+          });
+          
+          // Add delete handlers
+          const deleteButtons = document.querySelectorAll('.delete-button');
+          deleteButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+              event.stopPropagation();
+              const index = event.target.getAttribute('data-index');
+              deleteSavedGame(index);
+            });
+          });
+        } else {
+          saveList.innerHTML = '<div class="no-saves">No saved games found</div>';
+        }
+      } catch (error) {
+        console.error('Error loading saved games:', error);
+        saveList.innerHTML = '<div class="no-saves">Error loading saved games</div>';
+      }
+    }
+
+    // Function to format money amounts
+    function formatMoney(amount) {
+      return new Intl.NumberFormat('en-US').format(amount);
+    }
+
+    // Function to delete a saved game
+    async function deleteSavedGame(index) {
+      if (confirm('Are you sure you want to delete this saved game? This cannot be undone.')) {
+        try {
+          // Delete the saved game through Electron's gameAPI
+          await window.gameAPI.deleteSavedGame(index);
+          
+          // Reload the saved games list
+          loadSavedGames();
+        } catch (error) {
+          console.error('Error deleting saved game:', error);
+          alert('Error deleting saved game');
+        }
+      }
+    }
+
+    // Function to start a new game
+    function startGame(gameData) {
+      // Store initial game data and launch main.html with the Electron API
+      window.gameAPI.startNewGame(gameData)
+        .then(() => {
+          window.location.href = 'main.html?mode=new';
+        })
+        .catch(error => {
+          console.error('Error starting new game:', error);
+          alert('Error starting new game');
+        });
+    }
+
+    // Function to load an existing game
+    function loadGame(saveData) {
+      // Load the game with the Electron API
+      window.gameAPI.loadGame(saveData)
+        .then(() => {
+          window.location.href = 'main.html?mode=load';
+        })
+        .catch(error => {
+          console.error('Error loading game:', error);
+          alert('Error loading game');
+        });
+    }
+  </script>
+  <script>
+    // Electron integration
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check if Electron APIs are available
+      if (!window.gameAPI) {
+        console.error('Electron gameAPI not found. Are you running outside Electron?');
+        document.body.innerHTML = `
+          <div style="color: red; padding: 20px; text-align: center;">
+            <h2>Error: Electron API Not Available</h2>
+            <p>This application requires Electron to run properly.</p>
+          </div>
+        `;
+        return;
+      }
+    });
+
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      document.body.innerHTML = `
+        <div style="color: red; padding: 20px;">
+          Error: ${event.error.message}<br>
+          Stack: ${event.error.stack}
+        </div>
+      `;
+      console.error('Application error:', event.error);
+      
+      // Log to Electron's main process
+      if (window.gameAPI && window.gameAPI.logError) {
+        window.gameAPI.logError({
+          message: event.error.message,
+          stack: event.error.stack
+        });
+      }
+    });
+  </script>
+</body>
+</html>

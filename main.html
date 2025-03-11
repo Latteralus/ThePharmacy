@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Pharmacy Sim</title>
+  <!-- Use main/ prefix consistently for all resources -->
+  <link rel="stylesheet" href="main/css/style.css">
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Debug script for troubleshooting -->
+  <script src="main/js/debug.js"></script>
+
+  <!-- Add bootstrap script first to handle initialization -->
+  <script src="main/js/game-bootstrap.js"></script>
+
+  <!-- Add game initializer next - it needs to be available before game logic -->
+  <script src="main/js/gameInitializer.js"></script>
+
+  <!-- Load the game initialization script -->
+  <script src="main/js/main.js"></script>
+
+  <!-- Load data modules -->
+  <script src="main/js/data/names.js"></script>
+  <script src="main/js/data/employees.js"></script>
+  <script src="main/js/data/products.js"></script>
+  <script src="main/js/data/materials.js"></script>
+  <script src="main/js/data/equipment.js"></script>
+  <script src="main/js/data/insurance.js"></script>
+  <script src="main/js/data/research.js"></script>
+  <script src="main/js/data/helpers.js"></script>
+  <script src="main/js/data/finances.js"></script>
+
+  <!-- Load core game modules -->
+  <script src="main/js/ui.js"></script>
+  <script src="main/js/taskManager.js"></script>
+  <script src="main/js/taskAssignment.js"></script>
+  <script src="main/js/production.js"></script>
+  <script src="main/js/customers.js"></script>
+  <script src="main/js/prescriptions.js"></script>
+  <script src="main/js/insuranceClaims.js"></script>
+  <script src="main/js/timeEvents.js"></script>
+  <script src="main/js/taskbars.js"></script>
+  <script src="main/js/brandReputation.js"></script>
+  
+  <!-- Load UI components -->
+  <script src="main/components/topBar.js"></script>
+  <script src="main/components/sideBar.js"></script>
+  <script src="main/components/panel.js"></script>
+  <script src="main/modals/modal.js"></script>
+  
+  <!-- Load page renderers -->
+  <script src="main/js/pages/dashboardPage.js"></script>
+  <script src="main/js/pages/operationsPage.js"></script>
+  <script src="main/js/pages/employeesPage.js"></script>
+  <script src="main/js/pages/customersPage.js"></script>
+  <script src="main/js/pages/ordersPage.js"></script>
+  <script src="main/js/pages/inventoryPage.js"></script>
+  <script src="main/js/pages/marketplacePage.js"></script>
+  <script src="main/js/pages/equipmentPage.js"></script>
+  <script src="main/js/pages/financesPage.js"></script>
+  <script src="main/js/pages/researchPage.js"></script>
+  <script src="main/js/pages/marketingPage.js"></script>
+  <script src="main/js/pages/statisticsPage.js"></script>
+  <script src="main/js/pages/settingsPage.js"></script>
+
+  <!-- Electron integration script -->
+  <script src="main/js/electron-integration.js"></script>
+
+  <!-- Global error handler with Electron logging support -->
+  <script>
+    window.addEventListener('error', (event) => {
+      document.body.innerHTML = `
+        <div style="color: red; padding: 20px;">
+          <h2>Application Error</h2>
+          <p><strong>Message:</strong> ${event.error.message}</p>
+          <p><strong>Stack:</strong> ${event.error.stack}</p>
+          <button onclick="window.location.href='index.html'" style="margin-top: 20px; padding: 10px 20px; background-color: #1a237e; color: white; border: none; border-radius: 4px; cursor: pointer;">Return to Main Menu</button>
+        </div>
+      `;
+      console.error('Application error:', event.error);
+      
+      // Log to main process if available
+      if (window.gameAPI && window.gameAPI.logError) {
+        window.gameAPI.logError({
+          message: event.error.message,
+          stack: event.error.stack
+        });
+      }
+    });
+
+    // Unhandled promise rejection handler
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      
+      // Log to main process if available
+      if (window.gameAPI && window.gameAPI.logError) {
+        window.gameAPI.logError({
+          message: 'Unhandled promise rejection',
+          details: event.reason.toString(),
+          stack: event.reason.stack || 'No stack trace available'
+        });
+      }
+    });
+
+    // Wait for everything to load and check if initialization completed
+    window.addEventListener('load', function() {
+      console.log("Window load event triggered - checking if initialization completed");
+      
+      // Check if the game started properly
+      setTimeout(function() {
+        // Look for signs that the game is already initialized
+        const topBarExists = document.querySelector('.top-bar');
+        const sidebarExists = document.querySelector('.sidebar');
+        
+        // If the game interface is not visible, try fallback initialization
+        if (!topBarExists || !sidebarExists) {
+          console.log("Game interface not detected - running fallback initialization");
+          
+          // Create a fallback initialization button
+          const fallbackButton = document.createElement('div');
+          fallbackButton.style.position = 'fixed';
+          fallbackButton.style.top = '50%';
+          fallbackButton.style.left = '50%';
+          fallbackButton.style.transform = 'translate(-50%, -50%)';
+          fallbackButton.style.padding = '20px';
+          fallbackButton.style.backgroundColor = '#1a237e';
+          fallbackButton.style.color = 'white';
+          fallbackButton.style.borderRadius = '8px';
+          fallbackButton.style.cursor = 'pointer';
+          fallbackButton.style.textAlign = 'center';
+          fallbackButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+          fallbackButton.style.zIndex = '9999';
+          fallbackButton.innerHTML = `
+            <h3 style="margin-top: 0;">Game Initialization Issue</h3>
+            <p>The game interface didn't load correctly.</p>
+            <button id="try-fallback" style="padding: 10px 20px; background-color: #4caf50; color: white; border: none; border-radius: 4px; margin: 10px; cursor: pointer;">Try Manual Initialization</button>
+            <button id="go-back" style="padding: 10px 20px; background-color: #f44336; color: white; border: none; border-radius: 4px; margin: 10px; cursor: pointer;">Return to Main Menu</button>
+          `;
+          
+          document.body.appendChild(fallbackButton);
+          
+          // Add event listeners to buttons
+          document.getElementById('try-fallback').addEventListener('click', function() {
+            if (window.runFallbackInitialization) {
+              window.runFallbackInitialization();
+              fallbackButton.style.display = 'none';
+            } else {
+              console.error("Fallback initialization function not found");
+              alert("Fallback initialization function not found. Returning to main menu.");
+              window.location.href = 'index.html';
+            }
+          });
+          
+          document.getElementById('go-back').addEventListener('click', function() {
+            window.location.href = 'index.html';
+          });
+        }
+      }, 3000); // Wait 3 seconds after load to check
+    });
+  </script>
+
+  <!-- Fallback path finder for debugging -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Try to diagnose path issues
+      console.log("Checking for path issues...");
+      
+      // Log current directory information
+      console.log("Document location:", window.location.href);
+      console.log("Document path:", window.location.pathname);
+      
+      // Try to fetch a simple file to test paths
+      fetch('./js/debug.js')
+        .then(response => {
+          console.log("Successfully fetched debug.js:", response.status);
+        })
+        .catch(error => {
+          console.error("Failed to fetch debug.js:", error);
+          
+          // Try an alternative path
+          console.log("Trying alternative path...");
+          fetch('/js/debug.js')
+            .then(response => {
+              console.log("Alternative path successful:", response.status);
+            })
+            .catch(altError => {
+              console.error("Alternative path also failed:", altError);
+            });
+        });
+        
+      // Check if we're in an Electron environment
+      if (window.gameAPI) {
+        console.log("Electron environment detected");
+        
+        // Try to get app directory information through the preload API
+        if (window.gameAPI.getAppPath) {
+          window.gameAPI.getAppPath()
+            .then(appPath => {
+              console.log("App path from Electron:", appPath);
+            })
+            .catch(error => {
+              console.error("Failed to get app path:", error);
+            });
+        }
+      } else {
+        console.log("Not running in Electron environment");
+      }
+    });
+  </script>
+</body>
+</html>

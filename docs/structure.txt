@@ -1,0 +1,83 @@
+
+3/7/2025
+# PharmaSim Project Structure
+
+## Root Directory
+/PharmaSim
+├── package.json             # Electron app configuration and dependencies
+├── main.js                 # Electron main process entry point
+├── preload.js              # Preload script for renderer process
+├── LICENSE                 # Project licensing information
+├── README.md               # Project overview and documentation
+├── INSTALL.md              # Installation instructions
+
+## Source Code Directories
+├── src/                    # Main source code directory
+│   ├── renderer/           # Renderer process (frontend) code
+│   │   ├── index.html      # Main HTML entry point
+│   │   ├── styles/         # CSS stylesheets
+│   │   │   └── main.css
+│   │   └── js/             # Frontend JavaScript files
+│   │       ├── main.js
+│   │       ├── ui.js
+│   │       └── ... (other frontend scripts)
+│   │
+│   ├── main/               # Main game logic
+│   │   ├── js/             # Game logic JavaScript files
+│   │   │   ├── gameLogic.js
+│   │   │   ├── timeEvents.js
+│   │   │   ├── taskManager.js
+│   │   │   └── ... (other game logic scripts)
+│   │   │
+│   │   └── data/           # Game data and configuration
+│   │       ├── names.js
+│   │       ├── products.js
+│   │       └── ... (other data files)
+│   │
+│   └── assets/             # Static assets
+│       ├── images/
+│       ├── icons/
+│       └── fonts/
+
+## Build and Distribution
+├── build/                  # Build output directory
+│   ├── win/                # Windows build
+│   ├── mac/                # macOS build
+│   └── linux/              # Linux build
+
+## Development Tools
+├── scripts/                # Build and development scripts
+│   ├── build.js
+│   ├── dev.js
+│   └── package.js
+
+## Configuration and Docs
+├── docs/                   # Documentation
+│   ├── README.md
+│   ├── INSTALL.md
+│   └── CHANGELOG.md
+
+## Testing
+├── tests/                  # Unit and integration tests
+│   ├── main/
+│   └── renderer/
+
+## Node Modules
+├── node_modules/           # npm dependencies
+
+## Electron Packaging
+├── forge.config.js         # Electron Forge configuration
+└── .gitignore
+
+## Recent Updates
+- Migrated from browser-based to Electron desktop application
+- Added multi-platform build support
+- Restructured project for Electron architecture
+- Updated build and packaging scripts
+- Enhanced installation and documentation
+
+## Upcoming Features
+- Electron auto-update implementation
+- Cross-platform build optimizations
+- Enhanced logging and error reporting
+- Performance improvements for desktop environment

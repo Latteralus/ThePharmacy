@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - The Pharmacy Simulator</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f6fa;
+      color: #2c3e50;
+    }
+    
+    .settings-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      color: #1a237e;
+      margin: 0;
+    }
+    
+    .back-button {
+      padding: 0.5rem 1rem;
+      background-color: #1a237e;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.2s;
+    }
+    
+    .back-button:hover {
+      background-color: #283593;
+    }
+    
+    .settings-group {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1.5rem;
+      padding: 1.5rem;
+    }
+    
+    .settings-group h2 {
+      margin-top: 0;
+      color: #1a237e;
+      font-size: 1.3rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #f5f5f5;
+    }
+    
+    .setting-item:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    
+    .setting-label {
+      font-weight: 500;
+    }
+    
+    .setting-description {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 0.25rem;
+    }
+    
+    .setting-control {
+      min-width: 200px;
+    }
+    
+    input[type="range"] {
+      width: 100%;
+    }
+    
+    input[type="number"] {
+      width: 60px;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    select {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: white;
+    }
+    
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+    }
+    
+    input[type="checkbox"] {
+      margin-right: 0.5rem;
+    }
+    
+    .save-button {
+      width: 100%;
+      padding: 1rem;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    .save-button:hover {
+      background-color: #388E3C;
+    }
+    
+    .reset-button {
+      width: 100%;
+      padding: 1rem;
+      background-color: #F44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: background-color 0.2s;
+    }
+    
+    .reset-button:hover {
+      background-color: #D32F2F;
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-container">
+    <div class="header">
+      <h1>Settings</h1>
+      <button class="back-button" id="backBtn">Back to Main Menu</button>
+    </div>
+    
+    <form id="settingsForm">
+      <!-- Game Settings -->
+      <div class="settings-group">
+        <h2>Game Settings</h2>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Simulation Speed</div>
+            <div class="setting-description">Control how fast time passes in the game</div>
+          </div>
+          <div class="setting-control">
+            <select id="simulationSpeed" name="simulationSpeed">
+              <option value="0.5">0.5x (Slow)</option>
+              <option value="1.0" selected>1.0x (Normal)</option>
+              <option value="2.0">2.0x (Fast)</option>
+              <option value="5.0">5.0x (Very Fast)</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Difficulty</div>
+            <div class="setting-description">Affects customer frequency, costs, and more</div>
+          </div>
+          <div class="setting-control">
+            <select id="difficulty" name="difficulty">
+              <option value="easy">Easy</option>
+              <option value="normal" selected>Normal</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Auto-save Interval</div>
+            <div class="setting-description">How often the game automatically saves (in minutes)</div>
+          </div>
+          <div class="setting-control">
+            <input type="number" id="autoSaveInterval" name="autoSaveInterval" min="1" max="60" value="5">
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Auto-save Enabled</div>
+          </div>
+          <div class="setting-control">
+            <div class="checkbox-wrapper">
+              <input type="checkbox" id="autoSaveEnabled" name="autoSaveEnabled" checked>
+              <label for="autoSaveEnabled">Enable automatic saving</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Audio Settings -->
+      <div class="settings-group">
+        <h2>Audio Settings</h2>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Music Volume</div>
+          </div>
+          <div class="setting-control">
+            <input type="range" id="musicVolume" name="musicVolume" min="0" max="100" value="50">
+            <span id="musicVolumeValue">50%</span>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Sound Effects Volume</div>
+          </div>
+          <div class="setting-control">
+            <input type="range" id="sfxVolume" name="sfxVolume" min="0" max="100" value="50">
+            <span id="sfxVolumeValue">50%</span>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Enable Music</div>
+          </div>
+          <div class="setting-control">
+            <div class="checkbox-wrapper">
+              <input type="checkbox" id="musicEnabled" name="musicEnabled" checked>
+              <label for="musicEnabled">Play background music</label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Enable Sound Effects</div>
+          </div>
+          <div class="setting-control">
+            <div class="checkbox-wrapper">
+              <input type="checkbox" id="sfxEnabled" name="sfxEnabled" checked>
+              <label for="sfxEnabled">Play sound effects</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Display Settings -->
+      <div class="settings-group">
+        <h2>Display Settings</h2>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">UI Scale</div>
+            <div class="setting-description">Adjust the size of the user interface</div>
+          </div>
+          <div class="setting-control">
+            <select id="uiScale" name="uiScale">
+              <option value="0.8">80% (Small)</option>
+              <option value="1.0" selected>100% (Normal)</option>
+              <option value="1.2">120% (Large)</option>
+              <option value="1.5">150% (Very Large)</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Color Theme</div>
+          </div>
+          <div class="setting-control">
+            <select id="colorTheme" name="colorTheme">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+              <option value="pharmacy" selected>Pharmacy Blue</option>
+              <option value="high-contrast">High Contrast</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="setting-item">
+          <div>
+            <div class="setting-label">Enable Fullscreen</div>
+            <div class="setting-description">Run the game in fullscreen mode</div>
+          </div>
+          <div class="setting-control">
+            <div class="checkbox-wrapper">
+              <input type="checkbox" id="fullscreenEnabled" name="fullscreenEnabled">
+              <label for="fullscreenEnabled">Use fullscreen mode</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Save Button -->
+      <button class="save-button" type="submit">Save Settings</button>
+      
+      <!-- Reset Button -->
+      <button class="reset-button" type="button" id="resetBtn">Reset to Defaults</button>
+    </form>
+  </div>
+
+  <script>
+    // Get references to form elements
+    const settingsForm = document.getElementById('settingsForm');
+    const backBtn = document.getElementById('backBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const musicVolumeInput = document.getElementById('musicVolume');
+    const sfxVolumeInput = document.getElementById('sfxVolume');
+    const musicVolumeValue = document.getElementById('musicVolumeValue');
+    const sfxVolumeValue = document.getElementById('sfxVolumeValue');
+    
+    // Update volume display values
+    musicVolumeInput.addEventListener('input', () => {
+      musicVolumeValue.textContent = `${musicVolumeInput.value}%`;
+    });
+    
+    sfxVolumeInput.addEventListener('input', () => {
+      sfxVolumeValue.textContent = `${sfxVolumeInput.value}%`;
+    });
+    
+    // Load saved settings
+    async function loadSettings() {
+      try {
+        // Check if we're running in Electron
+        if (window.gameAPI) {
+          const savedSettings = await window.gameAPI.getSettings();
+          if (savedSettings) {
+            applySettings(savedSettings);
+          }
+        } else {
+          // Fallback for non-Electron environment
+          const settingsJson = localStorage.getItem('pharmacySettings');
+          if (settingsJson) {
+            const savedSettings = JSON.parse(settingsJson);
+            applySettings(savedSettings);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    }
+    
+    // Apply loaded settings to form
+    function applySettings(settings) {
+      // Game settings
+      if (settings.simulationSpeed) {
+        document.getElementById('simulationSpeed').value = settings.simulationSpeed;
+      }
+      
+      if (settings.difficulty) {
+        document.getElementById('difficulty').value = settings.difficulty;
+      }
+      
+      if (settings.autoSaveInterval) {
+        document.getElementById('autoSaveInterval').value = settings.autoSaveInterval;
+      }
+      
+      if (settings.hasOwnProperty('autoSaveEnabled')) {
+        document.getElementById('autoSaveEnabled').checked = settings.autoSaveEnabled;
+      }
+      
+      // Audio settings
+      if (settings.musicVolume !== undefined) {
+        document.getElementById('musicVolume').value = settings.musicVolume;
+        document.getElementById('musicVolumeValue').textContent = `${settings.musicVolume}%`;
+      }
+      
+      if (settings.sfxVolume !== undefined) {
+        document.getElementById('sfxVolume').value = settings.sfxVolume;
+        document.getElementById('sfxVolumeValue').textContent = `${settings.sfxVolume}%`;
+      }
+      
+      if (settings.hasOwnProperty('musicEnabled')) {
+        document.getElementById('musicEnabled').checked = settings.musicEnabled;
+      }
+      
+      if (settings.hasOwnProperty('sfxEnabled')) {
+        document.getElementById('sfxEnabled').checked = settings.sfxEnabled;
+      }
+      
+      // Display settings
+      if (settings.uiScale) {
+        document.getElementById('uiScale').value = settings.uiScale;
+      }
+      
+      if (settings.colorTheme) {
+        document.getElementById('colorTheme').value = settings.colorTheme;
+      }
+      
+      if (settings.hasOwnProperty('fullscreenEnabled')) {
+        document.getElementById('fullscreenEnabled').checked = settings.fullscreenEnabled;
+      }
+    }
+    
+    // Save settings
+    async function saveSettings(formData) {
+      try {
+        const settings = {
+          // Game settings
+          simulationSpeed: parseFloat(formData.get('simulationSpeed')),
+          difficulty: formData.get('difficulty'),
+          autoSaveInterval: parseInt(formData.get('autoSaveInterval')),
+          autoSaveEnabled: formData.get('autoSaveEnabled') === 'on',
+          
+          // Audio settings
+          musicVolume: parseInt(formData.get('musicVolume')),
+          sfxVolume: parseInt(formData.get('sfxVolume')),
+          musicEnabled: formData.get('musicEnabled') === 'on',
+          sfxEnabled: formData.get('sfxEnabled') === 'on',
+          
+          // Display settings
+          uiScale: parseFloat(formData.get('uiScale')),
+          colorTheme: formData.get('colorTheme'),
+          fullscreenEnabled: formData.get('fullscreenEnabled') === 'on'
+        };
+        
+        // Save to Electron or localStorage
+        if (window.gameAPI) {
+          await window.gameAPI.updateSettings(settings);
+        } else {
+          // Fallback for non-Electron environment
+          localStorage.setItem('pharmacySettings', JSON.stringify(settings));
+        }
+        
+        alert('Settings saved successfully!');
+      } catch (error) {
+        console.error('Error saving settings:', error);
+        alert('Error saving settings');
+      }
+    }
+    
+    // Reset settings to defaults
+    function resetSettings() {
+      const defaultSettings = {
+        // Game settings
+        simulationSpeed: '1.0',
+        difficulty: 'normal',
+        autoSaveInterval: 5,
+        autoSaveEnabled: true,
+        
+        // Audio settings
+        musicVolume: 50,
+        sfxVolume: 50,
+        musicEnabled: true,
+        sfxEnabled: true,
+        
+        // Display settings
+        uiScale: '1.0',
+        colorTheme: 'pharmacy',
+        fullscreenEnabled: false
+      };
+      
+      // Apply default settings to form
+      applySettings(defaultSettings);
+    }
+    
+    // Event listeners
+    settingsForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const formData = new FormData(settingsForm);
+      saveSettings(formData);
+    });
+    
+    backBtn.addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+    
+    resetBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to reset all settings to defaults?')) {
+        resetSettings();
+      }
+    });
+    
+    // Load settings when page loads
+    document.addEventListener('DOMContentLoaded', loadSettings);
+    
+    // Handle Electron integration
+    document.addEventListener('keydown', (event) => {
+      // Check for Alt+Enter to toggle fullscreen
+      if (event.altKey && event.key === 'Enter') {
+        const fullscreenCheckbox = document.getElementById('fullscreenEnabled');
+        fullscreenCheckbox.checked = !fullscreenCheckbox.checked;
+        
+        // Apply fullscreen change if in Electron
+        if (window.gameAPI && window.gameAPI.toggleFullscreen) {
+          window.gameAPI.toggleFullscreen();
+        }
+      }
+      
+      // Escape key to go back
+      if (event.key === 'Escape') {
+        window.location.href = 'index.html';
+      }
+    });
+  </script>
+  <script>
+    window.addEventListener('error', (event) => {
+      document.body.innerHTML = `
+        <div style="color: red; padding: 20px;">
+          Error: ${event.error.message}<br>
+          Stack: ${event.error.stack}
+        </div>
+      `;
+      console.error('Application error:', event.error);
+    });
+  </script>
+</body>
+</html>
