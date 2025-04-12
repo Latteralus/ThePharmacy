@@ -5,8 +5,7 @@ const { autoUpdater } = require('electron-updater');
 const gameIntegration = require('./game-integration');
 const log = require('electron-log');
 const { initializeIPC } = require('./main/ipcMain');
-// Later in createWindow()
-initializeIPC(mainWindow);
+
 
 // Configure electron-log
 log.transports.file.level = 'info';
@@ -105,6 +104,8 @@ function createWindow() {
     log[logLevel](`[Renderer] ${message} (${sourceId}:${line})`);
   });
   
+  // Initialize the IPC handlers after the window is created
+  initializeIPC(mainWindow);
   return mainWindow;
 }
 
