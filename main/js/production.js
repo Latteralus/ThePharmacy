@@ -1,14 +1,17 @@
-// /js/production.js
-
-window.production = (function() {
-
+/**
+ * @fileoverview This file handles the production of "compound" products in the game. 
+ * It manages the process of creating products from their ingredients, 
+ * checking material availability from the inventory, and creating production tasks.
+ * Now uses the functions and data from the inventory.js file.
+ */
+(function() {
     // Function to check if a product can be compounded based on material availability
     function canCompound(product) {
         if (!product) return false;
   
         for (let ingredient of product.ingredients) {
-            const material = window.materialsData.find(m => m.id === ingredient.id);
-            if (!material || material.inventory < ingredient.quantity) {
+            const material = window.inventory.materialsData.find(m => m.id === ingredient.id);
+            if (!material || material.quantity < ingredient.quantity) {
                 console.log(`[production.js] Not enough ${material ? material.name : 'unknown material'} to compound ${product.name}`);
                 return false;
             }
@@ -67,8 +70,8 @@ window.production = (function() {
                     
                     // Log material shortage details
                     for (let ingredient of product.ingredients) {
-                        const material = window.materialsData.find(m => m.id === ingredient.id);
-                        if (!material || material.inventory < ingredient.quantity) {
+                        const material = window.inventory.materialsData.find(m => m.id === ingredient.id);
+                        if (!material || material.quantity < ingredient.quantity) {
                             console.log(`[production.js] Material shortage: ${material ? material.name : 'unknown material'}, needed: ${ingredient.quantity}, available: ${material ? material.inventory : 0}`); // ADDED LOG - Material shortage
                         }
                     }
@@ -87,9 +90,9 @@ window.production = (function() {
             if (product) {
                 // Deduct materials used in compounding
                 product.ingredients.forEach(ingredient => {
-                    const material = window.materialsData.find(m => m.id === ingredient.id);
+                    const material = window.inventory.materialsData.find(m => m.id === ingredient.id);
                     if (material) {
-                        material.inventory -= ingredient.quantity * task.quantityToMake;
+                        material.quantity -= ingredient.quantity * task.quantityToMake;
                     }
                 });
     
@@ -189,4 +192,4 @@ window.production = (function() {
         init
     };
   
-})();
+}());

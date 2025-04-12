@@ -1,19 +1,27 @@
-// Modified main.js to ensure proper initialization and time flow
+/** 
+ * @fileoverview This file serves as the primary entry point for the game application. 
+ * It orchestrates the main game loop, manages the simulation's time flow, 
+ * and coordinates the interactions between various game systems. It initializes 
+ * the game state, handles time-based updates, and controls the rendering of the UI.
+ */
 
-// Set the desired starting date and time (year, month (0-indexed), day, hour, minute)
-const startDate = new Date(2023, 0, 1, 7, 0);
+import { initializeNewGame } from './gameInitialization.js';
+import { gameState } from './gameInitialization.js';
+import { taskManager } from './taskManager.js';
+import { ui } from './ui.js';
+import { timeEvents } from './timeEvents.js';
 
 // Game configuration
 const GAME_CONFIG = {
-    SIMULATION_SPEED: 1.0, // Default game speed multiplier
-    GAME_MINUTE_IN_MS: 1000, // 1 second real time = 1 minute game time
-    FIXED_TIMESTEP: 1000 / 60, // 60 fps for logic updates
-    MAX_UPDATES_PER_FRAME: 10, // Prevent spiral of death if browser freezes temporarily
-    END_DAY_HOUR: 22 // 10 PM is end of day
+    SIMULATION_SPEED: 1.0, 
+    GAME_MINUTE_IN_MS: 1000, 
+    FIXED_TIMESTEP: 1000 / 60, 
+    MAX_UPDATES_PER_FRAME: 10, 
+    END_DAY_HOUR: 22 
 };
 
-// Global flag to track if the game has been initialized
-window.isGameInitialized = false;
+// Initialize the game state (now always happens)
+initializeNewGame();
 
 // The main game loop using requestAnimationFrame
 function gameLoop(timestamp) {
@@ -21,17 +29,16 @@ function gameLoop(timestamp) {
     if (!window.gameState.lastFrameTime) {
         window.gameState.lastFrameTime = timestamp;
         window.gameState.lastSimulationTime = timestamp;
-        window.gameState.renderInfo.lastFpsUpdate = timestamp;
+        gameState.renderInfo.lastFpsUpdate = timestamp;
         requestAnimationFrame(gameLoop);
         return;
     }
     
     // Calculate delta time (time since last frame)
-    const deltaTime = timestamp - window.gameState.lastFrameTime;
-    window.gameState.lastFrameTime = timestamp;
+    const deltaTime = timestamp - gameState.lastFrameTime;
+    gameState.lastFrameTime = timestamp;
     
-    // Only run simulation if game is active and not paused
-    if (window.gameState.isDayActive && !window.gameState.isPaused) {
+    if (gameState.isDayActive && !gameState.isPaused) {
         // Run the simulation updates with fixed timestep for stability
         updateSimulation(timestamp);
     }
@@ -46,17 +53,17 @@ function gameLoop(timestamp) {
 // Update game simulation with fixed timestep
 function updateSimulation(timestamp) {
     // Calculate time since last simulation update
-    const simulationDelta = timestamp - window.gameState.lastSimulationTime;
+    const simulationDelta = timestamp - gameState.lastSimulationTime;
     
     // Initialize simulationAccumulator if it doesn't exist
-    if (window.gameState.simulationAccumulator === undefined) {
-        window.gameState.simulationAccumulator = 0;
+    if (gameState.simulationAccumulator === undefined) {
+        gameState.simulationAccumulator = 0;
     }
     
-    window.gameState.simulationAccumulator += simulationDelta;
-    window.gameState.lastSimulationTime = timestamp;
+    gameState.simulationAccumulator += simulationDelta;
+    gameState.lastSimulationTime = timestamp;
     
-    console.log(`[main] Simulation update, accumulator: ${window.gameState.simulationAccumulator.toFixed(2)}ms`);
+    console.log(`[main] Simulation update, accumulator: ${gameState.simulationAccumulator.toFixed(2)}ms`);
     
     // Limit updates to prevent spiral of death
     let updates = 0;
@@ -68,17 +75,18 @@ function updateSimulation(timestamp) {
         
         console.log(`[main] Advancing game time by ${gameTimeDelta.toFixed(2)}ms (${(gameTimeDelta / (60 * 1000)).toFixed(2)} game minutes)`);
         
-        try {
-            // Update the game time
-            updateGameTime(gameTimeDelta);
-        } catch (error) {
-            console.error("[main] Error in updateGameTime:", error);
+        // Update the game time with error handling
+        try {                
+             updateGameTime(gameTimeDelta);
+        } catch (error) {            
+            console.error("[main] Error in gameTime:", error);
+            
         }
         
-        // Decrement the accumulator
-        window.gameState.simulationAccumulator -= GAME_CONFIG.FIXED_TIMESTEP;
+        gameState.simulationAccumulator -= GAME_CONFIG.FIXED_TIMESTEP;
         updates++;
     }
+
 }
 
 // Update the game time
@@ -86,38 +94,38 @@ function updateGameTime(msElapsed) {
     // Make sure currentDate exists before trying to modify it
     if (!window.gameState.currentDate) {
         window.gameState.currentDate = new Date(startDate.getTime());
-        console.warn("[main] currentDate was undefined, initializing with startDate");
+        console.warn("[main] currentDate was undefined, initializing with gameState.currentDate");
     }
     
     // Advance the game time
-    window.gameState.currentDate.setTime(window.gameState.currentDate.getTime() + msElapsed);
+    gameState.currentDate.setTime(gameState.currentDate.getTime() + msElapsed);
     
     // Convert milliseconds to minutes for task updates
     const minutesElapsed = msElapsed / (60 * 1000);
     
-    // ALWAYS update tasks with the exact time elapsed - add safety checks
-    if (window.taskManager && typeof window.taskManager.updateTasks === 'function' && minutesElapsed > 0) {
+    
+    if (taskManager && typeof taskManager.updateTasks === 'function' && minutesElapsed > 0) {
         try {
-            window.taskManager.updateTasks(minutesElapsed);
+            taskManager.updateTasks(minutesElapsed);
         } catch (error) {
             console.error("[main] Error updating tasks:", error);
-        }
+        }        
     }
     
     // Check for end of day (22:00 is 10 PM)
-    const currentHour = window.gameState.currentDate.getHours();
-    const currentMinute = window.gameState.currentDate.getMinutes();
+    const currentHour = gameState.currentDate.getHours();
+    const currentMinute = gameState.currentDate.getMinutes();
     
     if (currentHour === GAME_CONFIG.END_DAY_HOUR && currentMinute === 0) {
         // Trigger end of day only once
-        if (window.gameState.isDayActive) {
+        if (gameState.isDayActive) {
             console.log("End of day reached");
             window.gameState.isDayActive = false; // Stop advancing time
-            if (window.timeEvents && typeof window.timeEvents.endOfDay === 'function') {
+            if (timeEvents && typeof timeEvents.endOfDay === 'function') {
                 try {
-                    window.timeEvents.endOfDay(window.gameState);
-                } catch (error) {
-                    console.error("[main] Error in endOfDay event:", error);
+                    timeEvents.endOfDay(window.gameState);
+                } catch (error) {                    
+                     console.error("[main] Error in endOfDay event:", error);
                 }
             }
         }
@@ -125,13 +133,13 @@ function updateGameTime(msElapsed) {
         // Run minute checks at the appropriate frequency
         const minuteDelta = Math.floor(msElapsed / (60 * 1000)); // Convert ms to minutes
         
-        if (minuteDelta > 0 && window.timeEvents && typeof window.timeEvents.minuteCheck === 'function') {
+        if (minuteDelta > 0 && timeEvents && typeof timeEvents.minuteCheck === 'function') {
             try {
                 for (let i = 0; i < minuteDelta; i++) {
-                    window.timeEvents.minuteCheck(window.gameState);
+                    timeEvents.minuteCheck(gameState);
                 }
             } catch (error) {
-                console.error("[main] Error in minuteCheck event:", error);
+               console.error("[main] Error in minuteCheck event:", error);
             }
         }
     }
@@ -141,18 +149,30 @@ function updateGameTime(msElapsed) {
 function renderUI() {
     try {
         // Update the time display
-        if (window.ui && typeof window.ui.updateTime === 'function') {
-            window.ui.updateTime();
+        if (ui && typeof ui.updateTime === 'function'){
+            try {
+                ui.updateTime();
+            } catch (error) {
+                console.error("[main] Error updating UI time:", error);
+            }
         }
         
         // Update any progress bars
         if (typeof window.updateTaskProgressBars === 'function') {
-            window.updateTaskProgressBars();
+            try {
+                window.updateTaskProgressBars();
+            } catch (error) {
+                console.error("[main] Error updating task progress bars:", error);
+            }
         }
         
         // Update any countdown timers
         if (typeof window.updateCountdownTimers === 'function') {
-            window.updateCountdownTimers();
+            try {
+                window.updateCountdownTimers();
+            } catch (error) {
+                console.error("[main] Error updating countdown timers:", error);
+            }
         }
     } catch (error) {
         console.error("[main] Error in renderUI:", error);
@@ -167,45 +187,18 @@ window.setGameSpeed = function(speedMultiplier) {
 
 // Pause/resume game simulation
 window.toggleGamePause = function() {
-    window.gameState.isPaused = !window.gameState.isPaused;
-    console.log(`Game ${window.gameState.isPaused ? 'paused' : 'resumed'}`);
+    gameState.isPaused = !gameState.isPaused;
+    console.log(`Game ${gameState.isPaused ? 'paused' : 'resumed'}`);
     
-    // Reset accumulators when resuming to prevent sudden jumps
-    if (!window.gameState.isPaused) {
-        window.gameState.lastFrameTime = performance.now();
-        window.gameState.lastSimulationTime = performance.now();
-        window.gameState.simulationAccumulator = 0;
+     if (!gameState.isPaused) {
+        gameState.lastFrameTime = performance.now();
+        gameState.lastSimulationTime = performance.now();
+        gameState.simulationAccumulator = 0;
     }
 };
 
 // Expose the game loop for external use
 window.gameLoop = gameLoop;
-
-// Check if we need to initialize the game state manually (fallback)
-if (!window.isGameInitialized && typeof window.initializeNewGame !== 'function') {
-    console.log("Initializing game state directly from main.js (fallback)");
-    
-    // Initialize minimal game state for fallback
-    window.gameState = {
-        currentDate: new Date(startDate.getTime()),
-        dayIndex: 0,
-        isDayActive: true,
-        isPaused: false,
-        simulationAccumulator: 0,
-        lastFrameTime: 0,
-        lastSimulationTime: 0,
-        renderInfo: {
-            fps: 0,
-            frameCount: 0,
-            lastFpsUpdate: 0
-        },
-        pharmacyName: "Default Pharmacy",
-        difficulty: "normal",
-        location: "suburban"
-    };
-    
-    window.isGameInitialized = true;
-}
 
 // Define the showPage function if it doesn't exist
 if (typeof window.showPage !== 'function') {
@@ -235,10 +228,8 @@ if (typeof window.showPage !== 'function') {
         
         if (typeof window[rendererName] === 'function') {
             try {
-                // Call the page renderer
                 window[rendererName](mainContent);
                 console.log(`Rendered page: ${pageName}`);
-                
                 // Dispatch custom event that page has changed (for components that need to react)
                 const event = new CustomEvent('pageChanged', { 
                     detail: { page: pageName } 
@@ -275,20 +266,19 @@ setInterval(() => {
     lastFrameTime = now;
     
     // Add safety checks for all gameState properties
-    const gameTimeStr = window.gameState?.currentDate instanceof Date 
-        ? window.gameState.currentDate.toLocaleTimeString() 
+    const gameTimeStr = gameState?.currentDate instanceof Date 
+        ? gameState.currentDate.toLocaleTimeString() 
         : 'unknown';
     
     console.log(`[main] Game loop health check: ${elapsed}ms since last frame, ` +
                 `FPS: ${fps.toFixed(1)}, ` +
                 `game time: ${gameTimeStr}`);
     
-    // Check if game is paused or day is inactive
-    if (window.gameState?.isPaused) {
+    if (gameState?.isPaused) {
         console.log("[main] Game is currently PAUSED");
     }
     
-    if (!window.gameState?.isDayActive) {
+    if (!gameState?.isDayActive) {
         console.log("[main] Day is currently INACTIVE");
     }
 }, 5000);
