@@ -404,5 +404,5 @@ window.customers = {
     }
 };
 
-// Run stuck customer detection every 2 minutes
-setInterval(() => window.customers.detectAndFixStuckCustomers(), 2 * 60 * 1000);
+// Stuck-customer detection runs as part of taskManager.js's single
+// integrity-check timer, not on its own interval here.

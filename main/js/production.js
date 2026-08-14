@@ -23,7 +23,7 @@ window.production = (function() {
         const reducedTime = Math.max(Math.ceil(originalTime / 2), 1); // Ensure minimum of 1 minute
         
         const compoundTask = {
-            id: `compound-${product.id}`, // Removed timestamp
+            id: `compound-${product.id}-${Date.now()}`,
             type: 'compound',
             productId: product.id,
             productName: product.name,
@@ -80,6 +80,34 @@ window.production = (function() {
         });
     }
   
+    // Refresh the inventory UI, falling back through whatever update path is
+    // actually available (used after any task completion that changes stock).
+    function refreshInventoryUI() {
+        if (typeof window.updateUI === 'function') {
+            window.updateUI('inventory');
+            return;
+        }
+
+        console.log("[production.js] window.updateUI function not found. Inventory UI may need manual refresh.");
+
+        if (typeof window.ui !== 'undefined' && typeof window.ui.updateInventory === 'function') {
+            window.ui.updateInventory();
+        } else if (typeof window.updateInventoryDisplay === 'function') {
+            window.updateInventoryDisplay();
+        } else if (window.currentPage === 'inventory' && typeof window.renderInventoryPage === 'function') {
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent) {
+                window.renderInventoryPage(mainContent);
+            }
+        }
+
+        try {
+            document.dispatchEvent(new CustomEvent('inventoryUpdated'));
+        } catch (error) {
+            console.error('[production.js] Error dispatching inventoryUpdated event:', error);
+        }
+    }
+
     // Function to handle task completion (called by taskManager when a task is finalized)
     function handleTaskCompletion(task) {
         if (task.type === 'compound') {
@@ -92,37 +120,13 @@ window.production = (function() {
                         material.inventory -= ingredient.quantity * task.quantityToMake;
                     }
                 });
-    
+
                 // Increase product inventory
                 product.inventory += task.quantityToMake;
                 console.log(`[production.js] Compounding completed for ${task.quantityToMake} units of ${product.name}. Inventory updated.`);
-                
-                // Check if updateUI function exists before calling it
-                if (typeof window.updateUI === 'function') {
-                    window.updateUI('inventory');
-                } else {
-                    console.log("[production.js] window.updateUI function not found. Inventory UI may need manual refresh.");
-                    
-                    // Fallback UI update methods
-                    if (typeof window.ui !== 'undefined' && typeof window.ui.updateInventory === 'function') {
-                        window.ui.updateInventory();
-                    } else if (typeof window.updateInventoryDisplay === 'function') {
-                        window.updateInventoryDisplay();
-                    } else if (window.currentPage === 'inventory' && typeof window.renderInventoryPage === 'function') {
-                        const mainContent = document.querySelector('.main-content');
-                        if (mainContent) {
-                            window.renderInventoryPage(mainContent);
-                        }
-                    }
-                    
-                    // Dispatch a custom event for any listeners
-                    try {
-                        document.dispatchEvent(new CustomEvent('inventoryUpdated'));
-                    } catch (error) {
-                        console.error('[production.js] Error dispatching inventoryUpdated event:', error);
-                    }
-                }
-    
+
+                refreshInventoryUI();
+
                 // Check if this compound task was for a prescription
                 if (task.prescriptionId) {
                     console.log(`[production.js] Compound task ${task.id} was for prescription ${task.prescriptionId}. Creating fill task.`);
@@ -140,32 +144,8 @@ window.production = (function() {
                 // Decrease product inventory as it's used to fill prescriptions
                 product.inventory -= task.quantityNeeded;
                 console.log(`[production.js] ${task.quantityNeeded} units of ${product.name} used to fill prescription. Inventory updated.`);
-                
-                // Check if updateUI function exists before calling it
-                if (typeof window.updateUI === 'function') {
-                    window.updateUI('inventory');
-                } else {
-                    console.log("[production.js] window.updateUI function not found. Inventory UI may need manual refresh.");
-                    
-                    // Fallback UI update methods
-                    if (typeof window.ui !== 'undefined' && typeof window.ui.updateInventory === 'function') {
-                        window.ui.updateInventory();
-                    } else if (typeof window.updateInventoryDisplay === 'function') {
-                        window.updateInventoryDisplay();
-                    } else if (window.currentPage === 'inventory' && typeof window.renderInventoryPage === 'function') {
-                        const mainContent = document.querySelector('.main-content');
-                        if (mainContent) {
-                            window.renderInventoryPage(mainContent);
-                        }
-                    }
-                    
-                    // Dispatch a custom event for any listeners
-                    try {
-                        document.dispatchEvent(new CustomEvent('inventoryUpdated'));
-                    } catch (error) {
-                        console.error('[production.js] Error dispatching inventoryUpdated event:', error);
-                    }
-                }
+
+                refreshInventoryUI();
             }
         }
     }

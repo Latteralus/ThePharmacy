@@ -354,25 +354,10 @@ function renderEmployeesPage(mainContent) {
                 taskSection.appendChild(taskInfo);
                 
                 // Progress bar
-                const progressContainer = document.createElement('div');
-                progressContainer.className = 'progress-container';
-                
-                const progressLabel = document.createElement('div');
-                progressLabel.className = 'progress-label';
-                progressLabel.textContent = `Progress: ${task.progress}/${task.totalTime} min`;
-                progressContainer.appendChild(progressLabel);
-                
-                const progressBar = document.createElement('div');
-                progressBar.className = 'progress-bar';
-                
-                const progressFill = document.createElement('div');
-                progressFill.className = 'progress-fill';
-                progressFill.style.width = `${(task.progress / task.totalTime) * 100}%`;
-                
-                progressBar.appendChild(progressFill);
-                progressContainer.appendChild(progressBar);
-                
-                taskSection.appendChild(progressContainer);
+                if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
+                    taskSection.appendChild(window.taskbars.createProgressBar(task));
+                }
+
                 card.appendChild(taskSection);
             }
         }

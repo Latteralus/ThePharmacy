@@ -197,26 +197,8 @@ window.renderOperationsPage = function (mainContent) {
                     empCard.appendChild(taskInfo);
 
                     // --- PROGRESS BAR ---
-                    if (task.status === 'inProgress' && task.totalTime > 0) {
-                        const progressBarLabel = document.createElement('p');
-                        progressBarLabel.style.marginTop = '0.25rem';
-                        progressBarLabel.textContent = 'Progress:';
-                        empCard.appendChild(progressBarLabel);
-
-                        // Create a progress element
-                        const progressBar = document.createElement('progress');
-                        progressBar.value = task.progress;       // current progress
-                        progressBar.max = task.totalTime;        // total minutes
-                        progressBar.style.width = '100%';
-                        empCard.appendChild(progressBar);
-
-                        // Add time estimate
-                        const timeLeft = task.totalTime - task.progress;
-                        const timeEstimate = document.createElement('small');
-                        timeEstimate.style.display = 'block';
-                        timeEstimate.style.color = '#666';
-                        timeEstimate.textContent = `Est. time remaining: ${timeLeft} minutes`;
-                        empCard.appendChild(timeEstimate);
+                    if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
+                        empCard.appendChild(window.taskbars.createProgressBar(task));
                     }
                 } else {
                     taskInfo.textContent = 'Current Task: Error - Not Found';
@@ -376,22 +358,8 @@ window.renderOperationsPage = function (mainContent) {
                 }
 
                 // Progress bar for in-progress tasks
-                if (task.status === 'inProgress' && task.totalTime > 0) {
-                    const taskProgressLabel = document.createElement('p');
-                    taskProgressLabel.textContent = 'Progress:';
-                    taskDiv.appendChild(taskProgressLabel);
-
-                    const taskProgressBar = document.createElement('progress');
-                    taskProgressBar.value = task.progress;
-                    taskProgressBar.max = task.totalTime;
-                    taskProgressBar.style.width = '100%';
-                    taskDiv.appendChild(taskProgressBar);
-
-                    // Time remaining
-                    const timeLeftLabel = document.createElement('small');
-                    timeLeftLabel.style.display = 'block';
-                    timeLeftLabel.textContent = `${task.progress} / ${task.totalTime} minutes`;
-                    taskDiv.appendChild(timeLeftLabel);
+                if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
+                    taskDiv.appendChild(window.taskbars.createProgressBar(task));
                 }
 
                 tasksList.appendChild(taskDiv);

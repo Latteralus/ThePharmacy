@@ -763,30 +763,28 @@ window.taskManager = (function() {
                 }
             });
             
-            // 4. Check for customers who have been waiting too long
+            // 4. Check for customers who have been waiting too long. This is
+            // the one place stuck-customer detection runs (customers.js used
+            // to also run it on its own 2-minute timer, which was redundant).
+            const customerWaitThreshold = 15 * 60 * 1000; // 15 minutes
+
             if (window.customers && window.customers.activeCustomers) {
-                const customerWaitThreshold = 15 * 60 * 1000; // 15 minutes
-                
                 window.customers.activeCustomers.forEach(customer => {
-                    if (!customer) return; // Skip null/undefined customers
-                    
-                    if (customer.lastStateChange) {
-                        const waitTime = now - customer.lastStateChange;
-                        
-                        if (waitTime > customerWaitThreshold) {
-                            console.warn(`Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has been in state "${customer.status}" for ${Math.round(waitTime / 60000)} minutes`);
-                            
-                            // Trigger customer check if it's available
-                            if (window.customers && typeof window.customers.detectAndFixStuckCustomers === 'function') {
-                                try {
-                                    window.customers.detectAndFixStuckCustomers();
-                                } catch (error) {
-                                    console.error(`Error detecting and fixing stuck customers: ${error.message}`);
-                                }
-                            }
-                        }
+                    if (!customer || !customer.lastStateChange) return;
+
+                    const waitTime = now - customer.lastStateChange;
+                    if (waitTime > customerWaitThreshold) {
+                        console.warn(`Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has been in state "${customer.status}" for ${Math.round(waitTime / 60000)} minutes`);
                     }
                 });
+            }
+
+            if (window.customers && typeof window.customers.detectAndFixStuckCustomers === 'function') {
+                try {
+                    window.customers.detectAndFixStuckCustomers();
+                } catch (error) {
+                    console.error(`Error detecting and fixing stuck customers: ${error.message}`);
+                }
             }
             
             // 5. Check for progress anomalies
