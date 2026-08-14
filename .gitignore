@@ -28,5 +28,10 @@ Thumbs.db
 dist/
 build/
 
+# Test output
+test-results/
+playwright-report/
+coverage/
+
 # Other
 *.env.*

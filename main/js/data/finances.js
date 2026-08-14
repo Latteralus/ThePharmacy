@@ -711,11 +711,3 @@ window.finances = {
         };
     }
 };
-
-// Initialize financial system
-(function() {
-    console.log("[finances.js] Initializing financial system...");
-    
-    // Set all product prices on startup
-    window.finances.setToSuggestedPrices();
-})();

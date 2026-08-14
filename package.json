@@ -17,16 +17,21 @@
     "start": "electron .",
     "build": "electron-builder",
     "dist": "electron-builder --win --x64",
-    "publish": "electron-builder --publish always"
+    "publish": "electron-builder --publish always",
+    "test": "jest",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
-    "electron": "^35.0.0",
-    "electron-builder": "^24.13.3",
-    "electron-packager": "^17.1.1"
+    "@playwright/test": "^1.62.1",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "playwright": "^1.62.1"
   },
   "dependencies": {
-    "electron-log": "^5.3.2",
-    "electron-updater": "^6.3.9"
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9"
   },
   "build": {
     "appId": "com.yourcompany.thepharmacy",

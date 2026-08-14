@@ -309,95 +309,10 @@ function ensureGameSystemsInitialized() {
     console.log("[gameInitializer] Game systems initialization check complete");
 }
 
-// Detect game startup mode and initialize accordingly
-window.addEventListener('DOMContentLoaded', function() {
-    console.log("[gameInitializer] DOM loaded, checking startup mode");
-    
-    // Parse URL parameters to determine if we're starting a new game or loading
-    const urlParams = new URLSearchParams(window.location.search);
-    const mode = urlParams.get('mode');
-    
-    console.log("[gameInitializer] Startup mode from URL parameters:", mode);
-    
-    if (mode === 'new') {
-        console.log("[gameInitializer] Starting in 'new game' mode");
-        
-        // Try to get the game options that were saved when starting a new game
-        if (window.gameAPI && window.gameAPI.getNewGameOptions) {
-            console.log("[gameInitializer] Attempting to get new game options from gameAPI");
-            window.gameAPI.getNewGameOptions()
-                .then(options => {
-                    console.log("[gameInitializer] Received game options from gameAPI:", options);
-                    if (options) {
-                        if (window.initializeNewGame(options)) {
-                            console.log("[gameInitializer] New game initialized successfully, starting game");
-                            startGame();
-                        } else {
-                            console.error("[gameInitializer] Failed to initialize new game");
-                            showErrorScreen("Failed to initialize new game");
-                        }
-                    } else {
-                        console.error("[gameInitializer] No game options found");
-                        showErrorScreen("No game options found for new game");
-                    }
-                })
-                .catch(error => {
-                    console.error("[gameInitializer] Error getting new game options:", error);
-                    showErrorScreen("Error starting new game: " + error.message);
-                });
-        } else {
-            // Fallback if gameAPI is not available
-            console.log("[gameInitializer] gameAPI not available, using default options");
-            const defaultOptions = {
-                pharmacyName: "Your Pharmacy",
-                difficulty: "normal",
-                startingCapital: "medium",
-                location: "suburban"
-            };
-            if (window.initializeNewGame(defaultOptions)) {
-                console.log("[gameInitializer] New game initialized with default options, starting game");
-                startGame();
-            } else {
-                console.error("[gameInitializer] Failed to initialize new game with default options");
-                showErrorScreen("Failed to initialize new game with default options");
-            }
-        }
-    } else if (mode === 'load') {
-        console.log("[gameInitializer] Starting in 'load game' mode");
-        
-        // Load saved game
-        window.loadSavedGame()
-            .then(success => {
-                if (success) {
-                    console.log("[gameInitializer] Game loaded successfully, starting game");
-                    startGame();
-                } else {
-                    console.error("[gameInitializer] Failed to load saved game");
-                    showErrorScreen("Failed to load saved game");
-                }
-            })
-            .catch(error => {
-                console.error("[gameInitializer] Error loading saved game:", error);
-                showErrorScreen("Error loading saved game: " + error.message);
-            });
-    } else {
-        console.warn("[gameInitializer] No mode specified, defaulting to new game");
-        // Default to new game with default options
-        const defaultOptions = {
-            pharmacyName: "Your Pharmacy",
-            difficulty: "normal",
-            startingCapital: "medium",
-            location: "suburban"
-        };
-        if (window.initializeNewGame(defaultOptions)) {
-            console.log("[gameInitializer] New game initialized with default options (no mode), starting game");
-            startGame();
-        } else {
-            console.error("[gameInitializer] Failed to initialize game (no mode specified)");
-            showErrorScreen("Failed to initialize game (no mode specified)");
-        }
-    }
-});
+// NOTE: Actual game startup (mode detection, calling initializeNewGame/loadSavedGame,
+// and building the UI) is driven by game-bootstrap.js, which runs after this file
+// loads. This file used to also self-trigger the same flow on DOMContentLoaded,
+// which caused the entire game to initialize twice on every launch.
 
 // Start the game simulation
 function startGame() {
