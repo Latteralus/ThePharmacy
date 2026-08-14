@@ -66,9 +66,6 @@
   <script src="main/js/pages/statisticsPage.js"></script>
   <script src="main/js/pages/settingsPage.js"></script>
 
-  <!-- Electron integration script -->
-  <script src="main/js/electron-integration.js"></script>
-
   <!-- Global error handler with Electron logging support -->
   <script>
     window.addEventListener('error', (event) => {
@@ -159,55 +156,6 @@
           });
         }
       }, 3000); // Wait 3 seconds after load to check
-    });
-  </script>
-
-  <!-- Fallback path finder for debugging -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      // Try to diagnose path issues
-      console.log("Checking for path issues...");
-      
-      // Log current directory information
-      console.log("Document location:", window.location.href);
-      console.log("Document path:", window.location.pathname);
-      
-      // Try to fetch a simple file to test paths
-      fetch('./js/debug.js')
-        .then(response => {
-          console.log("Successfully fetched debug.js:", response.status);
-        })
-        .catch(error => {
-          console.error("Failed to fetch debug.js:", error);
-          
-          // Try an alternative path
-          console.log("Trying alternative path...");
-          fetch('/js/debug.js')
-            .then(response => {
-              console.log("Alternative path successful:", response.status);
-            })
-            .catch(altError => {
-              console.error("Alternative path also failed:", altError);
-            });
-        });
-        
-      // Check if we're in an Electron environment
-      if (window.gameAPI) {
-        console.log("Electron environment detected");
-        
-        // Try to get app directory information through the preload API
-        if (window.gameAPI.getAppPath) {
-          window.gameAPI.getAppPath()
-            .then(appPath => {
-              console.log("App path from Electron:", appPath);
-            })
-            .catch(error => {
-              console.error("Failed to get app path:", error);
-            });
-        }
-      } else {
-        console.log("Not running in Electron environment");
-      }
     });
   </script>
 </body>

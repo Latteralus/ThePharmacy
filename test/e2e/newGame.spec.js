@@ -39,21 +39,11 @@ test('starting a new game reaches the game screen without console errors', async
   await page.waitForSelector('.sidebar', { timeout: 20_000 });
 
   // Known, pre-existing, non-fatal noise unrelated to game initialization:
-  // - preload.js can't require('path') under Electron's sandboxed preload
-  //   (gracefully degraded, "Path module not available" warning)
-  // - main/js/electron-integration.js is referenced in main.html but has
-  //   never existed in this repo (dangling <script> 404)
-  // - main.html's "fallback path finder" debug block always 404s
-  // None of these prevent the game from starting; only the game-breaking
-  // crash matters here.
-  const knownNoise = [
-    /module not found: path/,
-    /Path module not available/,
-    /electron-integration\.js/,
-    /Failed to load resource/,
-    /Failed to fetch debug\.js/,
-    /Alternative path also failed/,
-  ];
+  // preload.js can't require('path') under Electron's sandboxed preload
+  // (gracefully degraded, "Path module not available" warning). Doesn't
+  // prevent the game from starting; only the game-breaking crash matters
+  // here.
+  const knownNoise = [/module not found: path/, /Path module not available/];
   const unexpectedErrors = consoleErrors.filter(
     (msg) => !knownNoise.some((pattern) => pattern.test(msg))
   );
