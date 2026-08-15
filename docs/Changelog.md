@@ -22,7 +22,7 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (29 of 47 files converted so far, though a
+and per-file progress tracker (34 of 47 files converted so far, though a
 chunk of the remainder turned out to be dead code excluded from the count —
 see that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
@@ -159,6 +159,56 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration: ninth batch (customersPage, marketingPage, statisticsPage, equipmentPage, researchPage)
+
+Continued the migration at the standing 5-files-per-batch pace, moving into
+`main/js/pages/` proper (the last two batches picked up `dashboardPage.js`/
+`ordersPage.js` as trivial stubs alongside the task/time engine). Converted
+`main/js/pages/customersPage.js`, `main/js/pages/marketingPage.js`, and
+`main/js/pages/statisticsPage.js` — three more one-line placeholder pages,
+same shape as `dashboardPage.ts`/`ordersPage.ts` (see Known Issues above) —
+plus `main/js/pages/equipmentPage.js` and `main/js/pages/researchPage.js`,
+the two smallest *real* (non-stub) page files and both true leaves: neither
+reads another still-untyped page file, only already-typed data-layer globals
+(`equipmentData`, `financesData`, `updateFinancialSummary`, `researchData`,
+`research`, `productsData`). `main/js/pages/marketplacePage.js` was passed
+over this round even though it's equally leaf-shaped (nearly identical
+purchase-flow structure to `equipmentPage.js`) — batch was already full at 5.
+
+Added `window.renderCustomersPage`/`renderMarketingPage`/
+`renderStatisticsPage`/`renderEquipmentPage`/`renderResearchPage` to
+`global.d.ts`, all optional (matching `renderDashboardPage`/`renderOrdersPage`
+— nothing reads them through that property; `main.ts`'s `showPage` looks page
+renderers up dynamically by constructed string name).
+
+One new local type introduced: `equipmentPage.ts`'s `EquipmentCardRefs`, for
+the array of per-card DOM-element references built during render. Two
+behavior-preserving fixes for strict DOM typings, same pattern as
+sideBar.ts/topBar.ts's earlier `textContent = String(...)` fix:
+`equipmentPage.ts` assigns `HTMLInputElement.value` (a `string`) from
+`eq.autoPurchaseThreshold \|\| 0`/`eq.autoPurchaseAmount \|\| 0` (a `number`)
+for the auto-purchase threshold/amount inputs' initial values — wrapped both
+in `String(...)`, producing the identical string either way. No such fix was
+needed in `researchPage.ts`.
+
+Verified: `build:ts` clean, 8/8 Jest, 2/2 Playwright. Also drove the real
+Electron app directly (temporary Playwright script under `test/e2e/`,
+removed after use): started a new game; confirmed `showPage('customers')`/
+`showPage('marketing')`/`showPage('statistics')` each render their expected
+`<h2>` header; on the Equipment page, confirmed 8 unlocked equipment cards
+render, the search filter narrows the grid correctly, and buying 1 unit of
+the first item deducts the correct cost from `financesData.cash` ($100,000 →
+$99,500 for a $500 item) with the success alert firing; on the Research
+page, confirmed the current-level display, and that clicking "Start
+Research" deducts the next level's cost from `financesData.cash` ($99,500 →
+$94,500). No new console errors — only the pre-existing, already-documented
+preload.js noise.
+
+34 of 47 files converted so far (13 remaining). `main/js/pages/` is now 5 of
+11 done; remaining: `operationsPage.js`, `employeesPage.js`,
+`financesPage.js`, `inventoryPage.js`, `marketplacePage.js`,
+`settingsPage.js`.
 
 ### 2026-08-15 — TypeScript migration: eighth batch (taskManager, taskAssignment, timeEvents, dashboardPage, ordersPage)
 
@@ -848,3 +898,8 @@ dangling `<script>` reference to a `main/js/electron-integration.js` that
 didn't exist at that path yet (see the 2026-08-15 entry above for where it
 actually was), and a "fallback path finder" debug block in `main.html`
 that always 404'd.
+
+Important Note: For the remainder of the transition from JS to TS:
+1. Complete all remaining files in the next pass.
+2. Test
+3. We can then cleanup the files, notes, etc and prepare for development within the new structure.

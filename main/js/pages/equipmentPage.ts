@@ -1,6 +1,14 @@
 // /js/pages/equipmentPage.js
 
-window.renderEquipmentPage = function (mainContent) {
+interface EquipmentCardRefs {
+  rootDiv: HTMLDivElement;
+  buyQtyInput: HTMLInputElement;
+  autoThreshInput: HTMLInputElement;
+  autoAmtInput: HTMLInputElement;
+  eqObj: EquipmentItem;
+}
+
+window.renderEquipmentPage = function (mainContent: HTMLElement): void {
   // Clear existing content
   mainContent.innerHTML = '';
 
@@ -36,7 +44,7 @@ window.renderEquipmentPage = function (mainContent) {
   container.appendChild(equipmentGrid);
 
   // Array to store references to dynamically updated elements
-  const equipmentCards = [];
+  const equipmentCards: EquipmentCardRefs[] = [];
 
   // Bottom row for bulk purchase summary
   const summaryRow = document.createElement('div');
@@ -61,7 +69,7 @@ window.renderEquipmentPage = function (mainContent) {
   container.appendChild(summaryRow);
 
   // Function to render equipment cards
-  function renderEquipment() {
+  function renderEquipment(): void {
       equipmentGrid.innerHTML = '';
       equipmentCards.length = 0;
 
@@ -131,7 +139,7 @@ window.renderEquipmentPage = function (mainContent) {
           autoThreshLabel.textContent = 'Threshold:';
           const autoThreshInput = document.createElement('input');
           autoThreshInput.type = 'number';
-          autoThreshInput.value = eq.autoPurchaseThreshold || 0;
+          autoThreshInput.value = String(eq.autoPurchaseThreshold || 0);
           autoThreshInput.min = '0';
           autoThreshInput.className = 'auto-thresh-input';
           autoThreshWrapper.appendChild(autoThreshLabel);
@@ -141,7 +149,7 @@ window.renderEquipmentPage = function (mainContent) {
           autoAmtLabel.textContent = 'Amount:';
           const autoAmtInput = document.createElement('input');
           autoAmtInput.type = 'number';
-          autoAmtInput.value = eq.autoPurchaseAmount || 0;
+          autoAmtInput.value = String(eq.autoPurchaseAmount || 0);
           autoAmtInput.min = '0';
           autoAmtInput.className = 'auto-amt-input';
           autoAmtWrapper.appendChild(autoAmtLabel);
@@ -165,7 +173,7 @@ window.renderEquipmentPage = function (mainContent) {
   }
 
   // Function to calculate the total cost
-  function calculateTotalCost() {
+  function calculateTotalCost(): number {
       let sum = 0;
       equipmentCards.forEach(entry => {
           const qty = parseInt(entry.buyQtyInput.value, 10) || 0;
@@ -177,7 +185,7 @@ window.renderEquipmentPage = function (mainContent) {
   }
 
   // Function to confirm the purchase
-  function confirmPurchase() {
+  function confirmPurchase(): void {
       const totalCost = calculateTotalCost();
       if (window.financesData.cash < totalCost) {
           alert('Insufficient funds to complete the purchase.');
@@ -205,13 +213,13 @@ window.renderEquipmentPage = function (mainContent) {
   }
 
   // Function to update the total cost display
-  function updateTotalCostDisplay() {
+  function updateTotalCostDisplay(): void {
       const sum = calculateTotalCost();
       totalCostValue.textContent = sum.toFixed(2);
   }
 
   // Event listeners for input changes
-  function watchEquipmentChanges() {
+  function watchEquipmentChanges(): void {
       equipmentCards.forEach(entry => {
           entry.buyQtyInput.addEventListener('input', updateTotalCostDisplay);
           entry.autoThreshInput.addEventListener('input', updateTotalCostDisplay);

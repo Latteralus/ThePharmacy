@@ -1,6 +1,6 @@
 // /js/pages/researchPage.js
 
-window.renderResearchPage = function(mainContent) {
+window.renderResearchPage = function(mainContent: HTMLElement): void {
       // Clear existing content
       mainContent.innerHTML = '';
     
@@ -159,7 +159,7 @@ window.renderResearchPage = function(mainContent) {
       });
     
       // --- Function to Update UI ---
-      function updateResearchUI() {
+      function updateResearchUI(): void {
           // Update current research level
           const currentLevelValue = document.getElementById('current-research-level');
             if (currentLevelValue) {

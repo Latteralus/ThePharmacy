@@ -647,6 +647,11 @@ interface Window {
   // reads them through this property.
   renderDashboardPage?: (container: HTMLElement) => void;
   renderOrdersPage?: (container: HTMLElement) => void;
+  renderCustomersPage?: (container: HTMLElement) => void;
+  renderMarketingPage?: (container: HTMLElement) => void;
+  renderStatisticsPage?: (container: HTMLElement) => void;
+  renderEquipmentPage?: (container: HTMLElement) => void;
+  renderResearchPage?: (container: HTMLElement) => void;
   timeEvents?: TimeEventsApi;
   // Debug-only global set by timeEvents.ts (console-driven time skip), no
   // callers elsewhere in the codebase.

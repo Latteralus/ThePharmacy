@@ -68,3 +68,8 @@ main/js/taskAssignment.js
 main/js/timeEvents.js
 main/js/pages/dashboardPage.js
 main/js/pages/ordersPage.js
+main/js/pages/customersPage.js
+main/js/pages/marketingPage.js
+main/js/pages/statisticsPage.js
+main/js/pages/equipmentPage.js
+main/js/pages/researchPage.js

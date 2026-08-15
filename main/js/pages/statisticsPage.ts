@@ -1,4 +1,4 @@
-window.renderStatisticsPage = function(mainContent) {
+window.renderStatisticsPage = function(mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
   
     const header = document.createElement('h2');

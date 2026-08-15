@@ -1,4 +1,4 @@
-window.renderMarketingPage = function(mainContent) {
+window.renderMarketingPage = function(mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
   
     const header = document.createElement('h2');

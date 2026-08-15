@@ -1,4 +1,4 @@
-window.renderCustomersPage = function(mainContent) {
+window.renderCustomersPage = function(mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
   
     const header = document.createElement('h2');
