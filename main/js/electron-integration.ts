@@ -37,12 +37,12 @@
                     window.notifications.add(`A new version (${info.version}) is available. Downloading now...`, 'info');
                 }
             });
-            
+
             window.electronAPI.onUpdateDownloaded(() => {
                 console.log('Update downloaded');
                 // Prompt user to restart and install
                 if (window.confirm('The update has been downloaded. Restart the application to apply the update?')) {
-                    window.electronAPI.quitAndInstall();
+                    window.electronAPI!.quitAndInstall();
                 }
             });
         }
@@ -72,8 +72,8 @@
                         timestamp: Date.now()
                     };
                     
-                    const result = await window.gameAPI.saveGame(gameData);
-                    
+                    const result = await window.gameAPI!.saveGame!(gameData);
+
                     if (result && result.success) {
                         console.log('Game saved successfully');
                         
@@ -99,16 +99,20 @@
             // Add load game function to window
             window.loadGame = async function() {
                 try {
-                    const gameData = await window.gameAPI.loadGame();
-                    
+                    const gameData = await window.gameAPI!.loadGame!();
+
                     if (gameData) {
-                        // Restore game state
-                        window.gameState = gameData.gameState;
-                        window.financesData = gameData.financesData;
-                        window.employeesData = gameData.employeesData;
-                        window.productsData = gameData.productsData;
-                        window.materialsData = gameData.materialsData;
-                        window.equipmentData = gameData.equipmentData;
+                        // Restore game state. Non-null assertions throughout:
+                        // SavedGameData's fields are optional because they
+                        // describe an arbitrary on-disk JSON blob in general,
+                        // but a save file written by this file's own
+                        // saveGame() always has all of them.
+                        window.gameState = gameData.gameState!;
+                        window.financesData = gameData.financesData!;
+                        window.employeesData = gameData.employeesData!;
+                        window.productsData = gameData.productsData!;
+                        window.materialsData = gameData.materialsData!;
+                        window.equipmentData = gameData.equipmentData!;
 
                         // The save file round-trips through JSON, so Date fields
                         // come back as plain strings - revive them.
@@ -125,7 +129,7 @@
                         // re-attach it so equipmentPage.js's eq.isUnlocked() calls
                         // keep working after a load.
                         window.equipmentData.forEach(item => {
-                            item.isUnlocked = function() {
+                            item.isUnlocked = function(this: EquipmentItem) {
                                 return window.researchData.currentLevel >= this.researchLevelRequired;
                             };
                         });
@@ -177,20 +181,20 @@
             };
             
             // Add auto-save feature
-            let autoSaveInterval = null;
-            
-            function startAutoSave(interval = 5) {
+            let autoSaveInterval: ReturnType<typeof setInterval> | null = null;
+
+            function startAutoSave(interval: number = 5): void {
                 // Clear existing interval if any
                 if (autoSaveInterval) {
                     clearInterval(autoSaveInterval);
                 }
-                
+
                 // Start new auto-save interval (in minutes)
-                autoSaveInterval = setInterval(window.saveGame, interval * 60 * 1000);
+                autoSaveInterval = setInterval(window.saveGame!, interval * 60 * 1000);
                 console.log(`Auto-save enabled (every ${interval} minutes)`);
             }
-            
-            function stopAutoSave() {
+
+            function stopAutoSave(): void {
                 if (autoSaveInterval) {
                     clearInterval(autoSaveInterval);
                     autoSaveInterval = null;
@@ -212,13 +216,13 @@
                 // Ctrl+S for save
                 if (event.ctrlKey && event.key === 's') {
                     event.preventDefault();
-                    window.saveGame();
+                    window.saveGame!();
                 }
-                
+
                 // Ctrl+L for load
                 if (event.ctrlKey && event.key === 'l') {
                     event.preventDefault();
-                    window.loadGame();
+                    window.loadGame!();
                 }
             });
         }

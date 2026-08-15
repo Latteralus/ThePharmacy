@@ -79,3 +79,4 @@ main/js/pages/financesPage.js
 main/js/pages/inventoryPage.js
 main/js/pages/marketplacePage.js
 main/js/pages/settingsPage.js
+main/js/electron-integration.js

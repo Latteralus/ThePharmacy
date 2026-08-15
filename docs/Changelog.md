@@ -22,9 +22,13 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (40 of 47 files converted so far —
-`main/js/pages/` is now fully converted — though a chunk of the remainder
-turned out to be dead code excluded from the count — see that file); a much
+and per-file progress tracker (41 of 46 files converted so far —
+every renderer-side `<script>`-tag file, including `main/js/pages/`, is now
+fully typed; the one remaining main-process file, `main/ipcMain.js`, turned
+out to be entirely dead code and was deleted rather than converted, which is
+why the denominator dropped by one — though a chunk of the remainder besides
+that turned out to be dead code excluded from the count too — see that
+file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
 see that file for why.
 
@@ -137,8 +141,6 @@ file, and use ES-module syntax that would throw if they were);
 `<script>` tag or `require`/`import` anywhere live; `orders.js` even
 `import`s `inventory.js` via ES-module syntax, which would throw if either
 were ever actually loaded); `main/components/panel.js`'s `window.createPanel` (loaded, never called);
-~250 lines of placeholder IPC handlers in `main/ipcMain.js` (namespaced
-`game:*`/`tasks:*`/etc. channels nothing in the renderer ever invokes);
 `employees.js`'s `promoteEmployee`, `updateEmployeeSkills`, and a duplicate
 `calculateEmployeeEfficiency` (the one actually used lives in
 `taskAssignment.js:455` — two copies exist, risk of drift); `gameLogic.js`
@@ -173,6 +175,61 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration: eleventh batch (electron-integration) + `main/ipcMain.js` deleted as dead code
+
+Follow-on to the same session's page-file batch, at the user's request to
+finish scoping and converting the two remaining non-renderer-page files:
+`main/js/electron-integration.js` and `main/ipcMain.js`.
+
+`electron-integration.js` turned out to be a normal renderer `<script>` file
+despite its name — DOM APIs, `window.*` globals, wrapped in an IIFE, no
+`require`/`module.exports` anywhere. Converted the same way as every other
+renderer file, no special build setup needed. It's the file that actually
+*defines* `window.saveGame`/`window.loadGame` (every other file that touches
+them was just checking `typeof window.saveGame === 'function'` against an
+optional stub) — added `GameApi.saveGame`, a new `ElectronApi` interface, and
+`AutoSaveApi` to `global.d.ts` accordingly. The save payload's type is
+deliberately `unknown` rather than `SavedGameData`: it strips each
+`equipmentData` item's `isUnlocked()` method before it crosses IPC (functions
+don't survive structured clone), so it's a slightly different shape than what
+`loadGame()` hands back — `loadGame` re-attaches `isUnlocked` afterward.
+Verified via the existing `saveLoad.spec.js` e2e test, which already drives
+exactly this: save → quit → relaunch → load, then asserts
+`isUnlocked` is a function again and `brandReputation`'s methods survived.
+
+`main/ipcMain.js` was scoped next — being a `require()`d Node/CommonJS file
+rather than a `<script>` tag, it genuinely needed a second, isolated tsconfig
+(`module: "commonjs"`, Node lib, `@types/node`) to compile at all, since the
+existing single tsconfig's `module: "none"` + DOM lib setup is built entirely
+around the renderer's `window`-global architecture. While setting that up and
+actually reading the file closely enough to type it, its channel names
+(`game:saveGame`, `tasks:assignTasks`, `finances:processTransaction`, ...)
+turned out not to match anything `preload.js` actually invokes —
+`preload.js`'s `gameAPI.saveGame`/`.loadGame`/etc. call totally different,
+un-namespaced channels (`save-game`, `load-game`, ...) that are handled by
+`game-integration.js`, a completely separate file `main/ipcMain.js` has no
+relationship to. So all ~250 lines `main/ipcMain.js` registers are
+unreachable — this *confirms* the existing Known Issues entry about
+placeholder IPC handlers, rather than contradicting it. Converting confirmed
+-dead code has no payoff under this migration's own stated policy, and would
+have meant permanently maintaining a second tsconfig and a new dev dependency
+for code that never runs — so instead of converting it, the file and its one
+call site (`initializeIPC(mainWindow)` in `electron-main.js`) were deleted.
+The tsconfig/`@types/node` scaffolding set up to compile it was reverted
+along with it. `main/ipcMain.js`'s known-dead-code note in this file's Known
+Issues section above is removed now that the file itself is gone.
+
+Verified: `build:ts` clean, 8/8 Jest, 2/2 Playwright — including
+`saveLoad.spec.js`'s real save → quit → relaunch → load round trip, both
+before writing `electron-integration.ts` (to confirm the baseline) and after
+deleting `main/ipcMain.js` (to confirm its handlers were truly never on the
+load-bearing save/load path).
+
+41 of 46 files converted (the denominator dropped by one for the deleted
+file). Every renderer-side `<script>`-tag file in the app is now typed; what
+remains is exclusively the four confirmed-dead `main/components/*Card.js`
+files, which were never planned for conversion.
 
 ### 2026-08-15 — TypeScript migration: tenth batch (operationsPage, employeesPage, financesPage, inventoryPage, marketplacePage, settingsPage) — `main/js/pages/` fully converted
 

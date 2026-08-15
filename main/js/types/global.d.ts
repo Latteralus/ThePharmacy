@@ -328,10 +328,30 @@ interface BrandReputationApi {
   loseReputation: (amount: number) => void;
 }
 
-// Partial — electron-integration.js/preload.js own the real, larger shape.
+// Partial — preload.js (not yet converted) owns the real, larger shape.
+// saveGame's payload is intentionally untyped: it's not quite SavedGameData
+// (equipmentData has isUnlocked() stripped out before it crosses IPC, since
+// functions can't survive structured clone — see electron-integration.ts).
 interface GameApi {
   getNewGameOptions?: () => Promise<unknown>;
   loadGame?: () => Promise<SavedGameData | null>;
+  saveGame?: (gameData: unknown) => Promise<{ success: boolean } | undefined>;
+}
+
+// Partial — preload.js (not yet converted) owns the real, larger shape.
+interface UpdateInfo {
+  version: string;
+}
+
+interface ElectronApi {
+  onUpdateAvailable: (callback: (info: UpdateInfo) => void) => void;
+  onUpdateDownloaded: (callback: () => void) => void;
+  quitAndInstall: () => void;
+}
+
+interface AutoSaveApi {
+  start: (intervalMinutes?: number) => void;
+  stop: () => void;
 }
 
 interface CustomerTypeDef {
@@ -621,6 +641,7 @@ interface Window {
   createPanel: (args: { title: string; body: string }) => HTMLDivElement;
   showDailySummaryModal: (onNextDay?: () => void) => void;
   gameAPI?: GameApi;
+  electronAPI?: ElectronApi;
   employeesData: Employee[];
   employees: EmployeesApi;
   globalMarkup: number;
@@ -636,7 +657,10 @@ interface Window {
   // falls back to 'Manager') — a pre-existing "silently does nothing" gap,
   // not something this migration fixes. See docs/Changelog.md.
   username?: string;
-  saveGame?: () => void;
+  // Both owned by electron-integration.ts.
+  saveGame?: () => Promise<boolean>;
+  loadGame?: () => Promise<boolean>;
+  autoSave?: AutoSaveApi;
   notifications?: NotificationsApi;
   renderOperationsPage?: (container: HTMLElement) => (() => void);
   // Set by operationsPage.ts's own render call; the cleanup function
