@@ -22,9 +22,9 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (24 of 47 files converted so far, though 8 of
-the remaining 35 turned out to be dead code excluded from the count — see
-that file); a much
+and per-file progress tracker (29 of 47 files converted so far, though a
+chunk of the remainder turned out to be dead code excluded from the count —
+see that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
 see that file for why.
 
@@ -97,7 +97,13 @@ the multi-day timer is cosmetic only), `brandReputation.brandScore`
 (frozen at its starting value forever — only `reputationScore` actually
 moves), insurance plan `formulary` (always null, every plan covers
 everything), prescription `refillsAllowed`/`assignedEmployeeId` (generated,
-never read).
+never read). **Newly found while converting `taskAssignment.js` to TS
+(2026-08-15):** `canFillPrescription`'s inventory check reads
+`prescription.quantityNeeded` — but `quantityNeeded` only ever exists on the
+fill *Task* object (set in `prescriptions.js`), never on the `Prescription`
+itself, so that lookup is always `undefined` and the check silently falls
+through to `prescription.dosage` instead. Not fixed (out of scope for a
+migration pass), preserved via a local cast in `taskAssignment.ts`.
 **Correction to a prior entry:** `gameInitializer.js` calling
 `window.runFallbackInitialization` was previously listed here as dead —
 that was wrong. `gameInitializer.js` *defines*
@@ -153,6 +159,91 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration: eighth batch (taskManager, taskAssignment, timeEvents, dashboardPage, ordersPage)
+
+Continued the migration at the standing 5-files-per-batch pace. Moved out of
+`main/js/data/` and the customers/production/prescriptions cluster into the
+task/time engine — the last thing several already-converted files
+(`customers.ts`, `production.ts`, `prescriptions.ts`) had been holding a
+partial/placeholder `Task`/`TaskManagerApi`/`TaskAssignmentApi` type for.
+Converted `main/js/taskManager.js`, `main/js/taskAssignment.js`,
+`main/js/timeEvents.js`, `main/js/pages/dashboardPage.js`, and
+`main/js/pages/ordersPage.js` — the last two are one-line stub pages (see
+Known Issues above), picked up as trivial, leaf-most additions to round out
+the batch alongside the heavier task/time engine trio (task engine and
+`timeEvents.js` are mutually referential — `timeEvents.js` drives
+`taskManager.updateTasks`, `taskManager`/`taskAssignment` schedule
+auto-assignment via `setTimeout` back into each other — so all three
+converted together rather than split across batches).
+
+`Task`, `TaskManagerApi`, and `TaskAssignmentApi` are now their real, full
+types (upgraded from customers.ts's earlier partial index-signature
+placeholders); `TimeEventsApi` similarly went from a 3-method partial to its
+full real shape, plus a new `TimeEventsConfig` type for `CONFIG`.
+
+Notable typing decisions, all confirmed behavior-preserving:
+- Two non-null assertions in `taskManager.ts` preserve pre-existing
+  defensive-at-runtime behavior rather than adding new guards:
+  `task.prescriptionId!`/`product!` when calling
+  `taskAssignment.canFillPrescription`/`production.canCompound` (both
+  callees already handle a missing value gracefully at runtime — the
+  assertion only satisfies their required-parameter *signatures*), and
+  `customer.prescriptionId!` in the `readyForCheckout` →
+  `finances.completePrescription` path (a customer only reaches that status
+  after a prescription has already been assigned to them, per
+  `customers.ts`'s own `generateCustomer` flow).
+- Same pattern in `taskAssignment.ts`: `autoAssignTasks`' checkout-task
+  filter calls `getCustomerById(t.customerId!)` without a preceding truthy
+  check, matching the original's own unguarded shape (customerInteraction
+  tasks always carry a `customerId` in practice).
+- Found, not fixed, while converting `taskAssignment.ts`: `canFillPrescription`
+  reads `prescription.quantityNeeded`, but that field only ever exists on the
+  fill *Task* object (`prescriptions.js` sets it there), never on a
+  `Prescription` — always `undefined` at runtime, silently falling through to
+  `prescription.dosage`. Preserved via a local cast; folded into Known Issues
+  above rather than fixed, matching this migration's standing rule.
+- One ambient-type correction, confirmed non-behavior-changing:
+  `CustomersApi.generateCustomer`'s `hour` parameter went from required to
+  optional. `timeEvents.ts`'s `spawnCustomersForHour` has always called it
+  with zero arguments (a pre-existing quirk, unrelated to this batch), and
+  `hour` was already dead/unused inside `generateCustomer`'s own body — the
+  type now just matches what was already true at runtime.
+- `window.forceTimeForward` (the debug-console time-skip helper `timeEvents.js`
+  defines at its own bottom, outside the module IIFE) and
+  `window._taskAssignTimeout` (`taskManager.js`/`taskAssignment.js`'s shared
+  debounce handle for batching auto-assignment) both added to `global.d.ts`
+  for the first time. `window.renderDashboardPage`/`renderOrdersPage` also
+  added even though nothing reads them through that property — `main.ts`'s
+  `showPage` looks page renderers up dynamically by constructed string name,
+  not by static reference; added for consistency with every other
+  directly-assigned global, matching the convention already used for
+  `renderOperationsPage`/`renderInventoryPage`/etc.
+
+Verified: `build:ts` clean on the first attempt (no compile errors), 8/8
+Jest, 2/2 Playwright. Given this batch is inherently stateful/cross-module
+(the task and time engines aren't pure-logic in the way `helpers.ts` or
+`research.ts` were), skipped a pure old-vs-new script diff in favor of a
+scripted real-Electron-app driver: started a new game, generated a customer
+through `window.customers.generateCustomer()` and confirmed the resulting
+check-in task auto-assigned to a Cashier within the expected debounce
+window; called `window.forceTimeForward(2)` and confirmed task `progress`
+advanced correctly across multiple in-flight tasks; called
+`taskManager.forceCompleteTask()` on the check-in task and confirmed the
+full finalization cascade fired correctly (customer status
+`waitingForCheckIn` → `waitingForConsultation`, a new `consultation` task
+created and immediately auto-assigned); called
+`debugTaskStatus`/`logTaskAssignmentState`/`getProgressAnomalies`/
+`normalizeEmployeeRoles` directly and confirmed none threw; confirmed both
+stub pages render via `showPage`'s dynamic lookup. No new console errors —
+only the pre-existing, already-documented preload.js noise.
+
+29 of 47 files converted so far. `main/js/data/` and the task/time engine
+are now fully converted. Remaining: the 11 files under `main/js/pages/`
+(besides the two just converted), plus the confirmed-dead
+`main/components/*Card.js` files and `main/js/electron-integration.js`/
+`main/ipcMain.js` (main-process-adjacent, not yet scoped for this
+migration).
 
 ### 2026-08-15 — Fixed everything flagged during the seventh migration batch
 

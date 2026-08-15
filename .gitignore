@@ -63,3 +63,8 @@ main/js/data/employees.js
 main/js/data/finances.js
 main/js/game-bootstrap.js
 main/js/gameInitializer.js
+main/js/taskManager.js
+main/js/taskAssignment.js
+main/js/timeEvents.js
+main/js/pages/dashboardPage.js
+main/js/pages/ordersPage.js

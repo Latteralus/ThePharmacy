@@ -357,7 +357,11 @@ interface Customer {
 interface CustomersApi {
   activeCustomers: Customer[];
   customerTypes: Record<string, CustomerTypeDef>;
-  generateCustomer: (hour: number) => Customer;
+  // hour is accepted but never actually read by the implementation
+  // (customers.ts) — timeEvents.ts's spawnCustomersForHour calls this with
+  // no argument at all, which has always worked for that reason. Optional
+  // here to match, not a behavior change.
+  generateCustomer: (hour?: number) => Customer;
   assignPrescription: (customerId: string, prescriptionId: string | null) => void;
   updateCustomerStatus: (customerId: string, newStatus: string) => void;
   updateCustomerMood: (customerId: string, moodChange: number) => void;
@@ -372,13 +376,10 @@ interface CustomersApi {
   detectAndFixStuckCustomers: () => void;
 }
 
-// Partial — task shape is owned by taskManager.js/taskAssignment.js, still
-// plain JS. Only the fields converted .ts files actually read are named;
-// the index signature lets each creator (customers.ts, prescriptions.ts,
-// production.ts, ...) keep attaching whatever extra fields it needs
-// (dependencyTaskId, fillTaskDependency, etc.) without every field being
-// named here. Tighten once taskManager.js itself converts and owns the
-// authoritative shape.
+// Now the real, full shape (taskManager.ts owns it). The index signature is
+// kept even though every field a converted creator (customers.ts,
+// prescriptions.ts, production.ts) attaches is now named — cheap insurance
+// against the still-plain-JS page files reading/writing ad hoc fields later.
 interface Task {
   id: string;
   type: string;
@@ -394,22 +395,55 @@ interface Task {
   priority?: string;
   quantityToMake?: number;
   quantityNeeded?: number;
+  dependencyTaskId?: string;
+  fillTaskDependency?: boolean;
+  createdAt?: number;
+  lastUpdateTime?: number;
+  lastProgressTime?: number;
+  assignedAt?: number;
   [key: string]: unknown;
 }
 
-// Partial — taskManager.js owns the real shape; extend in place once it
-// converts.
-interface TaskManagerApi {
-  tasks: Task[];
-  addTask: (task: Task) => void;
-  updateTasks: (minutes: number) => void;
+interface ProgressAnomaly {
+  taskId: string;
+  expected: number;
+  actual: number;
+  difference: number;
+  timestamp: number;
 }
 
-// Partial — taskAssignment.js owns the real shape; extend in place once it
-// converts.
+// Now the real, full shape (taskManager.ts owns it).
+interface TaskManagerApi {
+  tasks: Task[];
+  addTask: (task: Task) => Task;
+  getTaskById: (taskId: string) => Task | undefined;
+  getUnassignedTasks: () => Task[];
+  getTasksForEmployee: (employeeId: string) => Task[];
+  getTasksForCustomer: (customerId: string) => Task[];
+  updateTasks: (minutes: number) => void;
+  debugTaskStatus: () => void;
+  forceCompleteTask: (taskId: string) => boolean;
+  addEventListener: (event: string, callback: (data: unknown) => void) => void;
+  removeEventListener: (event: string, callback: (data: unknown) => void) => void;
+  resetProgressVerification: (taskId?: string | null) => void;
+  getProgressAnomalies: () => ProgressAnomaly[];
+  EVENTS: {
+    TASK_ADDED: string;
+    TASK_COMPLETED: string;
+    TASK_PROGRESS_UPDATED: string;
+    TASK_STATUS_CHANGED: string;
+  };
+}
+
+// Now the real, full shape (taskAssignment.ts owns it).
 interface TaskAssignmentApi {
+  assignTaskToEmployee: (taskId: string, employeeId: string) => boolean;
   unassignTask: (taskId: string) => void;
   autoAssignTasks: () => void;
+  canFillPrescription: (prescriptionId: string) => boolean;
+  normalizeEmployeeRoles: () => void;
+  logTaskAssignmentState: () => void;
+  forceTaskReassignment: () => void;
 }
 
 interface Prescription {
@@ -536,14 +570,36 @@ interface InsuranceClaimsApi {
   init: () => void;
 }
 
-// Partial — timeEvents.js owns the real shape; extend in place once it
-// converts. Every call site in this batch guards with `window.timeEvents &&
-// ...` first, so this stays optional even though the calls that do happen
-// are otherwise unconditional.
+interface TimeEventsConfig {
+  OPENING_HOUR: number;
+  CLOSING_HOUR: number;
+  TASK_UPDATE_INTERVAL: number;
+  CUSTOMER_SPAWN_CHECK_INTERVAL: number;
+  AUTO_TASK_ASSIGN_INTERVAL: number;
+  INVENTORY_CHECK_INTERVAL: number;
+}
+
+// Now the real, full shape (timeEvents.ts owns it). Window.timeEvents stays
+// optional below — every call site across the codebase guards with
+// `window.timeEvents && ...` first, predating this file's own conversion.
 interface TimeEventsApi {
   startOfDay: (gameState: GameState) => void;
   endOfDay: (gameState: GameState) => void;
+  skipToNextDay: (gameState: GameState) => void;
   minuteCheck: (gameState: GameState) => void;
+  hourlyCheck: (gameState: GameState, hour: number) => void;
+  spawnCustomersForHour: (hour: number) => void;
+  autoOrderCheck: () => void;
+  forceTimeUpdate: (minutes?: number) => boolean;
+  CONFIG: TimeEventsConfig;
+  addEventListener: (event: string, callback: (data: unknown) => void) => void;
+  removeEventListener: (event: string, callback: (data: unknown) => void) => void;
+  EVENTS: {
+    START_OF_DAY: string;
+    END_OF_DAY: string;
+    HOURLY_CHECK: string;
+    AUTO_ORDERS_PLACED: string;
+  };
 }
 
 interface BootstrapApi {
@@ -584,7 +640,20 @@ interface Window {
   // Owned by inventoryPage.js, not converted yet.
   renderInventoryPage?: (container: HTMLElement) => void;
   updateInventoryDisplay?: () => void;
+  // Owned by dashboardPage.js/ordersPage.js. Never referenced by name
+  // anywhere (main.ts's showPage looks page renderers up dynamically by
+  // constructed string, see `render${Page}Page`) — declared for the same
+  // reason every other directly-assigned global is, not because anything
+  // reads them through this property.
+  renderDashboardPage?: (container: HTMLElement) => void;
+  renderOrdersPage?: (container: HTMLElement) => void;
   timeEvents?: TimeEventsApi;
+  // Debug-only global set by timeEvents.ts (console-driven time skip), no
+  // callers elsewhere in the codebase.
+  forceTimeForward?: (minutes?: number) => boolean;
+  // taskManager.ts's debounce handle for batching auto-assignment after
+  // rapid-fire task adds/completions.
+  _taskAssignTimeout?: ReturnType<typeof setTimeout>;
   ui: UiApi;
   taskManager: TaskManagerApi;
   taskAssignment: TaskAssignmentApi;
