@@ -13,7 +13,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["liquid", "cream", "ointment"],
-        isUnlocked: function() { // Check if research level is high enough
+        isUnlocked() { // Check if research level is high enough
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -29,7 +29,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["tablet"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -45,7 +45,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["tablet", "capsule"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -61,7 +61,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["capsule"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -77,7 +77,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["liquid", "suspension", "syrup"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -93,7 +93,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["liquid", "suspension", "syrup", "injectable"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -109,7 +109,7 @@ window.equipmentData = [
         researchLevelRequired: 1,
         workerType: "technician",
         dosageForms: ["suspension"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -125,7 +125,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["syrup"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -141,7 +141,7 @@ window.equipmentData = [
         researchLevelRequired: 1,
         workerType: "technician",
         dosageForms: ["tablet"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -157,7 +157,7 @@ window.equipmentData = [
         researchLevelRequired: 2,
         workerType: "technician",
         dosageForms: ["oil", "lotion"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -173,7 +173,7 @@ window.equipmentData = [
         researchLevelRequired: 1,
         workerType: "technician",
         dosageForms: ["capsule"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -189,7 +189,7 @@ window.equipmentData = [
         researchLevelRequired: 2,
         workerType: "technician",
         dosageForms: ["cream"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -205,7 +205,7 @@ window.equipmentData = [
         researchLevelRequired: 0,
         workerType: "technician",
         dosageForms: ["cream", "ointment", "gel"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -221,7 +221,7 @@ window.equipmentData = [
         researchLevelRequired: 2,
         workerType: "technician",
         dosageForms: ["ointment"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -237,7 +237,7 @@ window.equipmentData = [
         researchLevelRequired: 3,
         workerType: "technician",
         dosageForms: ["injectable", "eye drops"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -253,7 +253,7 @@ window.equipmentData = [
         researchLevelRequired: 3,
         workerType: "technician",
         dosageForms: ["injectable", "eye drops"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -269,7 +269,7 @@ window.equipmentData = [
         researchLevelRequired: 2,
         workerType: "technician",
         dosageForms: ["gel"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -285,7 +285,7 @@ window.equipmentData = [
         researchLevelRequired: 4,
         workerType: "technician",
         dosageForms: ["lotion"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -301,7 +301,7 @@ window.equipmentData = [
         researchLevelRequired: 5,
         workerType: "technician",
         dosageForms: ["inhaler"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -317,7 +317,7 @@ window.equipmentData = [
         researchLevelRequired: 5,
         workerType: "technician",
         dosageForms: ["nasal spray"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -333,7 +333,7 @@ window.equipmentData = [
         researchLevelRequired: 6,
         workerType: "technician",
         dosageForms: ["powder"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     },
@@ -349,7 +349,7 @@ window.equipmentData = [
         researchLevelRequired: 6,
         workerType: "technician",
         dosageForms: ["tablet", "capsule", "liquid", "cream", "ointment", "gel", "powder", "inhaler", "nasal spray", "lotion", "syrup", "suspension"],
-        isUnlocked: function() {
+        isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
         }
     }

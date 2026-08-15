@@ -42,3 +42,7 @@ coverage/
 main/js/data/insurance.js
 main/js/data/names.js
 main/js/data/materials.js
+main/js/data/products.js
+main/js/data/research.js
+main/js/data/equipment.js
+main/js/data/helpers.js

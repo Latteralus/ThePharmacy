@@ -95,7 +95,7 @@ window.researchData = {
 
 window.research = {
     getUnlockedProducts: function() {
-        let unlocked = [];
+        let unlocked: string[] = [];
         for (let i = 0; i <= window.researchData.currentLevel; i++) {
             unlocked = unlocked.concat(window.researchData.levels[i].unlockedProducts);
         }
@@ -103,7 +103,7 @@ window.research = {
     },
 
     getUnlockedEquipment: function() {
-        let unlocked = [];
+        let unlocked: string[] = [];
         for (let i = 0; i <= window.researchData.currentLevel; i++) {
             unlocked = unlocked.concat(window.researchData.levels[i].unlockedEquipment);
         }

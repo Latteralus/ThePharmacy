@@ -5,7 +5,7 @@
 // --------------------------------------------------------
 
 // Calculates material cost = quantity * material cost
-window.calculateMaterialCost = function(materialId, quantity) {
+window.calculateMaterialCost = function(materialId: string, quantity: number): number {
     const material = window.materialsData.find(m => m.id === materialId);
     if (!material) {
         console.error(`Material not found: ${materialId}`);
@@ -15,7 +15,7 @@ window.calculateMaterialCost = function(materialId, quantity) {
 };
 
 // Helper function to calculate cost of a product based on ingredients
-window.calculateProductCost = function(productId) {
+window.calculateProductCost = function(productId: string): number {
     const product = window.productsData.find(p => p.id === productId);
     if (!product) {
         console.error(`Product not found: ${productId}`);
@@ -34,7 +34,7 @@ window.calculateProductCost = function(productId) {
 // PRODUCTS DATA
 // --------------------------------------------------------
 
-const productsData = [
+const productsData: Product[] = [
     {
         id: 'pd001',
         name: 'Acetaminophen Tablet',

@@ -22,7 +22,7 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (3 of 47 files converted so far); a much
+and per-file progress tracker (7 of 47 files converted so far); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
 see that file for why.
 
@@ -199,6 +199,52 @@ with the same signature as the one in `materials.js`. Since `materials.js`
 loads after `products.js` in `main.html`, its version silently wins at
 runtime — the copy in `products.js` is dead code. Noted in
 `docs/revision.md`'s progress table for a future cleanup pass.
+
+### 2026-08-15 — TypeScript migration: third batch (products, research, equipment, helpers)
+
+Continued the migration. Converted `products.js`, `research.js`, `equipment.js`,
+and `helpers.js` — the rest of `main/js/data/`'s leaf-ish files, chosen in
+that order so each subsequent file's ambient dependencies were already
+covered by the one before it (`products.js` needs `materialsData`;
+`equipment.js` needs `researchData`, so `research.js` went first;
+`helpers.js` needs bits of nearly everything, so it went last).
+
+Two deliberate, behavior-preserving changes were needed to satisfy `strict`
+mode, both verified to produce byte-identical output to the original:
+- `helpers.ts`'s `calculateStartingWage` now explicitly initializes
+  `minWage`/`maxWage` to `NaN` instead of leaving them implicitly
+  `undefined` — TS's strict definite-assignment check would otherwise
+  reject the "no role/skill level matched" fall-through path. Confirmed via
+  a scripted side-by-side call with an unrecognized role: both old and new
+  versions return the same `60000` fallback the same way (through the
+  original's `NaN || 60000` trick, which still works — `NaN` is still
+  falsy either way).
+- `helpers.ts`'s `orderMaterialsForProduct` uses a non-null assertion on
+  `document.querySelector('.inventory-page-container')` rather than adding
+  a new null guard — preserves the original's behavior of throwing if
+  called from any page other than Inventory (confirmed by triggering it
+  from the Equipment page in the running app: throws identically in both
+  old and new).
+- `equipment.ts`'s 22 `isUnlocked: function() {...}` items became
+  shorthand method syntax (`isUnlocked() {...}`) so TS could correctly
+  infer `this` — no behavior change (regular method call semantics are
+  identical either way), confirmed by calling `isUnlocked()` on every item
+  before and after.
+
+Verified more thoroughly than prior batches given the increased complexity:
+`build:ts` clean, 8/8 Jest, 2/2 Playwright, plus four separate scripted
+before/after comparisons (one per file) exercising the actual functions —
+not just diffing static data — including `researchNextLevel()`'s side
+effects (level-up + cash deduction) and `orderMaterialsForProduct()`'s
+(cash deduction + transaction record). Manually launched the app and
+visually confirmed the Research and Equipment pages render correctly and
+that ordering materials from the Inventory page still works.
+
+`main/js/data/` is now fully TypeScript except `employees.js` and
+`finances.js`, both deferred — they pull in several still-untyped modules
+outside `data/` (`main.js`'s `gameState`, `customers.js`, `prescriptions.js`,
+`insuranceClaims.js`) and are high-traffic enough to warrant converting
+their dependencies first. 7 of 47 files converted so far.
 
 ### 2026-08-15 — Save/load fixed, three high-severity bugs fixed
 

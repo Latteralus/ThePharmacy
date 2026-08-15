@@ -2,7 +2,7 @@
 
 window.helpers = {
     // Calculates how many units of a product can be made based on available materials
-    calculatePotentialProduction: function(productId) {
+    calculatePotentialProduction(productId: string): number {
         const product = window.productsData.find(p => p.id === productId);
         if (!product) {
             console.error("Product not found:", productId);
@@ -27,14 +27,14 @@ window.helpers = {
     },
 
     // Calculates the materials needed to make a specified quantity of a product
-    calculateMaterialsNeeded: function(productId, quantity) {
+    calculateMaterialsNeeded(productId: string, quantity: number): Record<string, number> {
         const product = window.productsData.find(p => p.id === productId);
         if (!product) {
             console.error("Product not found:", productId);
             return {};
         }
 
-        const materialsNeeded = {};
+        const materialsNeeded: Record<string, number> = {};
         product.ingredients.forEach(ingredient => {
             materialsNeeded[ingredient.id] = ingredient.quantity * quantity;
         });
@@ -43,7 +43,7 @@ window.helpers = {
     },
 
     // Handles ordering materials for a product
-    orderMaterialsForProduct: function(productId, quantity) {
+    orderMaterialsForProduct(productId: string, quantity: number): void {
         if (isNaN(quantity) || quantity <= 0) {
             alert("Please enter a valid quantity.");
             return;
@@ -85,7 +85,7 @@ window.helpers = {
         const successMessage = document.createElement('div');
         successMessage.className = 'success-message';
         successMessage.textContent = `Successfully ordered materials for ${quantity} units of product ${productId}. Cost: $${totalCost.toFixed(2)}`;
-        document.querySelector('.inventory-page-container').appendChild(successMessage);
+        document.querySelector('.inventory-page-container')!.appendChild(successMessage);
 
         // Optional: Remove the message after a few seconds
         setTimeout(() => {
@@ -94,7 +94,7 @@ window.helpers = {
     },
 
     // Helper function to calculate the total cost of an order
-    calculateOrderCost: function(materialsNeeded) {
+    calculateOrderCost(materialsNeeded: Record<string, number>): number {
         let totalCost = 0;
         for (const materialId in materialsNeeded) {
             const material = window.materialsData.find(m => m.id === materialId);
@@ -106,8 +106,8 @@ window.helpers = {
     },
 
     // New helper function to calculate starting wages based on role and skill level
-    calculateStartingWage: function(role, skillLevel) {
-        let minWage, maxWage;
+    calculateStartingWage(role: string, skillLevel: string): number {
+        let minWage: number = NaN, maxWage: number = NaN;
 
         if (role === 'Pharmacist') {
             if (skillLevel === 'Novice') {
@@ -149,16 +149,16 @@ window.helpers = {
     },
 
     // New helper function to generate a new employee ID
-    generateNewEmployeeId: function() {
+    generateNewEmployeeId(): string {
         return `emp${Date.now()}`;
     },
 
     // Use functions from names.js to generate names
-    generateFirstName: function() {
+    generateFirstName(): string {
         return window.getRandomFirstName();
     },
 
-    generateLastName: function() {
+    generateLastName(): string {
         return window.getRandomLastName();
     }
 };
