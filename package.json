@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "electron-main.js",
   "description": "Pharmacy management simulation game",
-  "author": "Latteralus",
+  "author": "Chris Barnett",
   "license": "MIT",
   "homepage": "https://github.com/Latteralus/ThePharmacy#readme",
   "repository": {
@@ -14,12 +14,13 @@
     "url": "https://github.com/Latteralus/ThePharmacy/issues"
   },
   "scripts": {
-    "start": "electron .",
+    "build:ts": "tsc",
+    "start": "npm run build:ts && electron .",
     "build": "electron-builder",
-    "dist": "electron-builder --win --x64",
-    "publish": "electron-builder --publish always",
-    "test": "jest",
-    "test:e2e": "playwright test"
+    "dist": "npm run build:ts && electron-builder --win --x64",
+    "publish": "npm run build:ts && electron-builder --publish always",
+    "test": "npm run build:ts && jest",
+    "test:e2e": "npm run build:ts && playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -27,7 +28,8 @@
     "electron-builder": "^26.15.3",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
-    "playwright": "^1.62.1"
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "electron-log": "^5.4.4",

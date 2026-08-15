@@ -692,7 +692,7 @@ window.materialsData = [
 // --------------------------------------------------------
 // Helper Function to Calculate Material Cost with Discounts
 // --------------------------------------------------------
-window.calculateMaterialCost = function(materialId, quantity) {
+window.calculateMaterialCost = function(materialId: string, quantity: number): number {
   const material = window.materialsData.find(m => m.id === materialId);
   if (!material) {
     console.error(`Material not found: ${materialId}`);

@@ -14,13 +14,17 @@ game where you run a compounding pharmacy in real time — hire staff, fill
 prescriptions, compound products, manage inventory and insurance claims.
 Single-player, offline, no accounts.
 
-**Architecture:** Plain JavaScript, no bundler, no framework, no
-TypeScript. Every file is a `<script>` tag loaded by `main.html` (game
-screen), `index.html` (main menu), or `settings.html`. Modules communicate
-by hanging objects/functions off `window` (`window.taskManager`,
-`window.finances`, `window.updateUI`, etc.) rather than `import`/`export`.
-`docs/revision.md` documents a full TypeScript/React/Redux rewrite that was
-planned early on — **it was never built**; don't treat it as current.
+**Architecture:** Plain JavaScript, no bundler, no framework. Every file is
+a `<script>` tag loaded by `main.html` (game screen), `index.html` (main
+menu), or `settings.html`. Modules communicate by hanging objects/functions
+off `window` (`window.taskManager`, `window.finances`, `window.updateUI`,
+etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
+starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
+`.js` in place with no bundler, so this architecture doesn't change, files
+just gain types one at a time. `docs/revision.md` is the live migration plan
+and per-file progress tracker (3 of 47 files converted so far); a much
+larger Webpack/React/Redux rewrite was considered and explicitly rejected —
+see that file for why.
 
 **It works.** New game, load game, save game, the tasking/production loop,
 and the UI all run without crashing as of this writing. That was not true
@@ -133,6 +137,68 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration started (tooling + first file)
+
+User asked to begin transitioning the codebase from JS to TS. `docs/revision.md`
+previously documented a full Webpack/React/Redux/TS rewrite from 2025 that
+was never built; discussed the tradeoffs directly with the user and they
+agreed a big-bang rewrite isn't worth the risk — this project already lived
+through that failure mode once (the TestTime commit, see Glossary above)
+and a rewrite is the same shape of risk at a larger scale. Went with
+incremental, in-place TS adoption instead: `tsc` compiles `.ts` → `.js` with
+`module: "none"`, no bundler, no change to the `<script>`-tag/`window`-global
+architecture. `docs/revision.md` has been rewritten to document this as the
+current, active plan (with a running per-file progress table) instead of the
+archived rewrite.
+
+Added: `tsconfig.json` (`target: ES2022`, `strict: true`, no `outDir` — 
+compiles in place); `typescript` devDependency (pinned to the 5.9.x line —
+the newly-released TS 7 native/Go-ported compiler dropped `module: "none"`
+support, which this setup depends on, so stayed on the well-established 5.x
+line rather than redesigning around that); `main/js/types/global.d.ts` for
+ambient `window.*` typings, growing per converted file; a `build:ts` npm
+script chained in front of `start`/`test`/`test:e2e`/`dist`/`publish` so
+compiled output is always fresh (compiled `.js` for converted files is now
+gitignored — build artifact, not source, to avoid the exact staleness bugs
+this project keeps hitting).
+
+Converted the first file as a proof of concept: `main/js/data/insurance.js`
+→ `insurance.ts` (the one true leaf in `main/js/data/` — assigns
+`window.insuranceData`, reads nothing else, so needed zero ambient type
+dependencies). Verified end-to-end, not just compiled: `npm run build:ts`
+clean, 8/8 Jest, 2/2 Playwright, and a manual Electron launch confirming
+`window.insuranceData` still holds all 6 plans and
+`customers.getRandomInsurance()` still works, no new console errors.
+
+The other 46 files are unconverted — see `docs/revision.md`'s progress
+table for what's next; conversion will continue leaf-most-file-first,
+one small batch at a time, each independently verified the same way.
+
+### 2026-08-15 — TypeScript migration: second batch (names.js, materials.js)
+
+Continued the migration started earlier the same day. Converted the two
+remaining true-leaf files in `main/js/data/` — `names.js` and
+`materials.js` — both only ever read their own `window.*` global, never
+another file's, so no new ambient dependencies were needed beyond what they
+already assign (added to `main/js/types/global.d.ts`).
+
+Verified more rigorously than the first file: in addition to the usual
+`build:ts` clean / 8/8 Jest / 2/2 Playwright, wrote a throwaway script that
+`require()`s the pre-conversion `.js` (from git history) and the
+post-conversion generated `.js` side by side and diffs their data —
+confirmed byte-identical `window.namesData` and `window.materialsData`, and
+identical `calculateMaterialCost()` output. Manually launched the app and
+visually confirmed the Marketplace page (iterates `window.materialsData`)
+renders correctly, and that `getRandomFirstName`/`getRandomLastName`/
+`generateDoctorName` still work.
+
+Found, but deliberately did not fix (out of scope for a migration session):
+`main/js/data/products.js` independently defines `window.calculateMaterialCost`
+with the same signature as the one in `materials.js`. Since `materials.js`
+loads after `products.js` in `main.html`, its version silently wins at
+runtime — the copy in `products.js` is dead code. Noted in
+`docs/revision.md`'s progress table for a future cleanup pass.
 
 ### 2026-08-15 — Save/load fixed, three high-severity bugs fixed
 

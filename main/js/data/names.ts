@@ -55,7 +55,7 @@ window.namesData = {
 /**
 * Generates a random first name from namesData.
 */
-function getRandomFirstName() {
+function getRandomFirstName(): string {
   const firstNames = window.namesData.firstNames;
   const randomIndex = Math.floor(Math.random() * firstNames.length);
   return firstNames[randomIndex];
@@ -64,7 +64,7 @@ function getRandomFirstName() {
 /**
 * Generates a random last name from namesData.
 */
-function getRandomLastName() {
+function getRandomLastName(): string {
   const lastNames = window.namesData.lastNames;
   const randomIndex = Math.floor(Math.random() * lastNames.length);
   return lastNames[randomIndex];
@@ -73,7 +73,7 @@ function getRandomLastName() {
 /**
 * Generates a random doctor name with the "Dr." prefix.
 */
-function generateDoctorName() {
+function generateDoctorName(): string {
   const firstName = getRandomFirstName();
   const lastName = getRandomLastName();
   return `Dr. ${firstName} ${lastName}`;

@@ -35,3 +35,10 @@ coverage/
 
 # Other
 *.env.*
+
+# TypeScript build output — .ts is the source of truth, .js is generated
+# by `npm run build:ts` (chained in front of start/test/dist/publish).
+# Add each converted file's .js path here as it migrates off plain JS.
+main/js/data/insurance.js
+main/js/data/names.js
+main/js/data/materials.js
