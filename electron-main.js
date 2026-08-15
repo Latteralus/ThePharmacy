@@ -142,102 +142,14 @@ app.whenReady().then(() => {
   }
 });
 
-// Add handler for 'read-file' IPC calls to ensure correct file path resolution
-ipcMain.handle('read-file', async (event, filePath, options = {}) => {
-  try {
-    // Check if it's a relative path and prepend the resources directory
-    const resolvedPath = path.isAbsolute(filePath) 
-      ? filePath 
-      : path.join(__dirname, 'main', filePath);
-    
-    log.info(`Reading file: ${filePath} (resolved to: ${resolvedPath})`);
-    return await fs.promises.readFile(resolvedPath, options);
-  } catch (error) {
-    log.error(`Error reading file ${filePath}:`, error);
-    throw error;
-  }
-});
-
-// Add handler for 'write-file' IPC calls
-ipcMain.handle('write-file', async (event, filePath, data, options = {}) => {
-  try {
-    // Resolve the file path relative to the main directory
-    const resolvedPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(__dirname, 'main', filePath);
-      
-    log.info(`Writing file: ${filePath} (resolved to: ${resolvedPath})`);
-    await fs.promises.writeFile(resolvedPath, data, options);
-    return true;
-  } catch (error) {
-    log.error(`Error writing file ${filePath}:`, error);
-    throw error;
-  }
-});
-
-// Handle start new game
-ipcMain.handle('start-new-game', async (event, gameData) => {
-  try {
-    log.info('Starting new game with options:', gameData);
-    // Store the game options for later use
-    global.newGameOptions = gameData;
-    return true;
-  } catch (error) {
-    log.error('Error starting new game:', error);
-    throw error;
-  }
-});
-
-// Handle get new game options
-ipcMain.handle('get-new-game-options', async () => {
-  log.info('Retrieving new game options:', global.newGameOptions);
-  return global.newGameOptions;
-});
-
-// Handle load game
-ipcMain.handle('load-game', async () => {
-  try {
-    log.info('Loading saved game');
-    // This would be implemented according to your game's save/load system
-    return global.savedGameData || null;
-  } catch (error) {
-    log.error('Error loading game:', error);
-    throw error;
-  }
-});
-
-// Handle save game
-ipcMain.handle('save-game', async (event, gameData) => {
-  try {
-    log.info('Saving game data');
-    global.savedGameData = gameData;
-    return { success: true };
-  } catch (error) {
-    log.error('Error saving game:', error);
-    throw error;
-  }
-});
-
-// Handle get settings
-ipcMain.handle('get-settings', async () => {
-  return global.gameSettings || {
-    volume: 50,
-    musicEnabled: true,
-    soundEnabled: true,
-    simulationSpeed: 1.0
-  };
-});
-
-// Handle update settings
-ipcMain.handle('update-settings', async (event, settings) => {
-  try {
-    global.gameSettings = settings;
-    return { success: true };
-  } catch (error) {
-    log.error('Error updating settings:', error);
-    throw error;
-  }
-});
+// NOTE: 'read-file', 'write-file', 'start-new-game', 'get-new-game-options',
+// 'load-game', 'save-game', 'get-settings', and 'update-settings' are handled
+// by gameIntegration.initGameIntegration() (see game-integration.js), which
+// persists to disk under the app's userData directory. They used to also be
+// registered here as in-memory-only duplicates, which made Electron throw on
+// the second registration and silently aborted the rest of
+// gameIntegration's setup (including get-saved-games/delete-saved-game/
+// log-error) - the game could never actually save.
 
 // Quit when all windows are closed, except on macOS
 app.on('window-all-closed', () => {

@@ -585,11 +585,18 @@ function setCustomerFrequency(multiplier) {
     
     // Store the multiplier in a global variable
     window.customerFrequencyMultiplier = multiplier;
-    
-    // Patch the calcCustomers function to use the multiplier
-    const originalCalcCustomers = window.brandReputation.calcCustomers;
+
+    // Capture the true, unpatched calcCustomers exactly once. Re-wrapping
+    // window.brandReputation.calcCustomers directly (as this used to do)
+    // would wrap whatever the *current* patched version already was,
+    // stacking multipliers every time the dropdown changed instead of
+    // replacing the previous one.
+    if (!window._originalCalcCustomers) {
+        window._originalCalcCustomers = window.brandReputation.calcCustomers;
+    }
+
     window.brandReputation.calcCustomers = function(hour) {
-        const baseCount = originalCalcCustomers.call(this, hour);
+        const baseCount = window._originalCalcCustomers.call(this, hour);
         return Math.floor(baseCount * window.customerFrequencyMultiplier);
     };
     

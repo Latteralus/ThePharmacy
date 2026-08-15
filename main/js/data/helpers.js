@@ -131,7 +131,7 @@ window.helpers = {
                 minWage = 47680;
                 maxWage = 57130;
             }
-        } else if (role === 'Sales Rep') {
+        } else if (role === 'Cashier') {
             if (skillLevel === 'Novice') {
                 minWage = 50000;
                 maxWage = 60000;

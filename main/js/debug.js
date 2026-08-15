@@ -18,7 +18,12 @@
     debugOverlay.style.padding = '20px';
     debugOverlay.style.overflow = 'auto';
     debugOverlay.style.zIndex = '99999';
-    
+    // Starts hidden - this is a full-screen panel that would otherwise
+    // block every click in the game (including gameplay buttons) until
+    // someone found and clicked "Hide Debug". Toggle it with the small
+    // tab added below instead.
+    debugOverlay.style.display = 'none';
+
     // Add header
     const header = document.createElement('h2');
     header.textContent = 'Debug Information';
@@ -54,11 +59,28 @@
     buttonContainer.appendChild(mainMenuButton);
     
     debugOverlay.appendChild(buttonContainer);
-    
+
+    // Small always-visible tab to reopen the debug panel once it's hidden
+    const debugToggle = document.createElement('button');
+    debugToggle.id = 'debug-toggle';
+    debugToggle.textContent = 'Debug';
+    debugToggle.style.position = 'fixed';
+    debugToggle.style.bottom = '8px';
+    debugToggle.style.left = '8px';
+    debugToggle.style.zIndex = '99998';
+    debugToggle.style.padding = '4px 8px';
+    debugToggle.style.fontSize = '11px';
+    debugToggle.style.fontFamily = 'monospace';
+    debugToggle.style.opacity = '0.5';
+    debugToggle.addEventListener('click', function() {
+      debugOverlay.style.display = debugOverlay.style.display === 'none' ? 'block' : 'none';
+    });
+
     // Add to document when DOM is ready
     function addDebugOverlay() {
       if (document.body) {
         document.body.appendChild(debugOverlay);
+        document.body.appendChild(debugToggle);
         interceptConsoleLog();
       } else {
         setTimeout(addDebugOverlay, 10);

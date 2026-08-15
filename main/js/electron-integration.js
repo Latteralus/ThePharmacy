@@ -53,6 +53,9 @@
             window.saveGame = async function() {
                 try {
                     // Get the current game state
+                    // window.brandReputation carries live methods (calcCustomers,
+                    // gainReputation, loseReputation) which can't cross IPC's
+                    // structured-clone boundary - only send its plain data fields.
                     const gameData = {
                         gameState: window.gameState,
                         financesData: window.financesData,
@@ -60,7 +63,10 @@
                         productsData: window.productsData,
                         materialsData: window.materialsData,
                         equipmentData: window.equipmentData,
-                        brandReputation: window.brandReputation,
+                        brandReputation: {
+                            brandScore: window.brandReputation.brandScore,
+                            reputationScore: window.brandReputation.reputationScore
+                        },
                         timestamp: Date.now()
                     };
                     
@@ -101,7 +107,12 @@
                         window.productsData = gameData.productsData;
                         window.materialsData = gameData.materialsData;
                         window.equipmentData = gameData.equipmentData;
-                        window.brandReputation = gameData.brandReputation;
+                        // Merge saved data into the existing brandReputation module
+                        // instead of replacing it, so its methods (calcCustomers,
+                        // gainReputation, loseReputation) survive the load.
+                        if (window.brandReputation && gameData.brandReputation) {
+                            Object.assign(window.brandReputation, gameData.brandReputation);
+                        }
                         
                         console.log('Game loaded successfully');
                         

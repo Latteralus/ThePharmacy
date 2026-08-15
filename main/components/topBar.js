@@ -122,6 +122,20 @@ window.renderTopBar = function renderTopBar() {
   rightSection.appendChild(financialSummary);
   rightSection.appendChild(timeContainer);
 
+  // Save button
+  const saveButton = document.createElement('button');
+  saveButton.className = 'save-button';
+  saveButton.innerHTML = '💾 Save';
+  saveButton.title = 'Save game (Ctrl+S)';
+  saveButton.addEventListener('click', () => {
+    if (typeof window.saveGame === 'function') {
+      window.saveGame();
+    } else {
+      console.error('window.saveGame is not available');
+    }
+  });
+  rightSection.appendChild(saveButton);
+
   // Notifications button (new feature)
   const notificationsButton = document.createElement('button');
   notificationsButton.className = 'notifications-button';
@@ -347,6 +361,22 @@ window.renderTopBar = function renderTopBar() {
       font-size: 0.9rem;
     }
     
+    .save-button {
+      background-color: rgba(255, 255, 255, 0.15);
+      border: none;
+      color: white;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 6px 12px;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+    }
+
+    .save-button:hover {
+      background-color: rgba(255, 255, 255, 0.28);
+    }
+
     .notifications-button {
       background: none;
       border: none;
@@ -357,7 +387,7 @@ window.renderTopBar = function renderTopBar() {
       margin-left: 10px;
       transition: transform 0.2s;
     }
-    
+
     .notifications-button:hover {
       transform: scale(1.1);
     }

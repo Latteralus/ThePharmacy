@@ -85,23 +85,23 @@ window.renderSidebar = function renderSidebar() {
     `;
     sidebar.appendChild(reputationInfo);
     
-    // Add "Logout" Button at the very bottom
+    // Add "Main Menu" button at the very bottom
     const logoutButton = document.createElement('div');
     logoutButton.className = 'nav-item logout-button';
-    
+
     const logoutIcon = document.createElement('span');
     logoutIcon.className = 'nav-icon';
     logoutIcon.innerHTML = '🚪';
     logoutButton.appendChild(logoutIcon);
-    
+
     const logoutLabel = document.createElement('span');
     logoutLabel.className = 'nav-label';
-    logoutLabel.textContent = 'Logout';
+    logoutLabel.textContent = 'Main Menu';
     logoutButton.appendChild(logoutLabel);
-    
+
     logoutButton.onclick = () => {
-        if (confirm('Are you sure you want to logout?')) {
-            window.location.href = '/logout';
+        if (confirm('Return to the main menu? Unsaved progress will be lost.')) {
+            window.location.href = 'index.html';
         }
     };
     
