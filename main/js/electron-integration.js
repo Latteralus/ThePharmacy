@@ -54,15 +54,17 @@
                 try {
                     // Get the current game state
                     // window.brandReputation carries live methods (calcCustomers,
-                    // gainReputation, loseReputation) which can't cross IPC's
-                    // structured-clone boundary - only send its plain data fields.
+                    // gainReputation, loseReputation), and every equipmentData
+                    // item carries an isUnlocked() method - none of that can
+                    // cross IPC's structured-clone boundary, so only send plain
+                    // data fields.
                     const gameData = {
                         gameState: window.gameState,
                         financesData: window.financesData,
                         employeesData: window.employeesData,
                         productsData: window.productsData,
                         materialsData: window.materialsData,
-                        equipmentData: window.equipmentData,
+                        equipmentData: (window.equipmentData || []).map(({ isUnlocked, ...rest }) => rest),
                         brandReputation: {
                             brandScore: window.brandReputation.brandScore,
                             reputationScore: window.brandReputation.reputationScore
