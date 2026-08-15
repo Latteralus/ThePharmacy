@@ -1,6 +1,6 @@
 // /js/pages/operationsPage.js - FIXED VERSION
 
-window.renderOperationsPage = function (mainContent) {
+window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
     // Indicate we've navigated to "operations"
     window.currentPage = 'operations';
 
@@ -156,7 +156,7 @@ window.renderOperationsPage = function (mainContent) {
     // --------------------- RENDERING FUNCTIONS ---------------------
 
     // Render employees with card style
-    function renderEmployees() {
+    function renderEmployees(): void {
         const employeesList = document.getElementById('employeesList');
         if (!employeesList) return;
         
@@ -223,7 +223,7 @@ window.renderOperationsPage = function (mainContent) {
     }
 
     // Render all active tasks
-    function renderTasks() {
+    function renderTasks(): void {
         const tasksList = document.getElementById('tasksList');
         if (!tasksList) return;
         
@@ -247,7 +247,7 @@ window.renderOperationsPage = function (mainContent) {
         }
 
         // Group tasks by type
-        const groupedTasks = {};
+        const groupedTasks: Record<string, Task[]> = {};
         activeTasks.forEach(task => {
             if (!groupedTasks[task.type]) {
                 groupedTasks[task.type] = [];
@@ -277,7 +277,7 @@ window.renderOperationsPage = function (mainContent) {
             groupHeader.textContent = taskTypeDescription;
             tasksList.appendChild(groupHeader);
 
-            tasksOfType.forEach(task => {
+            tasksOfType.forEach((task: Task) => {
                 const taskDiv = document.createElement('div');
                 taskDiv.className = 'task-entry';
                 taskDiv.style.border = '1px solid #ddd';
@@ -368,11 +368,11 @@ window.renderOperationsPage = function (mainContent) {
     }
 
     // Use the UI functions for customers and prescriptions
-    function renderCustomers() {
+    function renderCustomers(): void {
         window.ui.updateCustomers();
     }
 
-    function renderPrescriptions() {
+    function renderPrescriptions(): void {
         window.ui.updatePrescriptions();
     }
 
@@ -387,14 +387,14 @@ window.renderOperationsPage = function (mainContent) {
                 renderPrescriptions();
             } else {
                 // Stop the interval if we navigate away
-                clearInterval(window.operationsRefreshInterval);
+                clearInterval(window.operationsRefreshInterval!);
                 window.operationsRefreshInterval = null;
             }
         }, 2000); // Refresh every 2 seconds
     }
 
     // Return a cleanup function
-    return function cleanup() {
+    return function cleanup(): void {
         if (window.operationsRefreshInterval) {
             clearInterval(window.operationsRefreshInterval);
             window.operationsRefreshInterval = null;

@@ -602,6 +602,13 @@ interface TimeEventsApi {
   };
 }
 
+// chart.js is loaded via a plain <script> tag (main.html), not imported, so
+// TS has no ambient knowledge of it. Minimal shape covering only what
+// financesPage.ts actually calls (`new Chart(ctx, {type, data, options})`).
+declare class Chart {
+  constructor(ctx: CanvasRenderingContext2D, config: { type: string; data: ChartData; options?: Record<string, unknown> });
+}
+
 interface BootstrapApi {
   retry: () => void;
   checkComponents: () => boolean;
@@ -631,7 +638,13 @@ interface Window {
   username?: string;
   saveGame?: () => void;
   notifications?: NotificationsApi;
-  renderOperationsPage?: (container: HTMLElement) => void;
+  renderOperationsPage?: (container: HTMLElement) => (() => void);
+  // Set by operationsPage.ts's own render call; the cleanup function
+  // returned by renderOperationsPage is never actually captured by
+  // showPage (main.ts casts the renderer's return type away), so this
+  // interval is the page's only way to stop refreshing itself once you
+  // navigate away.
+  operationsRefreshInterval?: ReturnType<typeof setInterval> | null;
   renderEmployees?: () => void;
   // Owned by employeesPage.js, not converted yet, but called unconditionally
   // by employees.ts's hireEmployee (no typeof guard in the original either)
@@ -652,6 +665,10 @@ interface Window {
   renderStatisticsPage?: (container: HTMLElement) => void;
   renderEquipmentPage?: (container: HTMLElement) => void;
   renderResearchPage?: (container: HTMLElement) => void;
+  renderMarketplacePage?: (container: HTMLElement) => void;
+  renderEmployeesPage?: (container: HTMLElement) => HTMLElement;
+  renderFinancesPage?: (container: HTMLElement) => void;
+  renderSettingsPage?: (container: HTMLElement) => void;
   timeEvents?: TimeEventsApi;
   // Debug-only global set by timeEvents.ts (console-driven time skip), no
   // callers elsewhere in the codebase.
@@ -698,4 +715,19 @@ interface Window {
   loadSavedGame: () => Promise<boolean>;
   runFallbackInitialization: () => boolean;
   bootstrapGame: BootstrapApi;
+  // Read by settingsPage.ts's simulation-speed dropdown, but never actually
+  // set anywhere — main.ts keeps its own SIMULATION_SPEED config in a
+  // script-local `const GAME_CONFIG`, not on `window`. window.GAME_CONFIG is
+  // therefore always undefined; settingsPage.ts's own setGameSpeed always
+  // hits its "Game config not found" branch and never changes the speed.
+  // Pre-existing, confirmed while converting settingsPage.js — see
+  // docs/Changelog.md.
+  GAME_CONFIG?: { SIMULATION_SPEED: number };
+  // Set by settingsPage.ts's setCustomerFrequency the first time the
+  // frequency dropdown changes.
+  customerFrequencyMultiplier?: number;
+  _originalCalcCustomers?: (hour: number) => number;
+  // Set by settingsPage.ts's setOperatingCosts the first time it runs, to
+  // remember the pre-multiplier overhead value.
+  originalOverhead?: number;
 }

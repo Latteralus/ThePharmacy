@@ -1,6 +1,6 @@
 // improved-financesPage.js (concise version)
 
-window.renderFinancesPage = function(mainContent) {
+window.renderFinancesPage = function(mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
 
     const container = document.createElement('div');
@@ -61,7 +61,7 @@ window.renderFinancesPage = function(mainContent) {
     const tabs = document.createElement('div');
     tabs.className = 'tabs';
     const tabHeaders = ['Overview', 'Daily Report', 'Monthly Report', 'Transactions'];
-    const tabContents = [];
+    const tabContents: HTMLDivElement[] = [];
 
     tabHeaders.forEach(headerText => {
         const tabHeader = document.createElement('button');
@@ -292,7 +292,7 @@ window.renderFinancesPage = function(mainContent) {
     // ===== Helper Functions =====
     
     // Create a financial summary card
-    function createSummaryCard(title, value, status) {
+    function createSummaryCard(title: string, value: string, status: string): HTMLDivElement {
         const card = document.createElement('div');
         card.className = `summary-card ${status}`;
         
@@ -311,14 +311,14 @@ window.renderFinancesPage = function(mainContent) {
     }
     
     // Generate transaction table rows
-    function generateTransactionRows(transactions, limit = 20) {
+    function generateTransactionRows(transactions: Transaction[], limit: number = 20): string {
         if (!transactions || transactions.length === 0) {
             return '<tr><td colspan="5">No transactions found</td></tr>';
         }
-        
+
         // Sort transactions by date (newest first)
-        const sortedTransactions = [...transactions].sort((a, b) => 
-            new Date(b.date) - new Date(a.date)
+        const sortedTransactions = [...transactions].sort((a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime()
         );
         
         // Take only the first 'limit' transactions
@@ -338,27 +338,27 @@ window.renderFinancesPage = function(mainContent) {
     }
     
     // Format date
-    function formatDate(date) {
+    function formatDate(date: Date): string {
         if (!(date instanceof Date)) {
             date = new Date(date);
         }
         return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} ${padZero(date.getHours())}:${padZero(date.getMinutes())}`;
     }
-    
+
     // Pad with zero
-    function padZero(num) {
+    function padZero(num: number): string {
         return num.toString().padStart(2, '0');
     }
-    
+
     // Capitalize first letter
-    function capitalizeFirstLetter(string) {
-        return string.charAt(0).toUpperCase() + string.slice(1);
+    function capitalizeFirstLetter(str: string): string {
+        return str.charAt(0).toUpperCase() + str.slice(1);
     }
     
     // Initialize chart.js charts
-    function initializeCharts() {
+    function initializeCharts(): void {
         // Monthly Financials Chart
-        const monthlyFinancialsCtx = document.getElementById('monthly-financials-chart')?.getContext('2d');
+        const monthlyFinancialsCtx = document.querySelector<HTMLCanvasElement>('#monthly-financials-chart')?.getContext('2d');
         if (monthlyFinancialsCtx) {
             const chartData = window.finances.getMonthlyFinancialChartData();
             new Chart(monthlyFinancialsCtx, {
@@ -378,7 +378,7 @@ window.renderFinancesPage = function(mainContent) {
         }
         
         // Daily Sales Chart
-        const dailySalesCtx = document.getElementById('dailySalesChart')?.getContext('2d');
+        const dailySalesCtx = document.querySelector<HTMLCanvasElement>('#dailySalesChart')?.getContext('2d');
         if (dailySalesCtx) {
             const dailySalesData = window.finances.getDailySalesChartData();
             new Chart(dailySalesCtx, {
@@ -397,7 +397,7 @@ window.renderFinancesPage = function(mainContent) {
         }
         
         // Monthly Sales Chart
-        const monthlySalesCtx = document.getElementById('monthlySalesChart')?.getContext('2d');
+        const monthlySalesCtx = document.querySelector<HTMLCanvasElement>('#monthlySalesChart')?.getContext('2d');
         if (monthlySalesCtx) {
             const monthlySalesData = window.finances.getMonthlySalesChartData();
             new Chart(monthlySalesCtx, {
@@ -417,12 +417,12 @@ window.renderFinancesPage = function(mainContent) {
     }
     
     // Add event listeners
-    function addEventListeners() {
+    function addEventListeners(): void {
         // Apply markup button
         const applyMarkupBtn = document.getElementById('apply-markup-btn');
         if (applyMarkupBtn) {
             applyMarkupBtn.addEventListener('click', function() {
-                const markupInput = document.getElementById('global-markup');
+                const markupInput = document.querySelector<HTMLInputElement>('#global-markup')!;
                 const markup = parseFloat(markupInput.value);
                 
                 if (!isNaN(markup) && markup >= 0) {
@@ -447,8 +447,8 @@ window.renderFinancesPage = function(mainContent) {
         const filterBtn = document.getElementById('apply-transaction-filter');
         if (filterBtn) {
             filterBtn.addEventListener('click', function() {
-                const typeFilter = document.getElementById('transaction-type').value;
-                const searchFilter = document.getElementById('transaction-search').value.toLowerCase();
+                const typeFilter = document.querySelector<HTMLSelectElement>('#transaction-type')!.value;
+                const searchFilter = document.querySelector<HTMLInputElement>('#transaction-search')!.value.toLowerCase();
                 
                 // Filter transactions
                 let filteredTransactions = window.financesData.transactions || [];

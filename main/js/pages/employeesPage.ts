@@ -1,6 +1,6 @@
 // /js/pages/employeesPage.js - IMPROVED VERSION
 
-function renderEmployeesPage(mainContent) {
+function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     mainContent.innerHTML = '';
 
     // Main container for the Employees page
@@ -214,7 +214,7 @@ function renderEmployeesPage(mainContent) {
     // --------------------------------------------------------------
 
     // Render Employee Cards
-    function renderEmployees(searchText = '') {
+    function renderEmployees(searchText: string = ''): void {
         employeesGrid.innerHTML = ''; // Clear existing cards
         
         let filteredEmployees = window.employeesData.filter(employee => {
@@ -240,7 +240,7 @@ function renderEmployeesPage(mainContent) {
     }
     
     // Create an employee card
-    function createEmployeeCard(employee) {
+    function createEmployeeCard(employee: Employee): HTMLDivElement {
         const card = document.createElement('div');
         card.className = 'employee-card';
         
@@ -479,7 +479,7 @@ function renderEmployeesPage(mainContent) {
     };
     
     // Function to confirm firing an employee
-    function confirmFireEmployee(employee) {
+    function confirmFireEmployee(employee: Employee): void {
         if (confirm(`Are you sure you want to terminate ${employee.firstName} ${employee.lastName}?`)) {
             window.employees.fireEmployee(employee.id);
             renderEmployees(searchInput.value); // Update the employee list

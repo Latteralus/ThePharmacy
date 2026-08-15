@@ -1,4 +1,12 @@
-window.renderMarketplacePage = function(mainContent) {
+interface MarketplaceCardRefs {
+  rootDiv: HTMLDivElement;
+  nameSpan: HTMLSpanElement;
+  inventorySpan: HTMLSpanElement;
+  qtyInput: HTMLInputElement;
+  matObj: Material;
+}
+
+window.renderMarketplacePage = function(mainContent: HTMLElement): void {
   mainContent.innerHTML = '';
 
   // Create a container for the Marketplace page
@@ -50,7 +58,7 @@ window.renderMarketplacePage = function(mainContent) {
   container.appendChild(materialsGrid);
 
   // We'll store references to dynamically updated elements:
-  const materialCards = []; // an array of { rootDiv, nameSpan, inventorySpan, qtyInput, matObj }
+  const materialCards: MarketplaceCardRefs[] = [];
 
   // -------------------------------------------------------------------------
   // 3) Bottom row for bulk purchase summary
@@ -85,7 +93,7 @@ window.renderMarketplacePage = function(mainContent) {
   // -------------------------------------------------------------------------
   // Render function: builds each card for materials
   // -------------------------------------------------------------------------
-  function renderMaterials() {
+  function renderMaterials(): void {
     materialsGrid.innerHTML = '';
     materialCards.length = 0; // clear
 
@@ -180,7 +188,7 @@ window.renderMarketplacePage = function(mainContent) {
   // -------------------------------------------------------------------------
   // Calculate the total cost of all selected items
   // -------------------------------------------------------------------------
-  function calculateTotalCost() {
+  function calculateTotalCost(): number {
     let sum = 0;
     materialCards.forEach(entry => {
       const qty = parseInt(entry.qtyInput.value, 10) || 0;
@@ -194,7 +202,7 @@ window.renderMarketplacePage = function(mainContent) {
   // -------------------------------------------------------------------------
   // Purchase logic: subtract cost from finances, add items to inventory
   // -------------------------------------------------------------------------
-  function confirmPurchase() {
+  function confirmPurchase(): void {
     const totalCost = calculateTotalCost();
     if (window.financesData.cash < totalCost) {
       alert('Not enough cash to buy these materials!');
@@ -226,7 +234,7 @@ window.renderMarketplacePage = function(mainContent) {
   // -------------------------------------------------------------------------
   // updateTotalCostDisplay: refresh the displayed total
   // -------------------------------------------------------------------------
-  function updateTotalCostDisplay() {
+  function updateTotalCostDisplay(): void {
     const sum = calculateTotalCost();
     totalCostValue.textContent = sum.toFixed(2);
   }
@@ -244,7 +252,7 @@ window.renderMarketplacePage = function(mainContent) {
   purchaseButton.addEventListener('click', confirmPurchase);
 
   // 3) Each qtyInput might also update total cost on change
-  function watchQuantityChanges() {
+  function watchQuantityChanges(): void {
     materialCards.forEach(entry => {
       entry.qtyInput.addEventListener('input', () => {
         updateTotalCostDisplay();

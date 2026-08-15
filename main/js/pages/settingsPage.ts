@@ -1,6 +1,6 @@
 // /js/pages/settingsPage.js
 
-window.renderSettingsPage = function(mainContent) {
+window.renderSettingsPage = function(mainContent: HTMLElement): void {
     // Clear existing content
     mainContent.innerHTML = '';
 
@@ -39,7 +39,7 @@ window.renderSettingsPage = function(mainContent) {
     toggleDayButton.onclick = function() {
         toggleDayActive();
         updateDayStatus(dayStatus);
-        this.textContent = window.gameState?.isDayActive ? 'End Day' : 'Start Day';
+        toggleDayButton.textContent = window.gameState?.isDayActive ? 'End Day' : 'Start Day';
     };
     dayActiveControl.appendChild(toggleDayButton);
     
@@ -59,7 +59,7 @@ window.renderSettingsPage = function(mainContent) {
     togglePauseButton.onclick = function() {
         toggleGamePause();
         updatePauseStatus(pauseStatus);
-        this.textContent = window.gameState?.isPaused ? 'Resume Game' : 'Pause Game';
+        togglePauseButton.textContent = window.gameState?.isPaused ? 'Resume Game' : 'Pause Game';
     };
     pauseControl.appendChild(togglePauseButton);
     
@@ -80,9 +80,9 @@ window.renderSettingsPage = function(mainContent) {
     
     speedOptions.forEach(option => {
         const optElement = document.createElement('option');
-        optElement.value = option.value;
+        optElement.value = String(option.value);
         optElement.textContent = option.label;
-        
+
         // Set currently selected option
         if (window.GAME_CONFIG && option.value === window.GAME_CONFIG.SIMULATION_SPEED) {
             optElement.selected = true;
@@ -90,12 +90,12 @@ window.renderSettingsPage = function(mainContent) {
             // Default to normal speed if config not available
             optElement.selected = true;
         }
-        
+
         speedSelect.appendChild(optElement);
     });
-    
+
     speedSelect.onchange = function() {
-        setGameSpeed(parseFloat(this.value));
+        setGameSpeed(parseFloat(speedSelect.value));
     };
     
     speedControl.appendChild(speedSelect);
@@ -152,19 +152,19 @@ window.renderSettingsPage = function(mainContent) {
     
     customerFreqOptions.forEach(option => {
         const optElement = document.createElement('option');
-        optElement.value = option.value;
+        optElement.value = String(option.value);
         optElement.textContent = option.label;
-        
+
         // Set default selection
         if (option.value === 1.0) {
             optElement.selected = true;
         }
-        
+
         customerFreqSelect.appendChild(optElement);
     });
-    
+
     customerFreqSelect.onchange = function() {
-        setCustomerFrequency(parseFloat(this.value));
+        setCustomerFrequency(parseFloat(customerFreqSelect.value));
     };
     
     customerFreqControl.appendChild(customerFreqSelect);
@@ -177,7 +177,7 @@ window.renderSettingsPage = function(mainContent) {
     cashInput.type = 'number';
     cashInput.min = '0';
     cashInput.step = '1000';
-    cashInput.value = window.financesData?.cash || 10000;
+    cashInput.value = String(window.financesData?.cash || 10000);
     cashInput.className = 'settings-input';
     
     const setCashButton = document.createElement('button');
@@ -208,19 +208,19 @@ window.renderSettingsPage = function(mainContent) {
     
     costsOptions.forEach(option => {
         const optElement = document.createElement('option');
-        optElement.value = option.value;
+        optElement.value = String(option.value);
         optElement.textContent = option.label;
-        
+
         // Set default selection
         if (option.value === 1.0) {
             optElement.selected = true;
         }
-        
+
         costsSelect.appendChild(optElement);
     });
-    
+
     costsSelect.onchange = function() {
-        setOperatingCosts(parseFloat(this.value));
+        setOperatingCosts(parseFloat(costsSelect.value));
     };
     
     costsControl.appendChild(costsSelect);
@@ -308,69 +308,69 @@ window.renderSettingsPage = function(mainContent) {
         updateDayStatus(document.getElementById('day-status-indicator'));
         updatePauseStatus(document.getElementById('pause-status-indicator'));
     }, 1000);
-    
+
     // -----------------------------------
-    // Helper Functions 
+    // Helper Functions
     // -----------------------------------
-    
+
     // Create a settings section with title
-    function createSettingsSection(title) {
+    function createSettingsSection(title: string): HTMLDivElement {
         const section = document.createElement('div');
         section.className = 'settings-section';
-        
+
         const sectionTitle = document.createElement('h3');
         sectionTitle.textContent = title;
         section.appendChild(sectionTitle);
-        
+
         return section;
     }
-    
+
     // Create a setting item with label
-    function createSettingItem(label) {
+    function createSettingItem(label: string): HTMLDivElement {
         const item = document.createElement('div');
         item.className = 'settings-item';
-        
+
         const itemLabel = document.createElement('div');
         itemLabel.className = 'settings-label';
         itemLabel.textContent = label;
         item.appendChild(itemLabel);
-        
+
         const itemControls = document.createElement('div');
         itemControls.className = 'settings-controls';
         item.appendChild(itemControls);
-        
+
         return itemControls;
     }
-    
+
     // Update day status indicator
-    function updateDayStatus(element) {
+    function updateDayStatus(element: HTMLElement | null): void {
         if (!element) return;
-        
+
         const isActive = window.gameState?.isDayActive || false;
         element.textContent = isActive ? '🟢 Active' : '🔴 Inactive';
         element.style.color = isActive ? '#4caf50' : '#f44336';
         element.className = 'settings-value';
     }
-    
+
     // Update pause status indicator
-    function updatePauseStatus(element) {
+    function updatePauseStatus(element: HTMLElement | null): void {
         if (!element) return;
-        
+
         const isPaused = window.gameState?.isPaused || false;
         element.textContent = isPaused ? '⏸️ Paused' : '▶️ Running';
         element.style.color = isPaused ? '#ff9800' : '#4caf50';
         element.className = 'settings-value';
     }
-    
+
     // Update time display
-    function updateTimeDisplay(element) {
+    function updateTimeDisplay(element: HTMLElement | null): void {
         if (!element || !window.gameState?.currentDate) return;
-        
+
         element.textContent = window.ui.formatDateTime(window.gameState.currentDate);
     }
-    
+
     // Add styles for the settings page
-    function addStyles(mainContent) {
+    function addStyles(mainContent: HTMLElement): void {
         const style = document.createElement('style');
         style.textContent = `
             .settings-page-container {
@@ -474,7 +474,7 @@ window.renderSettingsPage = function(mainContent) {
 // -----------------------------------
 
 // Toggle day active state
-function toggleDayActive() {
+function toggleDayActive(): boolean {
     if (!window.gameState) {
         console.error('Game state not found');
         return false;
@@ -495,15 +495,26 @@ function toggleDayActive() {
 }
 
 // Toggle game pause
-function toggleGamePause() {
+//
+// Declared as `const ... = function` rather than `function toggleGamePause()`
+// deliberately: settingsPage.js loads after main.js in main.html, and a
+// top-level `function` declaration in a plain (non-module) script becomes a
+// `window` property, same as `window.toggleGamePause = ...` would. That was
+// silently clobbering main.ts's real `window.toggleGamePause` on every page
+// load — found while converting this file to TS (main.ts's own assignment
+// stopped type-checking against the resulting merged global type). `const`
+// keeps this local-only, matching what every caller of the bare identifier
+// here already got in practice (this file's own onclick handlers only ever
+// called the local one). See docs/Changelog.md.
+const toggleGamePause = function(): boolean {
     if (!window.gameState) {
         console.error('Game state not found');
         return false;
     }
-    
+
     window.gameState.isPaused = !window.gameState.isPaused;
     console.log(`Game is now ${window.gameState.isPaused ? 'paused' : 'running'}`);
-    
+
     // If unpaused, reset timing variables to prevent large time jumps
     if (!window.gameState.isPaused) {
         const now = performance.now();
@@ -511,24 +522,26 @@ function toggleGamePause() {
         if (window.gameState.lastSimulationTime !== undefined) window.gameState.lastSimulationTime = now;
         if (window.gameState.simulationAccumulator !== undefined) window.gameState.simulationAccumulator = 0;
     }
-    
-    return true;
-}
 
-// Set game simulation speed
-function setGameSpeed(speed) {
+    return true;
+};
+
+// Set game simulation speed. Always fails (see the GAME_CONFIG note in
+// global.d.ts) — same `const` reasoning as toggleGamePause above, applied to
+// window.setGameSpeed's identical shadowing.
+const setGameSpeed = function(speed: number): boolean {
     if (!window.GAME_CONFIG) {
         console.error('Game config not found');
         return false;
     }
-    
+
     window.GAME_CONFIG.SIMULATION_SPEED = speed;
     console.log(`Game speed set to ${speed}x`);
     return true;
-}
+};
 
 // Advance game time by one hour
-function advanceGameTimeByHour() {
+function advanceGameTimeByHour(): boolean {
     if (!window.gameState || !window.gameState.currentDate) {
         console.error('Game state or current date not found');
         return false;
@@ -547,7 +560,7 @@ function advanceGameTimeByHour() {
 }
 
 // Skip to next day
-function skipToNextDay() {
+function skipToNextDay(): boolean {
     if (!window.gameState || !window.gameState.currentDate) {
         console.error('Game state or current date not found');
         return false;
@@ -577,12 +590,12 @@ function skipToNextDay() {
 }
 
 // Set customer frequency multiplier
-function setCustomerFrequency(multiplier) {
+function setCustomerFrequency(multiplier: number): boolean {
     if (!window.brandReputation) {
         console.error('Brand reputation module not found');
         return false;
     }
-    
+
     // Store the multiplier in a global variable
     window.customerFrequencyMultiplier = multiplier;
 
@@ -595,105 +608,110 @@ function setCustomerFrequency(multiplier) {
         window._originalCalcCustomers = window.brandReputation.calcCustomers;
     }
 
-    window.brandReputation.calcCustomers = function(hour) {
-        const baseCount = window._originalCalcCustomers.call(this, hour);
-        return Math.floor(baseCount * window.customerFrequencyMultiplier);
+    window.brandReputation.calcCustomers = function(hour: number): number {
+        // Both guaranteed set by the two statements immediately above,
+        // every time this replacement runs.
+        const baseCount = window._originalCalcCustomers!.call(this, hour);
+        return Math.floor(baseCount * window.customerFrequencyMultiplier!);
     };
-    
+
     console.log(`Customer frequency multiplier set to ${multiplier}x`);
     return true;
 }
 
 // Set game cash
-function setGameCash(amount) {
+function setGameCash(amount: number): boolean {
     if (!window.financesData) {
         console.error('Finances data not found');
         return false;
     }
-    
+
     window.financesData.cash = amount;
-    
+
     // Update UI if available
     if (window.updateUI) {
         window.updateUI("finances");
     }
-    
+
     console.log(`Cash set to $${amount.toFixed(2)}`);
     return true;
 }
 
 // Set operating costs multiplier
-function setOperatingCosts(multiplier) {
+function setOperatingCosts(multiplier: number): boolean {
     if (!window.financesData) {
         console.error('Finances data not found');
         return false;
     }
-    
+
     // Store original overhead if not already stored
     if (!window.originalOverhead) {
         window.originalOverhead = window.financesData.overhead;
     }
-    
+
     // Apply multiplier to original overhead
     window.financesData.overhead = window.originalOverhead * multiplier;
-    
+
     console.log(`Operating costs multiplier set to ${multiplier}x (overhead: $${window.financesData.overhead.toFixed(2)})`);
     return true;
 }
 
 // Add a random employee of the specified role
-function addRandomEmployee(role) {
+function addRandomEmployee(role: string): boolean {
     if (!window.employees || !window.helpers) {
         console.error('Employees module or helpers not found');
         return false;
     }
-    
+
     const skillLevel = 'Intermediate'; // Default to intermediate skill level
-    
-    const newEmployee = {
+
+    const newEmployee: Employee = {
         id: window.helpers.generateNewEmployeeId(),
         firstName: window.helpers.generateFirstName(),
         lastName: window.helpers.generateLastName(),
         role: role,
         salary: window.helpers.calculateStartingWage(role, skillLevel),
-        skills: generateRandomSkills(role, skillLevel),
+        // Same pre-existing edge case as employees.ts's hireEmployee: an
+        // unrecognized `role` leaves `skills` empty (`{}`), not a full
+        // EmployeeSkills — preserved as-is rather than guarded against.
+        skills: generateRandomSkills(role, skillLevel) as EmployeeSkills,
         morale: 80,
         mood: "😀",
         hireDate: new Date(window.gameState.currentDate),
         currentTaskId: null
     };
-    
+
     // Add the employee to the data
     window.employeesData.push(newEmployee);
-    
+
     // Update UI if available
     if (window.updateUI) {
         window.updateUI("employees");
     }
-    
+
     console.log(`Added new ${role}: ${newEmployee.firstName} ${newEmployee.lastName}`);
     return true;
-    
+
     // Helper function to generate skills based on role and level
-    function generateRandomSkills(role, level) {
-        let skills = {};
+    function generateRandomSkills(role: string, level: string): Partial<EmployeeSkills> {
+        let skills: Partial<EmployeeSkills> = {};
         let baseValue = 0;
-        
+
         switch (level) {
             case 'Novice': baseValue = 40; break;
             case 'Intermediate': baseValue = 60; break;
             case 'Skilled': baseValue = 80; break;
             default: baseValue = 50;
         }
-        
+
         // Generate random variation around base value
-        function randomSkill(primary = false) {
+        function randomSkill(primary: boolean = false): number {
             // Primary skills get a boost, others are lower
             const base = primary ? baseValue + 10 : baseValue - 10;
             // Add random variation of +/- 10%
             return Math.min(100, Math.max(10, base + (Math.random() * 20 - 10)));
         }
-        
+
         // Assign skills based on role
         if (role === 'Pharmacist') {
             skills.compounding = randomSkill(true);
@@ -701,7 +719,7 @@ function addRandomEmployee(role) {
             skills.customerService = randomSkill();
             skills.inventoryManagement = randomSkill();
             skills.sales = randomSkill();
-        } 
+        }
         else if (role === 'Lab Technician') {
             skills.compounding = randomSkill(true);
             skills.dispensing = randomSkill();
@@ -716,13 +734,13 @@ function addRandomEmployee(role) {
             skills.inventoryManagement = randomSkill();
             skills.sales = randomSkill(true);
         }
-        
+
         return skills;
     }
 }
 
 // Reset all tasks
-function resetAllTasks() {
+function resetAllTasks(): boolean {
     if (!window.taskManager) {
         console.error('Task manager not found');
         return false;
@@ -753,7 +771,7 @@ function resetAllTasks() {
 }
 
 // Reset all customers
-function resetAllCustomers() {
+function resetAllCustomers(): boolean {
     if (!window.customers) {
         console.error('Customers module not found');
         return false;
@@ -778,7 +796,7 @@ function resetAllCustomers() {
 }
 
 // Complete game state reset
-function resetGameState() {
+function resetGameState(): boolean {
     // Reset day start time to morning
     if (window.gameState) {
         window.gameState.currentDate = new Date(window.gameState.currentDate);

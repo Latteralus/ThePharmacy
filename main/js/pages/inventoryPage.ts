@@ -1,6 +1,6 @@
 // /js/pages/inventoryPage.js
 
-window.renderInventoryPage = function (mainContent) {
+window.renderInventoryPage = function (mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
 
     const container = document.createElement('div');
@@ -120,7 +120,7 @@ window.renderInventoryPage = function (mainContent) {
     container.appendChild(materialsGrid);
 
     // Function to render products
-    function renderProducts() {
+    function renderProducts(): void {
         productsGrid.innerHTML = '';
         const filterText = filterInput.value.toLowerCase().trim();
 
@@ -224,7 +224,7 @@ window.renderInventoryPage = function (mainContent) {
             maxInvLabel.textContent = 'Max Inventory:';
             const maxInvInput = document.createElement('input');
             maxInvInput.type = 'number';
-            maxInvInput.value = prod.maxInventory || '0'; // Use existing value or default to 0
+            maxInvInput.value = String(prod.maxInventory || 0); // Use existing value or default to 0
             maxInvInput.min = '0';
             maxInvInput.step = '1';
             const updateMaxInvButton = document.createElement('button');
@@ -249,7 +249,7 @@ window.renderInventoryPage = function (mainContent) {
     }
 
     // Function to render materials
-    function renderMaterials() {
+    function renderMaterials(): void {
         materialsGrid.innerHTML = '';
         const filterText = filterInput.value.toLowerCase().trim();
 

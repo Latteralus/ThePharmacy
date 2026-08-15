@@ -22,9 +22,9 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (34 of 47 files converted so far, though a
-chunk of the remainder turned out to be dead code excluded from the count —
-see that file); a much
+and per-file progress tracker (40 of 47 files converted so far —
+`main/js/pages/` is now fully converted — though a chunk of the remainder
+turned out to be dead code excluded from the count — see that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
 see that file for why.
 
@@ -113,6 +113,20 @@ confusion was with `fallback.js`'s *unrelated*, unexported, genuinely-dead
 local function of the same name. Found and corrected while actually
 converting `gameInitializer.js` to TS (2026-08-15) — see that file's
 progress-table entry.
+**Newly found while converting `settingsPage.js` to TS (2026-08-15):** the
+Settings page's Simulation Speed dropdown has never worked —
+`setGameSpeed` bails out on `if (!window.GAME_CONFIG)`, but nothing ever
+sets `window.GAME_CONFIG`; `main.ts` keeps its own `SIMULATION_SPEED` in a
+script-local `const GAME_CONFIG`, not on `window`. Confirmed via manual
+launch (console logs "Game config not found" every time the dropdown
+changes). Not fixed — see `docs/revision.md`'s `settingsPage.ts` entry for
+the related (and compile-forced) `window.setGameSpeed`/`toggleGamePause`
+shadowing bug found in the same file.
+**Newly found while converting `inventoryPage.js` to TS (2026-08-15):** the
+Inventory page's "Raw Materials" tab click handler only toggles which grid
+is visible — it never calls `renderMaterials()`, so the grid is empty until
+the filter input fires at least once. Pre-existing in the original `.js`,
+confirmed via manual launch, not fixed.
 
 **Confirmed dead code** (zero callers, safe to delete): the four
 `main/components/*Card.js` files plus `card.js` (not loaded by any HTML
@@ -159,6 +173,74 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration: tenth batch (operationsPage, employeesPage, financesPage, inventoryPage, marketplacePage, settingsPage) — `main/js/pages/` fully converted
+
+At the user's explicit request to finish out the page files in one sitting
+(overriding the standing 5-files-per-batch pace for this one session),
+converted all 6 remaining files under `main/js/pages/`: `operationsPage.js`,
+`employeesPage.js`, `financesPage.js`, `inventoryPage.js`,
+`marketplacePage.js`, `settingsPage.js`. `main/js/pages/` — and, with it,
+every renderer-side `<script>`-tag file — is now fully typed. What's left of
+the migration is `main/components/{activityCard,card,cashCard,inventoryCard}.js`
+(confirmed dead code, not actually planned for conversion) and
+`main/js/electron-integration.js`/`main/ipcMain.js`, which run in Electron's
+main process rather than as renderer `<script>` tags — a genuinely different
+architecture (CommonJS-style Node, not `window`-global) that needs its own
+tsconfig/build scoping decision before conversion starts, deliberately not
+attempted in this batch.
+
+Two of the six were true leaves (`operationsPage.ts`, `marketplacePage.ts`),
+converting the same way every prior leaf page did. The other four needed
+real fixes:
+
+- **`settingsPage.ts` forced an actual compile-time resolution, not just a
+  note.** The file declares top-level `function setGameSpeed(speed) {...}`
+  and `function toggleGamePause() {...}` — in a plain (non-module) `<script>`,
+  top-level `function` declarations become `window` properties, exactly like
+  an explicit `window.x = ...` assignment would. Since `settingsPage.js`
+  loads *after* `main.js` in `main.html`, these have been silently
+  overwriting `main.ts`'s real `window.setGameSpeed`/`window.toggleGamePause`
+  on every single game load — since the game's founding, as far as this
+  session could tell. TypeScript caught it the moment both files had types:
+  `main.ts`'s assignment (`(speedMultiplier: number) => void`) couldn't
+  satisfy the merged global type once `settingsPage.ts` also declared a
+  same-named global returning `boolean`. There was no way to preserve the
+  shadowing behavior byte-for-byte and still get a compiling project, so both
+  were changed from `function` declarations to `const ... = function`
+  expressions, which stay scoped to the file instead of leaking onto
+  `window`. Grepped the whole codebase (including `test/`) first to confirm
+  nothing outside `settingsPage.ts` reads `window.setGameSpeed` or
+  `window.toggleGamePause` — so this changes what those two properties
+  silently *were*, but not any behavior any code path actually exercises.
+- **`window.GAME_CONFIG` turned out to never be set at all** — `main.ts`
+  keeps `SIMULATION_SPEED` in a script-local `const`, never on `window` — so
+  the Settings page's speed dropdown has always failed silently. See Known
+  Issues below; not fixed, just newly confirmed and documented.
+- **`financesPage.ts`** needed a hand-written ambient `declare class Chart`
+  (chart.js loads via `<script>`, not `import`, so TS has no built-in
+  knowledge of it) and the same `Date` arithmetic → `.getTime()` fix
+  `finances.ts` needed earlier for its own transaction sort.
+- **`inventoryPage.ts`** surfaced a real, pre-existing UI bug while manually
+  verifying the batch: the "Raw Materials" tab never actually renders
+  materials until the filter input fires once. Not introduced by this
+  conversion (same logic existed in the original `.js`); documented, not
+  fixed.
+
+Several more of the now-familiar `.value`/`.textContent` `String(...)`
+DOM-typing fixes (same pattern as every earlier page), and
+`settingsPage.ts`'s `addRandomEmployee` reuses `employees.ts`'s established
+`Partial<EmployeeSkills>` / unrecognized-role-leaves-`{}` pattern for its own
+near-identical candidate-generation logic.
+
+Verified: `build:ts` clean, 8/8 Jest, 2/2 Playwright, plus a temporary
+Playwright script (removed after use) driving the real Electron app through
+all 6 pages — Operations' employee/task list, Marketplace's purchase flow
+(cash decremented correctly), Inventory's product/materials tabs, Employees'
+full hire flow (candidate generation through to roster increment), Finances'
+charts and transactions tab, and Settings' day/pause toggles (confirmed the
+`GAME_CONFIG` dropdown bug reproduces exactly as documented, no unexpected
+console errors).
 
 ### 2026-08-15 — TypeScript migration: ninth batch (customersPage, marketingPage, statisticsPage, equipmentPage, researchPage)
 
