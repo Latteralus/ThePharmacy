@@ -22,7 +22,7 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (17 of 47 files converted so far, though 8 of
+and per-file progress tracker (24 of 47 files converted so far, though 8 of
 the remaining 35 turned out to be dead code excluded from the count — see
 that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
@@ -97,11 +97,16 @@ the multi-day timer is cosmetic only), `brandReputation.brandScore`
 (frozen at its starting value forever — only `reputationScore` actually
 moves), insurance plan `formulary` (always null, every plan covers
 everything), prescription `refillsAllowed`/`assignedEmployeeId` (generated,
-never read); `gameInitializer.js` calls `window.runFallbackInitialization`
-(found 2026-08-15), which doesn't exist anywhere live — its only definition
-is in the dead, unloaded `fallback.js` (see Confirmed dead code below) —
-presumably guarded by a `typeof` check elsewhere since this hasn't crashed
-anything.
+never read).
+**Correction to a prior entry:** `gameInitializer.js` calling
+`window.runFallbackInitialization` was previously listed here as dead —
+that was wrong. `gameInitializer.js` *defines*
+`window.runFallbackInitialization` (unconditionally, at its own bottom) and
+`main.html` really does call it or the game silently fails to start; the
+confusion was with `fallback.js`'s *unrelated*, unexported, genuinely-dead
+local function of the same name. Found and corrected while actually
+converting `gameInitializer.js` to TS (2026-08-15) — see that file's
+progress-table entry.
 
 **Confirmed dead code** (zero callers, safe to delete): the four
 `main/components/*Card.js` files plus `card.js` (not loaded by any HTML
@@ -148,6 +153,211 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — Fixed everything flagged during the seventh migration batch
+
+User asked to fix all the issues surfaced while converting/verifying the
+seventh batch (below) rather than leave them documented-but-open. Four
+fixes, all re-verified against the real running app afterward:
+
+1. **`main.ts`'s dead `updateCountdownTimers` guard.** Nothing in the
+   codebase ever defines `window.updateCountdownTimers`, so the `typeof`
+   check in `renderUI` never passed. Removed the branch (and the now-unused
+   ambient type), same treatment as the `updateInventory` fix earlier this
+   session.
+2. **`employees.ts`'s `hireSelectedEmployee` alert.** Referenced
+   `employeeData.skillLevel`, a field the candidate objects never actually
+   carry — always printed literally "undefined" in the success alert.
+   Removed it from the message. Verified via a real hire through the
+   running app: alert now reads "Successfully hired Verify Person as a
+   Pharmacist with a salary of $85000.00." — no "undefined".
+3. **`gameInitializer.ts`'s `runFallbackInitialization` fallback objects.**
+   This is the true last-resort path (used only if everything else already
+   failed), and it had always constructed an incomplete `gameState` (no
+   `renderInfo`) and `financesData` (only `cash`/`dailyIncome`/
+   `pendingInsuranceIncome`) — meaning the very thing meant to rescue a
+   broken launch would itself crash on the first animation frame
+   (`gameState.renderInfo.lastFpsUpdate`) or the first finances call
+   (`financesData.transactions.push`). Filled in both objects with the same
+   zeroed-default shape `initializeNewGame` already uses. Verified directly
+   (this path isn't reachable through normal play): wiped `window.gameState`/
+   `window.financesData`, called `runFallbackInitialization()`, then drove
+   one real `gameLoop` frame and one real `finances.addTransaction` call —
+   neither threw, `renderInfo` and `transactions` were both present.
+4. **Finances page charts (`ReferenceError: Chart is not defined`).**
+   `financesPage.js` has always called `new Chart(...)`, but nothing in
+   `main.html` loaded a Chart.js script — the dependency was simply never
+   added. Added `chart.js` as a real `dependencies` entry (`npm install
+   chart.js`, landed on v4.5.1) and a `<script
+   src="node_modules/chart.js/dist/chart.umd.min.js">` tag in `main.html`
+   before the page-renderer scripts. `financesPage.js` already used Chart.js
+   v3+'s config syntax (`plugins.title` instead of v2's `options.title`),
+   so no changes needed there. Verified in the running app: all 3 canvases
+   on the Finances page now have real attached Chart instances
+   (`Chart.getChart(canvas)` returns non-null for each).
+
+Deliberately left alone: `hireEmployee`'s candidate-generation `skills`
+object would be incomplete (`{}`) for an unrecognized `role` — but `role`
+only ever arrives from `employeesPage.js`'s `<select>`, hard-coded to
+exactly `['Pharmacist', 'Lab Technician', 'Cashier']`, so that branch isn't
+reachable through the actual UI. Not "fixed" since there's no live bug to
+fix, just an unused defensive gap.
+
+Re-verified everything after all four fixes: `build:ts` clean, 8/8 Jest,
+2/2 Playwright, plus the direct fallback-initialization test above and a
+full manual launch (new game → Finances page → hire flow) with no new
+console errors beyond the pre-existing preload.js noise.
+
+### 2026-08-15 — TypeScript migration: seventh batch (main, employees, finances, game-bootstrap, gameInitializer) + VS Code tsdk fix
+
+Two unrelated things in one session: a VS Code editor false-positive, and
+the next migration batch.
+
+**VS Code fix:** the editor's Problems panel showed TS2046 ("Argument for
+'--module' option must be: 'commonjs', 'es6', ...") pointing at
+`tsconfig.json`'s `module: "none"` — but `npx tsc -p .` (the actual pinned
+5.9.3 from `node_modules`) compiled clean, as it has all along. VS Code's
+built-in TypeScript language service was using its own bundled TS version
+instead of the workspace's pinned one, and that bundled version doesn't
+support `module: "none"` (this is exactly the TS7-drops-`module:"none"`
+situation `docs/revision.md` already documented as the reason for pinning
+to 5.9.x — the editor just wasn't honoring the pin). Fixed with
+`.vscode/settings.json` (`typescript.tsdk`), not by changing `tsconfig.json`
+— changing the actual build config would have broken the real, working
+architecture to satisfy a phantom editor warning.
+
+**Migration batch:** converted `main/js/main.js`, `main/js/data/employees.js`,
+`main/js/data/finances.js`, `main/js/game-bootstrap.js`, and
+`main/js/gameInitializer.js` — the largest batch so far by line count
+(~2,050 lines combined). Chosen together because they're the last thing
+blocking `main/js/data/`'s completion (`employees.js`/`finances.js` were
+both waiting on `window.gameState` from `main.js`) plus the bootstrap
+sequence that constructs `gameState`/`financesData` in the first place
+(`gameInitializer.js`) and drives it (`game-bootstrap.js`). `GameState` and
+`FinancesData` are now their real, full shapes (`main.js` and `finances.js`
+respectively own them) instead of the small partials earlier batches had
+been extending.
+
+Notable typing decisions:
+- `GameState`'s `simulationAccumulator`/`lastFrameTime`/`lastSimulationTime`/
+  `renderInfo`/`dateCreated` are genuinely optional — three different call
+  sites construct `window.gameState` (main.js's own fallback,
+  `initializeNewGame`, and `runFallbackInitialization`) and each sets a
+  different subset. `main.js`'s own `gameLoop` already defensively checks
+  `if (!window.gameState.lastFrameTime)`, confirming this isn't accidental.
+  `runFallbackInitialization`'s `renderInfo`-less path means `main.ts`'s
+  `window.gameState.renderInfo!.lastFpsUpdate = timestamp` would still throw
+  if that specific fallback-of-a-fallback ever ran — a pre-existing latent
+  bug, preserved via non-null assertion rather than "fixed" with a new
+  guard, matching this migration's standing rule of not changing behavior
+  it didn't set out to change.
+- Same rule applied to `runFallbackInitialization`'s finances fallback,
+  which only ever set 3 of `FinancesData`'s now-many required fields —
+  rather than fabricating the other fields with zero defaults (a real
+  behavior change), cast the incomplete literal to `FinancesData` so it
+  keeps leaving the rest `undefined` at runtime exactly like the original.
+- `showPage`/`ui`/`renderTopBar`/`renderSidebar`/`taskManager` (made
+  required in earlier batches) are joined by `displayEmployeeCandidates`,
+  `initializeNewGame`, `loadSavedGame`, `runFallbackInitialization`,
+  `bootstrapGame`, `gameLoop`, `isGameInitialized` — all called
+  unconditionally by at least one converted file despite their owner
+  (`employeesPage.js`, or one of this batch's own files) sometimes still
+  being guarded elsewhere with a defensive `typeof` check.
+- Found and preserved (not fixed) two more "silently does nothing" spots,
+  folded into Known Issues above: `main.js`'s `updateCountdownTimers` guard
+  never passes (nothing ever defines that global), and
+  `hireSelectedEmployee`'s success alert references a `skillLevel` field
+  that candidate objects never actually have.
+- **Corrected a stale Known Issues entry** while actually converting
+  `gameInitializer.js`: it previously said `window.runFallbackInitialization`
+  was dead code. It isn't — `gameInitializer.js` defines it for real and
+  `main.html` calls it. The earlier audit had confused it with an unrelated,
+  genuinely-dead same-named local function inside `fallback.js`.
+- `finances.ts`'s `addTransaction` sort switched from `b.date - a.date` to
+  `b.date.getTime() - a.date.getTime()` — identical result, just spelled
+  out since TS doesn't do arithmetic directly on two `Date` objects.
+
+Verified the same way as prior batches, scaled to this batch's size:
+`build:ts` clean, 8/8 Jest, 2/2 Playwright (including the save/load
+round-trip test, which directly exercises `gameInitializer.ts`'s load path),
+a scripted old-vs-new comparison (`employees.calculateEmployeeEfficiency`/
+`calculateTaskCompletionTime`/mood transitions across the full morale range,
+`hireEmployee`'s candidate generation and cash deduction,
+`finances.addTransaction`'s sort order and id uniqueness, `addIncome`/
+`addExpense` including the unknown-category fallback path, `updateProfitMetrics`,
+two chart-data functions — all byte-identical old vs. new). Also a real
+Electron launch driving the actual new-game form with non-default options
+(hard difficulty + urban location): confirmed the resulting cash
+($100,000 × 0.7 hard modifier = $70,000) and overhead ($650 hard base ×
+1.3 urban = $845) matched the expected math exactly, reputation applied the
+hard-difficulty starting value, `dateCreated` was set; let the real game
+loop run for 3 real seconds and confirmed `gameState.currentDate` advanced
+and `lastFrameTime` got set; hired a Cashier through the real
+`employees.hireEmployee` → `displayEmployeeCandidates` pipeline and
+confirmed 5 candidates generated with correct role/salary and the $500
+hiring fee deducted; visited the Employees and Finances pages and confirmed
+no *new* console errors (only the pre-existing preload.js noise, plus the
+pre-existing-but-newly-noticed Chart.js one documented above, from
+unrelated still-plain-JS page files).
+
+`main/js/data/` is now **fully converted**. 24 of 47 files converted so far
+(23 remaining).
+
+### 2026-08-15 — Dead-code cleanup: production.ts's unreachable updateInventory check
+
+Follow-up to the sixth migration batch below. That batch's conversion of
+`production.js` had to decide what to do with a `typeof
+window.ui.updateInventory === 'function'` check in `refreshInventoryUI`'s
+UI-refresh fallback chain — ui.ts's real `UiApi` type (see `global.d.ts`)
+has never had an `updateInventory` method, so the branch could never fire.
+At the time, kept it alive via a local untyped cast rather than changing
+behavior mid-migration. Asked to fix it directly afterward: removed the
+dead branch outright (production.ts's `refreshInventoryUI` now falls
+through to the `updateInventoryDisplay`/`renderInventoryPage` checks
+instead). Deleting code that could never execute isn't a behavior change,
+so no new verification beyond a clean `build:ts`, 8/8 Jest, 2/2 Playwright.
+
+### 2026-08-15 — TypeScript migration: sixth batch (production, prescriptions)
+
+User asked for just 2 files this round (batches are otherwise fixed at 5).
+Converted `main/js/production.js` and `main/js/prescriptions.js` together —
+they read each other (`prescriptions.generatePrescription` calls
+`production.canCompound`; `production.handleTaskCompletion` calls
+`prescriptions.getPrescription`/`createFillTaskForPrescription`), the same
+mutual-dependency shape as the previous batch's ui.ts/customers.ts pair.
+`prescriptions.js` converting makes `PrescriptionsApi` the real, full type
+(upgrading customers.ts's earlier partial placeholder), and removes the
+second of the three things that were blocking `employees.js`/`finances.js`
+from converting (only `window.gameState` from `main.js` remains).
+
+One dead-code compile hazard surfaced and deliberately preserved rather than
+fixed: `production.js`'s `refreshInventoryUI` fallback chain checks
+`typeof window.ui.updateInventory === 'function'`, but ui.ts's real `UiApi`
+has never actually exposed an `updateInventory` method — this branch has
+always been unreachable at runtime. Kept the exact behavior via a local
+untyped cast rather than removing the dead branch (out of scope for a
+migration pass; folded into Known Issues below). Also preserved two
+implicit-`NaN`-on-missing-field behaviors in `handleTaskCompletion`
+(`task.quantityToMake`/`quantityNeeded`) via non-null assertions rather than
+defaulting to `0`, matching the "don't silently change fallback behavior"
+precedent from earlier batches (helpers.ts's `NaN` initialization).
+
+Verified the same way as the previous batch: `build:ts` clean, 8/8 Jest,
+2/2 Playwright, a scripted old-vs-new comparison (`canCompound`,
+`createCompoundTask`, `handleTaskCompletion` for both compound and
+fillPrescription task types, `createFillTaskForPrescription`,
+`getRandomFrequency`'s weighting boundaries, `updatePrescriptionStatus`,
+`removePrescriptionsByCustomer` — all byte-identical old vs. new), and a
+real Electron launch driving the actual cross-module pipeline: generated 4
+customers through `window.customers.generateCustomer()`, confirmed each one
+correctly produced a prescription plus the right task chain (compound →
+dependent fillPrescription → customerInteraction check-in), let the game
+run for a few seconds and confirmed tasks picked up progress via the real
+`taskManager`/`taskAssignment` (still plain JS), and checked the Inventory
+page renders without error. No new console errors — only the pre-existing,
+already-documented preload.js noise.
+
+19 of 47 files converted so far (28 remaining).
 
 ### 2026-08-15 — TypeScript migration: fifth batch (sideBar, topBar, taskbars, ui, customers)
 

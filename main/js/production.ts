@@ -1,11 +1,11 @@
 // /js/production.js
 
-window.production = (function() {
+window.production = (function(): ProductionApi {
 
     // Function to check if a product can be compounded based on material availability
-    function canCompound(product) {
+    function canCompound(product: Product): boolean {
         if (!product) return false;
-  
+
         for (let ingredient of product.ingredients) {
             const material = window.materialsData.find(m => m.id === ingredient.id);
             if (!material || material.inventory < ingredient.quantity) {
@@ -15,14 +15,14 @@ window.production = (function() {
         }
         return true;
     }
-  
+
     // Function to create a compound task for a product
-    function createCompoundTask(product, quantity) {
+    function createCompoundTask(product: Product, quantity: number): Task {
         // Calculate the reduced time (half of the original)
         const originalTime = product.productionTime;
         const reducedTime = Math.max(Math.ceil(originalTime / 2), 1); // Ensure minimum of 1 minute
-        
-        const compoundTask = {
+
+        const compoundTask: Task = {
             id: `compound-${product.id}-${Date.now()}`,
             type: 'compound',
             productId: product.id,
@@ -34,15 +34,15 @@ window.production = (function() {
             assignedTo: null,
             quantityToMake: quantity // How many to compound
         };
-  
+
         window.taskManager.addTask(compoundTask);
         console.log(`[production.js] Created compound task for ${quantity} ${product.name} (Task ID: ${compoundTask.id}), time reduced from ${originalTime} to ${reducedTime} minutes`);
-        
+
         return compoundTask;
     }
-  
+
     // Function to check inventory and create compound tasks if needed
-    function checkAndCreateCompoundTasks() {
+    function checkAndCreateCompoundTasks(): void {
         console.log("[production.js] Checking inventory for compounding tasks...");
         window.productsData.forEach(product => {
             // Skip if there's already a pending or in-progress compound task for this product
@@ -55,7 +55,7 @@ window.production = (function() {
             } else { // ADDED LOGGING - No existing task
                 console.log(`[production.js] No existing compound task found for ${product.name}, checking inventory...`); // ADDED LOG
             }
-  
+
             // Check if inventory is below the threshold
             if (product.inventory < product.maxInventory) {
                 const quantityToMake = product.maxInventory - product.inventory;
@@ -64,7 +64,7 @@ window.production = (function() {
                     console.log(`[production.js] Created compound task for ${product.name}, quantity: ${quantityToMake}`); // ADDED LOG - Task creation
                 } else {
                     console.warn(`[production.js] Cannot create compound task for ${product.name} due to insufficient materials.`); // EXISTING LOG
-                    
+
                     // Log material shortage details
                     for (let ingredient of product.ingredients) {
                         const material = window.materialsData.find(m => m.id === ingredient.id);
@@ -72,17 +72,17 @@ window.production = (function() {
                             console.log(`[production.js] Material shortage: ${material ? material.name : 'unknown material'}, needed: ${ingredient.quantity}, available: ${material ? material.inventory : 0}`); // ADDED LOG - Material shortage
                         }
                     }
-  
+
                 }
             } else { // ADDED LOGGING - Inventory not below threshold
                 console.log(`[production.js] Inventory for ${product.name} is NOT below maxInventory, skipping compound task creation.`); // ADDED LOG
             }
         });
     }
-  
+
     // Refresh the inventory UI, falling back through whatever update path is
     // actually available (used after any task completion that changes stock).
-    function refreshInventoryUI() {
+    function refreshInventoryUI(): void {
         if (typeof window.updateUI === 'function') {
             window.updateUI('inventory');
             return;
@@ -90,12 +90,15 @@ window.production = (function() {
 
         console.log("[production.js] window.updateUI function not found. Inventory UI may need manual refresh.");
 
-        if (typeof window.ui !== 'undefined' && typeof window.ui.updateInventory === 'function') {
-            window.ui.updateInventory();
-        } else if (typeof window.updateInventoryDisplay === 'function') {
+        // A `window.ui.updateInventory()` check used to sit here as the
+        // first fallback. Removed: ui.js's real API (see UiApi in
+        // global.d.ts) has never exposed an `updateInventory` method, so
+        // the branch could never fire — dead code, not a behavior change
+        // to drop it.
+        if (typeof window.updateInventoryDisplay === 'function') {
             window.updateInventoryDisplay();
         } else if (window.currentPage === 'inventory' && typeof window.renderInventoryPage === 'function') {
-            const mainContent = document.querySelector('.main-content');
+            const mainContent = document.querySelector<HTMLElement>('.main-content');
             if (mainContent) {
                 window.renderInventoryPage(mainContent);
             }
@@ -104,12 +107,12 @@ window.production = (function() {
         try {
             document.dispatchEvent(new CustomEvent('inventoryUpdated'));
         } catch (error) {
-            console.error('[production.js] Error dispatching inventoryUpdated event:', error);
+            console.error('[production.js] Error dispatching inventoryUpdated event:', (error as Error).message);
         }
     }
 
     // Function to handle task completion (called by taskManager when a task is finalized)
-    function handleTaskCompletion(task) {
+    function handleTaskCompletion(task: Task): void {
         if (task.type === 'compound') {
             const product = window.productsData.find(p => p.id === task.productId);
             if (product) {
@@ -117,12 +120,12 @@ window.production = (function() {
                 product.ingredients.forEach(ingredient => {
                     const material = window.materialsData.find(m => m.id === ingredient.id);
                     if (material) {
-                        material.inventory -= ingredient.quantity * task.quantityToMake;
+                        material.inventory -= ingredient.quantity * task.quantityToMake!;
                     }
                 });
 
                 // Increase product inventory
-                product.inventory += task.quantityToMake;
+                product.inventory += task.quantityToMake!;
                 console.log(`[production.js] Compounding completed for ${task.quantityToMake} units of ${product.name}. Inventory updated.`);
 
                 refreshInventoryUI();
@@ -142,25 +145,25 @@ window.production = (function() {
             const product = window.productsData.find(p => p.id === task.productId);
             if (product) {
                 // Decrease product inventory as it's used to fill prescriptions
-                product.inventory -= task.quantityNeeded;
+                product.inventory -= task.quantityNeeded!;
                 console.log(`[production.js] ${task.quantityNeeded} units of ${product.name} used to fill prescription. Inventory updated.`);
 
                 refreshInventoryUI();
             }
         }
     }
-  
+
     // Initialize the production module
-    function init() {
+    function init(): void {
         // Perform an initial check and creation of compound tasks when the game starts
         checkAndCreateCompoundTasks();
-  
+
         // Set an interval to periodically check and create compound tasks
         setInterval(checkAndCreateCompoundTasks, 60000); // Check every minute, for example
-        
+
         console.log("[production.js] Production system initialized with 50% reduced compounding times");
     }
-  
+
     return {
         canCompound,
         createCompoundTask, // Expose this if you need to manually create compound tasks
@@ -168,5 +171,5 @@ window.production = (function() {
         handleTaskCompletion,
         init
     };
-  
+
 })();

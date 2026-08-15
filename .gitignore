@@ -56,3 +56,10 @@ main/components/topBar.js
 main/js/taskbars.js
 main/js/ui.js
 main/js/customers.js
+main/js/production.js
+main/js/prescriptions.js
+main/js/main.js
+main/js/data/employees.js
+main/js/data/finances.js
+main/js/game-bootstrap.js
+main/js/gameInitializer.js

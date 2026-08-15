@@ -60,44 +60,42 @@ window.employeesData = [
 
 window.employees = {
     // Get an employee by ID
-    getEmployeeById: function (employeeId) {
+    getEmployeeById(employeeId) {
         return window.employeesData.find(employee => employee.id === employeeId);
     },
 
     // Get an employee's full name
-    getEmployeeFullName: function (employee) {
+    getEmployeeFullName(employee) {
         return `${employee.firstName} ${employee.lastName}`;
     },
 
     // Calculate employee efficiency (based on skills and morale)
-    calculateEmployeeEfficiency: function (employee) {
+    calculateEmployeeEfficiency(employee) {
         let skillSum = 0;
         let skillCount = 0;
         for (const skill in employee.skills) {
-            skillSum += employee.skills[skill];
+            skillSum += employee.skills[skill as keyof EmployeeSkills];
             skillCount++;
         }
-        const avgSkill = skillSum / skillCount; 
+        const avgSkill = skillSum / skillCount;
         // We'll treat avgSkill ~ 0..100 as the general skill level
         return avgSkill; // Return 0..100 range if typical
     },
 
-    /**
-     * Calculates task completion time with:
-     *  - Double time at 0 skill
-     *  - Half time at 100 skill
-     *  - Morale: +/- 5 min (0 morale => +5, 100 morale => -5)
-     */
-    calculateTaskCompletionTime: function (baseTime, employeeId, taskType) {
-        const employee = this.getEmployeeById(employeeId);
-        const skillFactor = this.calculateEmployeeEfficiency(employee); 
+    // Calculates task completion time with:
+    //  - Double time at 0 skill
+    //  - Half time at 100 skill
+    //  - Morale: +/- 5 min (0 morale => +5, 100 morale => -5)
+    calculateTaskCompletionTime(baseTime, employeeId, taskType) {
+        const employee = this.getEmployeeById(employeeId)!;
+        const skillFactor = this.calculateEmployeeEfficiency(employee);
         // skillFactor ~ 0..100 typically
 
         // 1) Convert skillFactor => linear scale from 2.0 (worst) down to 0.5 (best)
         //    If skillFactor=0 => time multiplier=2
         //    If skillFactor=100 => time multiplier=0.5
         const skillPercent = Math.min(skillFactor, 100) / 100; // clamp at 100
-        const skillMultiplier = 2 - 1.5 * skillPercent; 
+        const skillMultiplier = 2 - 1.5 * skillPercent;
         // e.g. skillPercent=0 => 2 - 0 => 2
         //      skillPercent=1 => 2 - 1.5 => 0.5
 
@@ -108,14 +106,14 @@ window.employees = {
         if (taskType === "compounding") {
             // Slight additional reduction if compounding is high
             const compSkill = employee.skills.compounding; // ~0..100
-            const compPercent = Math.min(compSkill, 100) / 100; 
+            const compPercent = Math.min(compSkill, 100) / 100;
             // e.g. up to 25% reduction if compSkill=100
             adjustedTime *= (1 - (0.25 * compPercent));
-        } 
+        }
         else if (taskType === "dispensing") {
             const disp = employee.skills.dispensing;
             const cust = employee.skills.customerService;
-            const dispPercent = Math.min(disp + cust, 200) / 200; 
+            const dispPercent = Math.min(disp + cust, 200) / 200;
             // e.g. if disp+cust=200 => 1 => up to 25% reduction
             adjustedTime *= (1 - (0.25 * dispPercent));
         }
@@ -123,7 +121,7 @@ window.employees = {
 
         // 3) Adjust for morale: range from +5 (worst morale=0) to -5 (best morale=100)
         const morale = employee.morale; // 0..100
-        const moraleDelta = 5 - (morale / 100) * 10; 
+        const moraleDelta = 5 - (morale / 100) * 10;
         // e.g. morale=0 => +5, morale=100 => -5
         adjustedTime += moraleDelta;
 
@@ -137,7 +135,7 @@ window.employees = {
     },
 
     // Update employee morale
-    updateEmployeeMorale: function (employeeId, moraleChange) {
+    updateEmployeeMorale(employeeId, moraleChange) {
         const employee = this.getEmployeeById(employeeId);
         if (employee) {
             employee.morale = Math.max(0, Math.min(100, employee.morale + moraleChange));
@@ -158,7 +156,7 @@ window.employees = {
     },
 
     // Promote an employee
-    promoteEmployee: function (employeeId, newSalary, newRole = null) {
+    promoteEmployee(employeeId, newSalary, newRole = null) {
         const employee = this.getEmployeeById(employeeId);
         if (employee) {
             employee.salary = newSalary;
@@ -171,7 +169,7 @@ window.employees = {
     },
 
     // Update employee mood on task completion
-    updateEmployeeMoodOnTaskCompletion: function (employeeId, taskType) {
+    updateEmployeeMoodOnTaskCompletion(employeeId, taskType) {
         const employee = this.getEmployeeById(employeeId);
         if (employee) {
             if (taskType === 'fillPrescription') {
@@ -187,7 +185,7 @@ window.employees = {
     },
 
     // Hire an employee
-    hireEmployee: function (role, skillLevel) {
+    hireEmployee(role, skillLevel) {
         const hiringFee = 500;
         if (window.financesData.cash >= hiringFee) {
             window.financesData.cash -= hiringFee;
@@ -200,16 +198,16 @@ window.employees = {
             });
 
             // Generate candidates
-            let candidates = [];
+            let candidates: Employee[] = [];
             for (let i = 0; i < 5; i++) {
-                const skills = {};
+                const skills: Partial<EmployeeSkills> = {};
                 if (role === 'Pharmacist') {
                     skills.compounding = (skillLevel === 'Novice' ? 40 : (skillLevel === 'Intermediate' ? 60 : 80));
                     skills.dispensing = (skillLevel === 'Novice' ? 50 : (skillLevel === 'Intermediate' ? 70 : 90));
                     skills.customerService = (skillLevel === 'Novice' ? 40 : (skillLevel === 'Intermediate' ? 60 : 80));
                     skills.inventoryManagement = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
                     skills.sales = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
-                } 
+                }
                 else if (role === 'Lab Technician') {
                     skills.compounding = (skillLevel === 'Novice' ? 50 : (skillLevel === 'Intermediate' ? 70 : 90));
                     skills.dispensing = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
@@ -232,7 +230,10 @@ window.employees = {
                     lastName: window.helpers.generateLastName(),
                     role: role,
                     salary: window.helpers.calculateStartingWage(role, skillLevel),
-                    skills: skills,
+                    // Same edge case the original had: an unrecognized `role`
+                    // leaves `skills` empty (`{}`), not a full EmployeeSkills —
+                    // preserved as-is rather than guarded against.
+                    skills: skills as EmployeeSkills,
                     morale: 100,
                     mood: '😀',
                     hireDate: new Date(window.gameState.currentDate),
@@ -242,21 +243,21 @@ window.employees = {
 
             console.log("Candidates generated:", candidates);
             window.displayEmployeeCandidates(candidates);
-        } 
+        }
         else {
             alert('Insufficient funds to hire a new employee.');
         }
     },
 
     // Add an employee to the employeesData array
-    hireSelectedEmployee: function(employeeData) {
+    hireSelectedEmployee(employeeData) {
         window.employeesData.push(employeeData);
         window.updateUI("employees");
-        alert(`Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.skillLevel} ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`);
+        alert(`Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`);
     },
 
     // Fire an employee
-    fireEmployee: function (employeeId) {
+    fireEmployee(employeeId) {
         const employeeIndex = window.employeesData.findIndex(emp => emp.id === employeeId);
         if (employeeIndex > -1) {
             window.employeesData.splice(employeeIndex, 1);
@@ -268,15 +269,16 @@ window.employees = {
     },
 
     // Update employee skills
-    updateEmployeeSkills: function(employeeId, newSkills) {
+    updateEmployeeSkills(employeeId, newSkills) {
         const employee = this.getEmployeeById(employeeId);
         if (!employee) {
             console.error('Employee not found!');
             return;
         }
         for (const skill in newSkills) {
-            if (employee.skills.hasOwnProperty(skill)) {
-                employee.skills[skill] = newSkills[skill];
+            const key = skill as keyof EmployeeSkills;
+            if (employee.skills.hasOwnProperty(key)) {
+                employee.skills[key] = newSkills[key]!;
             }
         }
         console.log('Employee skills updated:', employee.firstName, employee.lastName, employee.skills);

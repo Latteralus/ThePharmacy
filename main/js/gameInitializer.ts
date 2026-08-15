@@ -1,13 +1,13 @@
 // gameInitializer.js - Handles the initialization of a new game or loading a saved game
 
-window.initializeNewGame = function(gameOptions) {
+window.initializeNewGame = function(gameOptions: NewGameOptions): boolean {
     console.log("[gameInitializer] Starting new game initialization with options:", gameOptions);
-    
+
     try {
         // Set the desired starting date and time (year, month (0-indexed), day, hour, minute)
         const startDate = new Date(2023, 0, 1, 7, 0); // January 1st, 2023, 7:00 AM
         console.log("[gameInitializer] Setting start date to:", startDate);
-        
+
         // 1. Initialize game state
         console.log("[gameInitializer] Creating game state object");
         window.gameState = {
@@ -29,14 +29,14 @@ window.initializeNewGame = function(gameOptions) {
             location: gameOptions.location || "suburban",
             dateCreated: new Date()
         };
-        
+
         console.log("[gameInitializer] Game state initialized:", window.gameState);
-        
+
         // 2. Initialize finances based on difficulty and starting capital
         console.log("[gameInitializer] Initializing finances with difficulty:", gameOptions.difficulty, "and starting capital:", gameOptions.startingCapital);
-        
+
         let startingCash = 100000; // Default (medium)
-        
+
         if (gameOptions.startingCapital === "low") {
             startingCash = 50000;
             console.log("[gameInitializer] Setting low starting cash:", startingCash);
@@ -46,7 +46,7 @@ window.initializeNewGame = function(gameOptions) {
         } else {
             console.log("[gameInitializer] Using medium starting cash:", startingCash);
         }
-        
+
         // Apply difficulty modifier to starting cash
         if (gameOptions.difficulty === "hard") {
             startingCash *= 0.7; // 30% less starting cash on hard
@@ -55,7 +55,7 @@ window.initializeNewGame = function(gameOptions) {
             startingCash *= 1.3; // 30% more starting cash on easy
             console.log("[gameInitializer] Applying easy difficulty modifier to cash:", startingCash);
         }
-        
+
         console.log("[gameInitializer] Creating finances object");
         window.financesData = {
             cash: startingCash,
@@ -108,9 +108,9 @@ window.initializeNewGame = function(gameOptions) {
             targetDailyRevenue: 1000, // Default target
             targetMonthlyRevenue: 30000 // Default target
         };
-        
+
         console.log("[gameInitializer] Finances initialized with $" + startingCash.toFixed(2));
-        
+
         // 3. Modify difficulty-based settings
         console.log("[gameInitializer] Checking if brandReputation exists before modifying...");
         if (typeof window.brandReputation === 'undefined') {
@@ -118,14 +118,14 @@ window.initializeNewGame = function(gameOptions) {
             window.brandReputation = {
                 brandScore: 10,
                 reputationScore: 10,
-                calcCustomers: function(hour) {
+                calcCustomers: function(hour: number) {
                     return 2; // Default customer generation rate
                 },
-                gainReputation: function(amount) {},
-                loseReputation: function(amount) {}
+                gainReputation: function(amount: number) {},
+                loseReputation: function(amount: number) {}
             };
         }
-        
+
         console.log("[gameInitializer] Applying difficulty modifiers to reputation and overhead");
         if (gameOptions.difficulty === "easy") {
             window.brandReputation.reputationScore = 15; // Higher starting reputation
@@ -140,7 +140,7 @@ window.initializeNewGame = function(gameOptions) {
         } else {
             console.log("[gameInitializer] Using normal difficulty settings");
         }
-        
+
         // 4. Location-based adjustments
         console.log("[gameInitializer] Applying location-based adjustments for:", gameOptions.location);
         if (gameOptions.location === "urban") {
@@ -156,11 +156,11 @@ window.initializeNewGame = function(gameOptions) {
         } else {
             console.log("[gameInitializer] Suburban location: using standard overhead");
         }
-        
+
         // 5. Make sure game element modules are properly initialized
         console.log("[gameInitializer] Ensuring game systems are initialized");
         ensureGameSystemsInitialized();
-        
+
         console.log("[gameInitializer] Game initialization complete");
         window.isGameInitialized = true;
         return true;
@@ -170,24 +170,24 @@ window.initializeNewGame = function(gameOptions) {
     }
 };
 
-window.loadSavedGame = async function() {
+window.loadSavedGame = async function(): Promise<boolean> {
     console.log("[gameInitializer] Loading saved game");
-    
+
     try {
         // Load the game data using the Electron gameAPI
         if (window.gameAPI && window.gameAPI.loadGame) {
             console.log("[gameInitializer] Using gameAPI to load game data");
             const gameData = await window.gameAPI.loadGame();
-            
+
             if (gameData) {
                 console.log("[gameInitializer] Game data loaded successfully, restoring state");
                 // Restore the game state from the saved data
-                window.gameState = gameData.gameState;
-                window.financesData = gameData.financesData;
-                window.employeesData = gameData.employeesData;
-                window.productsData = gameData.productsData;
-                window.materialsData = gameData.materialsData;
-                window.equipmentData = gameData.equipmentData;
+                window.gameState = gameData.gameState!;
+                window.financesData = gameData.financesData!;
+                window.employeesData = gameData.employeesData!;
+                window.productsData = gameData.productsData!;
+                window.materialsData = gameData.materialsData!;
+                window.equipmentData = gameData.equipmentData!;
 
                 // The save file round-trips through JSON, so Date fields come
                 // back as plain strings - revive them or anything that calls
@@ -206,7 +206,7 @@ window.loadSavedGame = async function() {
                 // eq.isUnlocked() calls keep working.
                 if (Array.isArray(window.equipmentData)) {
                     window.equipmentData.forEach(item => {
-                        item.isUnlocked = function() {
+                        item.isUnlocked = function(this: EquipmentItem) {
                             return window.researchData.currentLevel >= this.researchLevelRequired;
                         };
                     });
@@ -228,10 +228,10 @@ window.loadSavedGame = async function() {
                     equipmentData: !!window.equipmentData,
                     brandReputation: !!window.brandReputation
                 });
-                
+
                 // Ensure game systems are initialized
                 ensureGameSystemsInitialized();
-                
+
                 window.isGameInitialized = true;
                 return true;
             } else {
@@ -249,9 +249,9 @@ window.loadSavedGame = async function() {
 };
 
 // This function ensures all game systems are properly initialized
-function ensureGameSystemsInitialized() {
+function ensureGameSystemsInitialized(): void {
     console.log("[gameInitializer] Ensuring game systems are initialized");
-    
+
     // Make sure UI is initialized
     if (typeof window.ui === 'undefined') {
         console.error("[gameInitializer] UI module is missing!");
@@ -262,28 +262,28 @@ function ensureGameSystemsInitialized() {
     } else {
         console.warn("[gameInitializer] UI system not available for initialization or init method missing");
     }
-    
+
     // Check if basic data arrays exist
     if (typeof window.employeesData === 'undefined') {
         console.error("[gameInitializer] employeesData is missing!");
         window.employeesData = [];
     }
-    
+
     if (typeof window.productsData === 'undefined') {
         console.error("[gameInitializer] productsData is missing!");
         window.productsData = [];
     }
-    
+
     if (typeof window.materialsData === 'undefined') {
         console.error("[gameInitializer] materialsData is missing!");
         window.materialsData = [];
     }
-    
+
     if (typeof window.equipmentData === 'undefined') {
         console.error("[gameInitializer] equipmentData is missing!");
         window.equipmentData = [];
     }
-    
+
     // Set suggested prices for products
     if (window.finances && window.finances.setToSuggestedPrices) {
         console.log("[gameInitializer] Setting suggested product prices");
@@ -292,7 +292,7 @@ function ensureGameSystemsInitialized() {
     } else {
         console.warn("[gameInitializer] finances.setToSuggestedPrices not available");
     }
-    
+
     // Initialize insurance claims system
     if (window.insuranceClaims && window.insuranceClaims.init) {
         console.log("[gameInitializer] Initializing insurance claims system");
@@ -301,7 +301,7 @@ function ensureGameSystemsInitialized() {
     } else {
         console.warn("[gameInitializer] insuranceClaims.init not available");
     }
-    
+
     // Initialize production system
     if (window.production && window.production.init) {
         console.log("[gameInitializer] Initializing production system");
@@ -310,7 +310,7 @@ function ensureGameSystemsInitialized() {
     } else {
         console.warn("[gameInitializer] production.init not available");
     }
-    
+
     // Check if task assignment system exists
     if (typeof window.taskAssignment === 'undefined') {
         console.error("[gameInitializer] taskAssignment module is missing!");
@@ -324,17 +324,17 @@ function ensureGameSystemsInitialized() {
             console.warn("[gameInitializer] taskAssignment.autoAssignTasks not available");
         }
     }
-    
+
     // Check if taskManager exists
     if (typeof window.taskManager === 'undefined') {
         console.error("[gameInitializer] taskManager module is missing!");
     }
-    
+
     // Check if timeEvents exists
     if (typeof window.timeEvents === 'undefined') {
         console.error("[gameInitializer] timeEvents module is missing!");
     }
-    
+
     console.log("[gameInitializer] Game systems initialization check complete");
 }
 
@@ -344,36 +344,36 @@ function ensureGameSystemsInitialized() {
 // which caused the entire game to initialize twice on every launch.
 
 // Start the game simulation
-function startGame() {
+function startGame(): void {
     console.log("[gameInitializer] Starting game simulation");
-    
+
     try {
         // Initialize the UI components
         if (window.renderTopBar && window.renderSidebar) {
             console.log("[gameInitializer] Rendering top bar and sidebar");
-            
+
             const rootElement = document.getElementById('root');
             if (!rootElement) {
                 throw new Error("Root element not found");
             }
-            
+
             // Clear any existing content
             rootElement.innerHTML = '';
-            
+
             const topBar = window.renderTopBar();
             rootElement.appendChild(topBar);
             console.log("[gameInitializer] Top bar rendered");
-            
+
             const sidebar = window.renderSidebar();
             rootElement.appendChild(sidebar);
             console.log("[gameInitializer] Sidebar rendered");
-            
+
             // Add main content container
             const mainContent = document.createElement('div');
             mainContent.className = 'main-content';
             rootElement.appendChild(mainContent);
             console.log("[gameInitializer] Main content container added");
-            
+
             // Show the default page (operations)
             if (window.showPage) {
                 console.log("[gameInitializer] Showing operations page");
@@ -388,11 +388,11 @@ function startGame() {
         } else {
             throw new Error("UI rendering functions not available");
         }
-        
+
         // Start the day
         console.log("[gameInitializer] Setting day to active");
         window.gameState.isDayActive = true;
-        
+
         // Start the game loop
         if (typeof requestAnimationFrame === 'function' && window.gameLoop) {
             console.log("[gameInitializer] Starting game loop");
@@ -401,18 +401,18 @@ function startGame() {
         } else {
             throw new Error("Game loop function not found");
         }
-        
+
         console.log("[gameInitializer] Game started successfully");
     } catch (error) {
         console.error("[gameInitializer] Error starting game:", error);
-        showErrorScreen("Error starting game: " + error.message);
+        showErrorScreen("Error starting game: " + (error as Error).message);
     }
 }
 
 // Show an error screen when initialization fails
-function showErrorScreen(message) {
+function showErrorScreen(message: string): void {
     console.error("[gameInitializer] Showing error screen:", message);
-    
+
     const root = document.getElementById('root');
     if (root) {
         root.innerHTML = `
@@ -427,11 +427,15 @@ function showErrorScreen(message) {
 }
 
 // Export runFallbackInitialization for the fallback mechanism
-window.runFallbackInitialization = function() {
+window.runFallbackInitialization = function(): boolean {
     console.log("[gameInitializer] Running fallback initialization");
-    
+
     try {
-        // Basic game state
+        // Basic game state. renderInfo is included (the original omitted
+        // it) — main.ts's gameLoop unconditionally writes
+        // `gameState.renderInfo!.lastFpsUpdate` on its very first frame, so
+        // without it this last-resort fallback would immediately crash the
+        // thing it exists to rescue.
         if (!window.gameState) {
             const startDate = new Date(2023, 0, 1, 7, 0);
             window.gameState = {
@@ -439,21 +443,43 @@ window.runFallbackInitialization = function() {
                 dayIndex: 0,
                 isDayActive: true,
                 isPaused: false,
+                simulationAccumulator: 0,
+                lastFrameTime: 0,
+                lastSimulationTime: 0,
+                renderInfo: { fps: 0, frameCount: 0, lastFpsUpdate: 0 },
                 pharmacyName: "Emergency Pharmacy",
                 difficulty: "normal",
                 location: "suburban"
             };
         }
-        
-        // Basic finances
+
+        // Basic finances. The original only ever set these first 3 fields,
+        // leaving the rest (transactions, revenue, expenses, ...) undefined
+        // at runtime — a crash waiting to happen the moment anything in
+        // finances.ts touched them (e.g. `transactions.push` in
+        // addTransaction). Filled in with zeroed defaults, matching the
+        // shape initializeNewGame builds above, so this last-resort
+        // fallback is actually safe to run rather than just type-checking.
         if (!window.financesData) {
             window.financesData = {
                 cash: 100000,
                 dailyIncome: 0,
-                pendingInsuranceIncome: 0
+                pendingInsuranceIncome: 0,
+                pendingOrders: 0,
+                completedOrders: 0,
+                overhead: 500,
+                transactions: [],
+                revenue: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, total: 0 },
+                expenses: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, total: 0 },
+                profit: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, total: 0 },
+                insuranceReimbursements: { pending: 0, received: 0, rejected: 0 },
+                expenseCategories: { wages: 0, materials: 0, overhead: 0, equipment: 0, research: 0, other: 0 },
+                revenueCategories: { prescriptions: 0, copays: 0, insurance: 0, other: 0 },
+                targetDailyRevenue: 1000,
+                targetMonthlyRevenue: 30000
             };
         }
-        
+
         // Basic brand reputation
         if (!window.brandReputation) {
             window.brandReputation = {
@@ -464,7 +490,7 @@ window.runFallbackInitialization = function() {
                 loseReputation: function() {}
             };
         }
-        
+
         // Start the game
         startGame();
         return true;

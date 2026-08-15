@@ -3,7 +3,7 @@
 window.prescriptions = {
     activePrescriptions: [],
 
-    generatePrescription: function(customerId) {
+    generatePrescription(customerId) {
         console.log(`[prescriptions.js] Generating prescription for customer: ${customerId}`);
 
         const customer = window.customers.getCustomerById(customerId);
@@ -21,8 +21,8 @@ window.prescriptions = {
         });
 
         // If no products available or can be compounded, use any unlocked product
-        const productId = availableProducts.length > 0 ? 
-            availableProducts[Math.floor(Math.random() * availableProducts.length)] : 
+        const productId = availableProducts.length > 0 ?
+            availableProducts[Math.floor(Math.random() * availableProducts.length)] :
             unlockedProducts[Math.floor(Math.random() * unlockedProducts.length)];
 
         const product = window.productsData.find(p => p.id === productId);
@@ -33,7 +33,7 @@ window.prescriptions = {
 
         console.log(`[prescriptions.js] Selected product: ${product.name} (${productId})`);
 
-        const newPrescription = {
+        const newPrescription: Prescription = {
             id: `pres-${Date.now()}`,
             customerId: customerId,
             productId: productId,
@@ -56,7 +56,7 @@ window.prescriptions = {
             console.log(`[prescriptions.js] Product ${product.name} is out of stock. Creating compound task first.`);
 
             // Create a compound task to make the product first
-            const compoundTask = {
+            const compoundTask: Task = {
                 id: `compound-${newPrescription.id}`,
                 type: 'compound',
                 prescriptionId: newPrescription.id,
@@ -76,7 +76,7 @@ window.prescriptions = {
             console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
 
             // Create fill task, but mark it as dependent (won't be assigned until compound completes)
-            const fillTask = {
+            const fillTask: Task = {
                 id: `fill-${newPrescription.id}`,
                 type: 'fillPrescription',
                 prescriptionId: newPrescription.id,
@@ -108,14 +108,14 @@ window.prescriptions = {
         return newPrescription.id;
     },
 
-    createFillTaskForPrescription: function(prescription) {
+    createFillTaskForPrescription(prescription) {
         const product = window.productsData.find(p => p.id === prescription.productId);
         if (!product) {
             console.error(`[prescriptions.js] No product found for createFillTaskForPrescription: ${prescription.productId}`);
             return null;
         }
 
-        const fillTask = {
+        const fillTask: Task = {
             id: `fill-${prescription.id}`,
             type: 'fillPrescription',
             prescriptionId: prescription.id,
@@ -133,11 +133,11 @@ window.prescriptions = {
         };
         window.taskManager.addTask(fillTask);
         console.log(`[prescriptions.js] Created fillPrescription task: ${fillTask.id}`);
-        
+
         return fillTask.id;
     },
 
-    updatePrescriptionStatus: function(prescriptionId, newStatus) {
+    updatePrescriptionStatus(prescriptionId, newStatus) {
         console.log(`[prescriptions.js] Updating prescription status: ${prescriptionId} to ${newStatus}`);
 
         const prescription = this.activePrescriptions.find(p => p.id === prescriptionId);
@@ -150,7 +150,7 @@ window.prescriptions = {
     },
 
     // When fillPrescription completes
-    prescriptionFilled: function(prescriptionId, customerId) {
+    prescriptionFilled(prescriptionId, customerId) {
         console.log(`[prescriptions.js] Prescription filled: ${prescriptionId} for customer: ${customerId}`);
 
         this.updatePrescriptionStatus(prescriptionId, 'filled');
@@ -165,7 +165,7 @@ window.prescriptions = {
         window.customers.updateCustomerStatus(customerId, 'readyForCheckout');
 
         // Create a checkout interaction for the Cashier with high priority
-        const checkoutTask = {
+        const checkoutTask: Task = {
             id: `checkout-${customerId}-${Date.now()}`, // Unique ID with timestamp
             type: 'customerInteraction',
             customerId: customerId,
@@ -184,10 +184,10 @@ window.prescriptions = {
     },
 
     // Creates a consultation task for Pharmacist after check-in
-    createConsultationTask: function(customerId) {
+    createConsultationTask(customerId) {
         console.log(`[prescriptions.js] Creating consultation task for customer: ${customerId}`);
 
-        const consultationTask = {
+        const consultationTask: Task = {
             id: `consult-${customerId}-${Date.now()}`, // Unique ID with timestamp
             type: 'consultation',
             customerId: customerId,
@@ -205,12 +205,12 @@ window.prescriptions = {
         window.taskAssignment.autoAssignTasks();
     },
 
-    getPrescription: function(prescriptionId) {
+    getPrescription(prescriptionId) {
         return this.activePrescriptions.find(p => p.id === prescriptionId);
     },
-    
+
     // Helper functions for prescription generation
-    getRandomFrequency: function() {
+    getRandomFrequency() {
         const frequencies = [
             'once daily',
             'twice daily',
@@ -222,17 +222,17 @@ window.prescriptions = {
         ];
         return frequencies[Math.floor(Math.random() * frequencies.length)];
     },
-    
+
     // Remove prescriptions when customers leave
-    removePrescriptionsByCustomer: function(customerId) {
+    removePrescriptionsByCustomer(customerId) {
         // Find prescriptions for this customer
         const customerPrescriptions = this.activePrescriptions.filter(p => p.customerId === customerId);
-        
+
         // Remove them from active prescriptions
         this.activePrescriptions = this.activePrescriptions.filter(p => p.customerId !== customerId);
-        
+
         console.log(`[prescriptions.js] Removed ${customerPrescriptions.length} prescriptions for departed customer ${customerId}`);
-        
+
         // Update UI if needed
         window.ui.updatePrescriptions();
     }

@@ -57,9 +57,9 @@ window.financesData = {
 
 window.finances = {
     // Apply daily costs (called at end of day)
-    applyDailyCosts: function() {
+    applyDailyCosts() {
         console.log("[finances.js] Applying daily costs...");
-        
+
         // 1) Sum employee daily wages
         let totalWages = 0;
         window.employeesData.forEach(emp => {
@@ -112,12 +112,12 @@ window.finances = {
 
         // 7) Update UI
         window.updateUI("finances");
-        
+
         console.log(`[finances.js] Daily costs applied: Wages $${totalWages.toFixed(2)}, Overhead $${overheadCost.toFixed(2)}`);
     },
 
     // Call this whenever an order is completed
-    completePrescription: function(customerId, prescriptionId) {
+    completePrescription(customerId, prescriptionId) {
         const customer = window.customers.activeCustomers.find(c => c.id === customerId);
         const prescription = window.prescriptions.getPrescription(prescriptionId);
 
@@ -144,7 +144,7 @@ window.finances = {
         // Deduct copay from customer
         window.financesData.cash += copay;
         window.financesData.dailyIncome += copay;
-        
+
         // Update revenue categories
         window.financesData.revenueCategories.copays += copay;
         window.financesData.revenueCategories.prescriptions += price;
@@ -194,29 +194,29 @@ window.finances = {
 
         // Update UI
         window.updateUI("finances");
-        
+
         // Calculate new profit metrics
         this.updateProfitMetrics();
-        
+
         return { copay, price };
     },
 
     // Process insurance claims and update finances
-    processInsuranceClaims: function() {
+    processInsuranceClaims() {
         let totalClaimAmount = window.insuranceClaims.processAllClaims();
-        
+
         // When claims are processed, update revenue metrics
         if (totalClaimAmount > 0) {
             window.financesData.revenue.today += totalClaimAmount;
             window.financesData.revenue.thisWeek += totalClaimAmount;
             window.financesData.revenue.thisMonth += totalClaimAmount;
             window.financesData.revenue.total += totalClaimAmount;
-            
+
             // Update insurance categories
             window.financesData.revenueCategories.insurance += totalClaimAmount;
             window.financesData.insuranceReimbursements.received += totalClaimAmount;
             window.financesData.insuranceReimbursements.pending -= totalClaimAmount;
-            
+
             console.log(`[finances.js] Processed insurance claims: $${totalClaimAmount.toFixed(2)}`);
         }
 
@@ -228,19 +228,20 @@ window.finances = {
     },
 
     // Add generic income (e.g., from a cash sale without insurance)
-    addIncome: function(amount, category = 'other', description = 'Other income') {
+    addIncome(amount, category = 'other', description = 'Other income') {
         window.financesData.cash += amount;
         window.financesData.dailyIncome += amount;
-        
+
         // Update revenue metrics
         window.financesData.revenue.today += amount;
         window.financesData.revenue.thisWeek += amount;
         window.financesData.revenue.thisMonth += amount;
         window.financesData.revenue.total += amount;
-        
+
         // Update revenue category
-        if (window.financesData.revenueCategories[category] !== undefined) {
-            window.financesData.revenueCategories[category] += amount;
+        const revenueKey = category as keyof RevenueCategories;
+        if (window.financesData.revenueCategories[revenueKey] !== undefined) {
+            window.financesData.revenueCategories[revenueKey] += amount;
         } else {
             window.financesData.revenueCategories.other += amount;
         }
@@ -253,34 +254,35 @@ window.finances = {
             amount: amount,
             description: description
         });
-        
+
         // Update profit metrics
         this.updateProfitMetrics();
 
         // Update UI
         window.updateUI("finances");
-        
+
         console.log(`[finances.js] Added income: $${amount.toFixed(2)} (${category})`);
     },
 
     // Add an expense
-    addExpense: function(amount, category = 'other', description = 'Other expense') {
+    addExpense(amount, category = 'other', description = 'Other expense') {
         if (window.financesData.cash < amount) {
             console.error(`[finances.js] Insufficient funds for expense: $${amount.toFixed(2)}`);
             return false;
         }
-        
+
         window.financesData.cash -= amount;
-        
+
         // Update expense metrics
         window.financesData.expenses.today += amount;
         window.financesData.expenses.thisWeek += amount;
         window.financesData.expenses.thisMonth += amount;
         window.financesData.expenses.total += amount;
-        
+
         // Update expense category
-        if (window.financesData.expenseCategories[category] !== undefined) {
-            window.financesData.expenseCategories[category] += amount;
+        const expenseKey = category as keyof ExpenseCategories;
+        if (window.financesData.expenseCategories[expenseKey] !== undefined) {
+            window.financesData.expenseCategories[expenseKey] += amount;
         } else {
             window.financesData.expenseCategories.other += amount;
         }
@@ -293,30 +295,30 @@ window.finances = {
             amount: amount,
             description: description
         });
-        
+
         // Update profit metrics
         this.updateProfitMetrics();
 
         // Update UI
         window.updateUI("finances");
-        
+
         console.log(`[finances.js] Added expense: $${amount.toFixed(2)} (${category})`);
         return true;
     },
 
     // Add a new transaction to the transactions array
-    addTransaction: function(transaction) {
+    addTransaction(transaction) {
         // Make sure the transaction has a unique ID
         if (!transaction.id) {
             transaction.id = `trans-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         }
-        
+
         // Add the transaction
-        window.financesData.transactions.push(transaction);
-        
+        window.financesData.transactions.push(transaction as Transaction);
+
         // Keep transactions sorted by date (newest first)
-        window.financesData.transactions.sort((a, b) => b.date - a.date);
-        
+        window.financesData.transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+
         // Limit transaction history to prevent performance issues (keep last 1000)
         if (window.financesData.transactions.length > 1000) {
             window.financesData.transactions = window.financesData.transactions.slice(0, 1000);
@@ -324,7 +326,7 @@ window.finances = {
     },
 
     // Update a product's price (manually or by the user)
-    updateProductPrice: function(productId, newPrice) {
+    updateProductPrice(productId, newPrice) {
         const product = window.productsData.find(p => p.id === productId);
         if (!product) {
             console.error(`[finances.js] Product not found: ${productId}`);
@@ -341,24 +343,24 @@ window.finances = {
     },
 
     // Set all product prices to their suggested price
-    setToSuggestedPrices: function() {
+    setToSuggestedPrices() {
         let changeCount = 0;
         window.productsData.forEach(product => {
             const cost = window.calculateProductCost(product.id);
             const suggestedPrice = cost * window.globalMarkup;
-            
+
             if (product.price !== suggestedPrice) {
                 product.price = suggestedPrice;
                 changeCount++;
             }
         });
-        
+
         console.log(`[finances.js] Set ${changeCount} product prices to suggested markup (${(window.globalMarkup * 100 - 100).toFixed(0)}%)`);
         window.updateUI("inventory");
     },
 
     // Apply a markup to all product prices
-    applyMarkupToAllProducts: function(markupPercentage) {
+    applyMarkupToAllProducts(markupPercentage) {
         const markupFactor = 1 + (markupPercentage / 100);
 
         window.productsData.forEach(product => {
@@ -366,54 +368,54 @@ window.finances = {
             const newPrice = cost * markupFactor;
             product.price = newPrice;
         });
-        
+
         // Update global markup for future reference
         window.globalMarkup = markupFactor;
 
         console.log(`[finances.js] Applied ${markupPercentage.toFixed(0)}% markup to all product prices.`);
         window.updateUI("inventory");
     },
-    
+
     // Calculate and update profit metrics
-    updateProfitMetrics: function() {
+    updateProfitMetrics() {
         // Today's profit
-        window.financesData.profit.today = 
+        window.financesData.profit.today =
             window.financesData.revenue.today - window.financesData.expenses.today;
-        
+
         // This week's profit
-        window.financesData.profit.thisWeek = 
+        window.financesData.profit.thisWeek =
             window.financesData.revenue.thisWeek - window.financesData.expenses.thisWeek;
-        
+
         // This month's profit
-        window.financesData.profit.thisMonth = 
+        window.financesData.profit.thisMonth =
             window.financesData.revenue.thisMonth - window.financesData.expenses.thisMonth;
-        
+
         // Total profit
-        window.financesData.profit.total = 
+        window.financesData.profit.total =
             window.financesData.revenue.total - window.financesData.expenses.total;
     },
-    
+
     // Reset daily stats (called at start of day)
-    resetDailyStats: function() {
+    resetDailyStats() {
         window.financesData.dailyIncome = 0;
         window.financesData.revenue.today = 0;
         window.financesData.expenses.today = 0;
         window.financesData.profit.today = 0;
     },
-    
+
     // Start a new week (reset weekly stats)
-    startNewWeek: function() {
+    startNewWeek() {
         window.financesData.revenue.thisWeek = 0;
         window.financesData.expenses.thisWeek = 0;
         window.financesData.profit.thisWeek = 0;
     },
-    
+
     // Start a new month (move this month to last month, reset this month)
-    startNewMonth: function() {
+    startNewMonth() {
         window.financesData.revenue.lastMonth = window.financesData.revenue.thisMonth;
         window.financesData.expenses.lastMonth = window.financesData.expenses.thisMonth;
         window.financesData.profit.lastMonth = window.financesData.profit.thisMonth;
-        
+
         window.financesData.revenue.thisMonth = 0;
         window.financesData.expenses.thisMonth = 0;
         window.financesData.profit.thisMonth = 0;
@@ -422,12 +424,12 @@ window.finances = {
     // --- Chart Data Functions ---
 
     // Get chart data for daily sales (hourly breakdown for the current day)
-    getDailySalesChartData: function() {
+    getDailySalesChartData() {
         const today = new Date(window.gameState.currentDate);
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
         const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
 
-        const hourlySales = {};
+        const hourlySales: Record<number, number> = {};
 
         // Initialize hourly sales to 0
         for (let i = 0; i < 24; i++) {
@@ -455,12 +457,12 @@ window.finances = {
     },
 
     // Get chart data for monthly sales (daily breakdown for the current month)
-    getMonthlySalesChartData: function() {
+    getMonthlySalesChartData() {
         const today = new Date(window.gameState.currentDate);
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
 
-        const dailySales = {};
+        const dailySales: Record<number, number> = {};
 
         // Initialize daily sales to 0 for each day of the month
         const daysInMonth = endOfMonth.getDate();
@@ -489,14 +491,14 @@ window.finances = {
     },
 
     // Get chart data for monthly revenue/expenses/profit
-    getMonthlyFinancialChartData: function() {
+    getMonthlyFinancialChartData() {
         const today = new Date(window.gameState.currentDate);
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
 
-        const dailyRevenue = {};
-        const dailyExpenses = {};
-        const dailyProfit = {};
+        const dailyRevenue: Record<number, number> = {};
+        const dailyExpenses: Record<number, number> = {};
+        const dailyProfit: Record<number, number> = {};
 
         // Initialize daily values to 0 for each day of the month
         const daysInMonth = endOfMonth.getDate();
@@ -556,7 +558,7 @@ window.finances = {
     },
 
     // Get chart data for expense categories (pie chart)
-    getExpenseCategoriesChartData: function() {
+    getExpenseCategoriesChartData() {
         const categories = Object.keys(window.financesData.expenseCategories);
         const values = Object.values(window.financesData.expenseCategories);
 
@@ -569,7 +571,7 @@ window.finances = {
             'rgba(153, 102, 255, 0.2)',
             'rgba(255, 159, 64, 0.2)'
         ];
-        
+
         const borderColors = [
             'rgba(255, 99, 132, 1)',
             'rgba(54, 162, 235, 1)',
@@ -592,7 +594,7 @@ window.finances = {
     },
 
     // Get chart data for revenue categories (pie chart)
-    getRevenueCategoriesChartData: function() {
+    getRevenueCategoriesChartData() {
         const categories = Object.keys(window.financesData.revenueCategories);
         const values = Object.values(window.financesData.revenueCategories);
 
@@ -603,7 +605,7 @@ window.finances = {
             'rgba(153, 102, 255, 0.2)',
             'rgba(255, 159, 64, 0.2)'
         ];
-        
+
         const borderColors = [
             'rgba(75, 192, 192, 1)',
             'rgba(54, 162, 235, 1)',
@@ -624,7 +626,7 @@ window.finances = {
     },
 
     // Get total sales for a specific date
-    getDailySales: function(date) {
+    getDailySales(date) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
@@ -634,7 +636,7 @@ window.finances = {
     },
 
     // Get total profit/loss for a specific date
-    getDailyProfitLoss: function(date) {
+    getDailyProfitLoss(date) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
@@ -648,55 +650,55 @@ window.finances = {
 
         return income - expenses;
     },
-    
+
     // Get transactions filtered by criteria
-    getFilteredTransactions: function(options = {}) {
+    getFilteredTransactions(options = {}) {
         let filtered = [...window.financesData.transactions];
-        
+
         // Filter by date range
         if (options.startDate) {
-            filtered = filtered.filter(t => t.date >= options.startDate);
+            filtered = filtered.filter(t => t.date >= options.startDate!);
         }
-        
+
         if (options.endDate) {
-            filtered = filtered.filter(t => t.date <= options.endDate);
+            filtered = filtered.filter(t => t.date <= options.endDate!);
         }
-        
+
         // Filter by type
         if (options.type) {
             filtered = filtered.filter(t => t.type === options.type);
         }
-        
+
         // Filter by category
         if (options.category) {
             filtered = filtered.filter(t => t.category === options.category);
         }
-        
+
         // Filter by minimum amount
         if (options.minAmount) {
-            filtered = filtered.filter(t => t.amount >= options.minAmount);
+            filtered = filtered.filter(t => t.amount >= options.minAmount!);
         }
-        
+
         // Filter by maximum amount
         if (options.maxAmount) {
-            filtered = filtered.filter(t => t.amount <= options.maxAmount);
+            filtered = filtered.filter(t => t.amount <= options.maxAmount!);
         }
-        
+
         // Filter by search term (checks description)
         if (options.searchTerm) {
             const term = options.searchTerm.toLowerCase();
-            filtered = filtered.filter(t => 
+            filtered = filtered.filter(t =>
                 t.description.toLowerCase().includes(term) ||
                 (t.customerId && t.customerId.toLowerCase().includes(term)) ||
                 (t.prescriptionId && t.prescriptionId.toLowerCase().includes(term))
             );
         }
-        
+
         return filtered;
     },
-    
+
     // Get financial summary object
-    getFinancialSummary: function() {
+    getFinancialSummary() {
         return {
             cash: window.financesData.cash,
             pendingInsurance: window.financesData.pendingInsuranceIncome,

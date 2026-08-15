@@ -92,16 +92,28 @@ interface InsuranceReimbursements {
   rejected: number;
 }
 
-// Partial — only the fields converted .ts files currently read/write.
-// Extend in place (not with a second declaration) once finances.js itself
-// converts and the full shape is known.
-interface FinancesData {
-  cash: number;
-  dailyIncome: number;
-  pendingInsuranceIncome: number;
-  completedOrders: number;
-  pendingOrders: number;
-  insuranceReimbursements?: InsuranceReimbursements;
+interface FinancialPeriodTotals {
+  today: number;
+  thisWeek: number;
+  thisMonth: number;
+  lastMonth: number;
+  total: number;
+}
+
+interface ExpenseCategories {
+  wages: number;
+  materials: number;
+  overhead: number;
+  equipment: number;
+  research: number;
+  other: number;
+}
+
+interface RevenueCategories {
+  prescriptions: number;
+  copays: number;
+  insurance: number;
+  other: number;
 }
 
 interface TransactionInput {
@@ -113,20 +125,151 @@ interface TransactionInput {
   description: string;
   customerId?: string;
   prescriptionId?: string;
+  pending?: boolean;
+}
+
+// addTransaction always assigns an id if missing, so every transaction that
+// ends up in FinancesData.transactions has one.
+interface Transaction extends TransactionInput {
+  id: string;
+}
+
+// Now the real, full shape (finances.js owns it).
+interface FinancesData {
+  cash: number;
+  dailyIncome: number;
+  pendingInsuranceIncome: number;
+  pendingOrders: number;
+  completedOrders: number;
+  overhead: number;
+  transactions: Transaction[];
+  revenue: FinancialPeriodTotals;
+  expenses: FinancialPeriodTotals;
+  profit: FinancialPeriodTotals;
+  insuranceReimbursements: InsuranceReimbursements;
+  expenseCategories: ExpenseCategories;
+  revenueCategories: RevenueCategories;
+  targetDailyRevenue: number;
+  targetMonthlyRevenue: number;
+}
+
+interface ChartDataset {
+  label: string;
+  data: number[];
+  backgroundColor: string | string[];
+  borderColor: string | string[];
+  borderWidth: number;
+}
+
+interface ChartData {
+  labels: string[];
+  datasets: ChartDataset[];
+}
+
+interface TransactionFilterOptions {
+  startDate?: Date;
+  endDate?: Date;
+  type?: string;
+  category?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  searchTerm?: string;
+}
+
+interface FinancialSummary {
+  cash: number;
+  pendingInsurance: number;
+  revenue: FinancialPeriodTotals;
+  expenses: FinancialPeriodTotals;
+  profit: FinancialPeriodTotals;
+  revenueCategories: RevenueCategories;
+  expenseCategories: ExpenseCategories;
+  targetDailyRevenue: number;
+  targetMonthlyRevenue: number;
+  completedOrders: number;
 }
 
 interface FinancesApi {
+  applyDailyCosts: () => void;
+  completePrescription: (customerId: string, prescriptionId: string) => { copay: number; price: number } | undefined;
+  processInsuranceClaims: () => void;
+  addIncome: (amount: number, category?: string, description?: string) => void;
+  addExpense: (amount: number, category?: string, description?: string) => boolean;
   addTransaction: (transaction: TransactionInput) => void;
+  updateProductPrice: (productId: string, newPrice: number) => void;
+  setToSuggestedPrices: () => void;
+  applyMarkupToAllProducts: (markupPercentage: number) => void;
+  updateProfitMetrics: () => void;
+  resetDailyStats: () => void;
+  startNewWeek: () => void;
+  startNewMonth: () => void;
+  getDailySalesChartData: () => ChartData;
+  getMonthlySalesChartData: () => ChartData;
+  getMonthlyFinancialChartData: () => ChartData;
+  getExpenseCategoriesChartData: () => ChartData;
+  getRevenueCategoriesChartData: () => ChartData;
+  getDailySales: (date: Date) => number;
+  getDailyProfitLoss: (date: Date) => number;
+  getFilteredTransactions: (options?: TransactionFilterOptions) => Transaction[];
+  getFinancialSummary: () => FinancialSummary;
 }
 
-// Partial — same rationale as FinancesData; main.js owns the real shape.
-// Narrowed to Date (not string | Date): by the time any converted file
-// reads gameState.currentDate during normal gameplay, save/load's date
-// revival (see docs/Changelog.md, 2026-08-15 "Save/load fixed") has
-// already run, so it's always a real Date instance — `new Date(x)` still
-// accepts a Date argument, so this doesn't break existing callers.
+interface RenderInfo {
+  fps: number;
+  frameCount: number;
+  lastFpsUpdate: number;
+}
+
+// Now the real, full shape (main.js owns it). currentDate stays narrowed to
+// Date, not string | Date: by the time any converted file reads it during
+// normal gameplay, save/load's date revival (see docs/Changelog.md,
+// 2026-08-15 "Save/load fixed") has already run, so it's always a real Date
+// instance — `new Date(x)` still accepts a Date argument, so this doesn't
+// break existing callers. simulationAccumulator/lastFrameTime/
+// lastSimulationTime/renderInfo/dateCreated are genuinely optional: three
+// different places construct `window.gameState` (main.js's own fallback,
+// gameInitializer.ts's initializeNewGame, and its runFallbackInitialization)
+// and each sets a different subset — main.js's gameLoop already defensively
+// checks `if (!window.gameState.lastFrameTime)` for exactly this reason.
 interface GameState {
   currentDate: Date;
+  dayIndex: number;
+  isDayActive: boolean;
+  isPaused: boolean;
+  pharmacyName: string;
+  difficulty: string;
+  location: string;
+  simulationAccumulator?: number;
+  lastFrameTime?: number;
+  lastSimulationTime?: number;
+  renderInfo?: RenderInfo;
+  dateCreated?: Date;
+}
+
+// Options passed from the new-game form, through gameAPI, to
+// initializeNewGame. Every field is read with an `||` fallback, so all
+// optional.
+interface NewGameOptions {
+  pharmacyName?: string;
+  difficulty?: string;
+  location?: string;
+  startingCapital?: string;
+}
+
+// The shape handed back by gameAPI.loadGame() — a JSON/IPC round-trip of
+// whatever game-integration.js (still plain JS, main process) wrote out.
+// Loosely typed: Date fields actually arrive as strings at this point
+// (gameInitializer.ts revives currentDate/dateCreated immediately after —
+// `new Date(x)` accepts a string just as well as a Date, so typing this as
+// the "revived" shapes doesn't break that call).
+interface SavedGameData {
+  gameState?: GameState;
+  financesData?: FinancesData;
+  employeesData?: Employee[];
+  productsData?: Product[];
+  materialsData?: Material[];
+  equipmentData?: EquipmentItem[];
+  brandReputation?: Partial<BrandReputationApi>;
 }
 
 interface HelpersApi {
@@ -140,6 +283,43 @@ interface HelpersApi {
   generateLastName: () => string;
 }
 
+interface EmployeeSkills {
+  compounding: number;
+  dispensing: number;
+  customerService: number;
+  inventoryManagement: number;
+  sales: number;
+}
+
+interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  salary: number;
+  skills: EmployeeSkills;
+  morale: number;
+  mood: string;
+  // The three static starting employees use an ISO date string; employees
+  // hired at runtime (hireEmployee's candidates) get a real Date instead.
+  hireDate: string | Date;
+  currentTaskId: string | null;
+}
+
+interface EmployeesApi {
+  getEmployeeById: (employeeId: string) => Employee | undefined;
+  getEmployeeFullName: (employee: Employee) => string;
+  calculateEmployeeEfficiency: (employee: Employee) => number;
+  calculateTaskCompletionTime: (baseTime: number, employeeId: string, taskType: string) => number;
+  updateEmployeeMorale: (employeeId: string, moraleChange: number) => void;
+  promoteEmployee: (employeeId: string, newSalary: number, newRole?: string | null) => void;
+  updateEmployeeMoodOnTaskCompletion: (employeeId: string, taskType: string) => void;
+  hireEmployee: (role: string, skillLevel: string) => void;
+  hireSelectedEmployee: (employeeData: Employee) => void;
+  fireEmployee: (employeeId: string) => void;
+  updateEmployeeSkills: (employeeId: string, newSkills: Partial<EmployeeSkills>) => void;
+}
+
 interface BrandReputationApi {
   brandScore: number;
   reputationScore: number;
@@ -151,6 +331,7 @@ interface BrandReputationApi {
 // Partial — electron-integration.js/preload.js own the real, larger shape.
 interface GameApi {
   getNewGameOptions?: () => Promise<unknown>;
+  loadGame?: () => Promise<SavedGameData | null>;
 }
 
 interface CustomerTypeDef {
@@ -191,13 +372,13 @@ interface CustomersApi {
   detectAndFixStuckCustomers: () => void;
 }
 
-// Partial — task shape is owned by taskManager.js/taskAssignment.js and the
-// various task-creating files (customers.js, prescriptions.js, ...), none
-// of which have converted yet. Only the fields converted .ts files actually
-// read are named; the index signature lets each creator keep attaching
-// whatever extra fields it needs (dependencyTaskId, quantityNeeded, etc.)
-// without every field being named here. Tighten once taskManager.js itself
-// converts and owns the authoritative shape.
+// Partial — task shape is owned by taskManager.js/taskAssignment.js, still
+// plain JS. Only the fields converted .ts files actually read are named;
+// the index signature lets each creator (customers.ts, prescriptions.ts,
+// production.ts, ...) keep attaching whatever extra fields it needs
+// (dependencyTaskId, fillTaskDependency, etc.) without every field being
+// named here. Tighten once taskManager.js itself converts and owns the
+// authoritative shape.
 interface Task {
   id: string;
   type: string;
@@ -211,6 +392,8 @@ interface Task {
   assignedTo?: string | null;
   roleNeeded?: string;
   priority?: string;
+  quantityToMake?: number;
+  quantityNeeded?: number;
   [key: string]: unknown;
 }
 
@@ -219,6 +402,7 @@ interface Task {
 interface TaskManagerApi {
   tasks: Task[];
   addTask: (task: Task) => void;
+  updateTasks: (minutes: number) => void;
 }
 
 // Partial — taskAssignment.js owns the real shape; extend in place once it
@@ -243,15 +427,27 @@ interface Prescription {
   createdAt: number;
 }
 
-// Partial — prescriptions.js owns the real shape; extend in place once it
-// converts.
 interface PrescriptionsApi {
   activePrescriptions: Prescription[];
   generatePrescription: (customerId: string) => string | null;
+  createFillTaskForPrescription: (prescription: Prescription) => string | null;
+  updatePrescriptionStatus: (prescriptionId: string, newStatus: string) => void;
+  prescriptionFilled: (prescriptionId: string, customerId: string) => void;
   createConsultationTask: (customerId: string) => void;
-  removePrescriptionsByCustomer: (customerId: string) => void;
   getPrescription: (prescriptionId: string) => Prescription | undefined;
-  createFillTaskForPrescription: (prescription: Prescription) => void;
+  getRandomFrequency: () => string;
+  removePrescriptionsByCustomer: (customerId: string) => void;
+}
+
+// production.js's public API. canCompound/createCompoundTask/
+// handleTaskCompletion are read by prescriptions.ts and taskManager.js
+// (still plain JS) respectively.
+interface ProductionApi {
+  canCompound: (product: Product) => boolean;
+  createCompoundTask: (product: Product, quantity: number) => Task;
+  checkAndCreateCompoundTasks: () => void;
+  handleTaskCompletion: (task: Task) => void;
+  init: () => void;
 }
 
 // Named NotificationItem, not Notification — that name is already lib.dom's
@@ -340,17 +536,31 @@ interface InsuranceClaimsApi {
   init: () => void;
 }
 
+// Partial — timeEvents.js owns the real shape; extend in place once it
+// converts. Every call site in this batch guards with `window.timeEvents &&
+// ...` first, so this stays optional even though the calls that do happen
+// are otherwise unconditional.
+interface TimeEventsApi {
+  startOfDay: (gameState: GameState) => void;
+  endOfDay: (gameState: GameState) => void;
+  minuteCheck: (gameState: GameState) => void;
+}
+
+interface BootstrapApi {
+  retry: () => void;
+  checkComponents: () => boolean;
+  buildUI: () => void;
+}
+
 interface Window {
   insuranceData: InsurancePlan[];
   brandReputation: BrandReputationApi;
   createPanel: (args: { title: string; body: string }) => HTMLDivElement;
   showDailySummaryModal: (onNextDay?: () => void) => void;
-  // Optional: owned by files that haven't converted yet (main.js,
-  // employees.js). debug.js only ever does a `typeof window.x !==
-  // 'undefined'` existence check on these, never assumes a shape — tighten
-  // when each owner converts.
   gameAPI?: GameApi;
-  employeesData?: unknown;
+  employeesData: Employee[];
+  employees: EmployeesApi;
+  globalMarkup: number;
   // Required even though their owning file (main.js/game-bootstrap.js)
   // hasn't converted yet: sideBar.ts/topBar.ts/customers.ts call these
   // unconditionally (no typeof guard), so they must always be defined by
@@ -367,10 +577,19 @@ interface Window {
   notifications?: NotificationsApi;
   renderOperationsPage?: (container: HTMLElement) => void;
   renderEmployees?: () => void;
+  // Owned by employeesPage.js, not converted yet, but called unconditionally
+  // by employees.ts's hireEmployee (no typeof guard in the original either)
+  // — required for the same reason as showPage/ui/taskManager above.
+  displayEmployeeCandidates: (candidates: Employee[]) => void;
+  // Owned by inventoryPage.js, not converted yet.
+  renderInventoryPage?: (container: HTMLElement) => void;
+  updateInventoryDisplay?: () => void;
+  timeEvents?: TimeEventsApi;
   ui: UiApi;
   taskManager: TaskManagerApi;
   taskAssignment: TaskAssignmentApi;
   prescriptions: PrescriptionsApi;
+  production: ProductionApi;
   taskbars: TaskbarsApi;
   updateTaskProgressBars: () => void;
   renderTopBar: () => HTMLElement;
@@ -397,4 +616,12 @@ interface Window {
   gameState: GameState;
   updateUI: (page: string) => void;
   helpers: HelpersApi;
+  isGameInitialized: boolean;
+  gameLoop: (timestamp: number) => void;
+  setGameSpeed: (speedMultiplier: number) => void;
+  toggleGamePause: () => void;
+  initializeNewGame: (gameOptions: NewGameOptions) => boolean;
+  loadSavedGame: () => Promise<boolean>;
+  runFallbackInitialization: () => boolean;
+  bootstrapGame: BootstrapApi;
 }
