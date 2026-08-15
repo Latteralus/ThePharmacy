@@ -7,7 +7,7 @@
 
 (function() {
     // Task type colors - customize as needed
-    const taskTypeColors = {
+    const taskTypeColors: Record<string, string> = {
         'fillPrescription': '#4caf50', // Green
         'customerInteraction': '#2196f3', // Blue
         'consultation': '#9c27b0', // Purple
@@ -17,19 +17,19 @@
     };
 
     // Per-task interpolation state, keyed by task id
-    const progressTracker = new Map();
+    const progressTracker = new Map<string, { velocity: number }>();
 
     // Timestamp of the last interpolation frame
     let lastSystemUpdate = performance.now();
 
     // Called every animation frame (via window.updateTaskProgressBars) to
     // smoothly interpolate progress between real taskManager ticks.
-    function smoothUpdateTaskProgressBars() {
+    function smoothUpdateTaskProgressBars(): void {
         const now = performance.now();
         const timeSinceLastUpdate = now - lastSystemUpdate;
         lastSystemUpdate = now;
 
-        const progressBars = document.querySelectorAll('.task-progress-bar');
+        const progressBars = document.querySelectorAll<HTMLElement>('.task-progress-bar');
 
         progressBars.forEach(progressBar => {
             const taskId = progressBar.dataset.taskId;
@@ -44,7 +44,7 @@
                     });
                 }
 
-                const trackedState = progressTracker.get(taskId);
+                const trackedState = progressTracker.get(taskId)!;
                 const elapsedMinutes = timeSinceLastUpdate / 60000; // ms to minutes
                 const predictedProgress = Math.min(
                     task.totalTime,
@@ -58,8 +58,8 @@
                 progressTracker.delete(taskId);
 
                 if (task && task.status === 'completed') {
-                    const progressFill = progressBar.querySelector('.progress-fill');
-                    const progressPercent = progressBar.querySelector('.progress-percent');
+                    const progressFill = progressBar.querySelector<HTMLElement>('.progress-fill');
+                    const progressPercent = progressBar.querySelector<HTMLElement>('.progress-percent');
 
                     if (progressFill) progressFill.style.width = '100%';
                     if (progressPercent) progressPercent.textContent = '100%';
@@ -69,10 +69,10 @@
     }
 
     // Update the actual progress bar UI elements with the current progress
-    function updateProgressBarUI(progressBar, currentProgress, task) {
-        const progressFill = progressBar.querySelector('.progress-fill');
-        const progressPercent = progressBar.querySelector('.progress-percent');
-        const timeRemaining = progressBar.querySelector('.time-remaining');
+    function updateProgressBarUI(progressBar: HTMLElement, currentProgress: number, task: Task): void {
+        const progressFill = progressBar.querySelector<HTMLElement>('.progress-fill');
+        const progressPercent = progressBar.querySelector<HTMLElement>('.progress-percent');
+        const timeRemaining = progressBar.querySelector<HTMLElement>('.time-remaining');
 
         const percent = Math.min(100, Math.max(0, Math.round((currentProgress / task.totalTime) * 100)));
         const color = taskTypeColors[task.type] || taskTypeColors.default;
@@ -97,7 +97,7 @@
     // Build a progress bar element for a task. Callers (operationsPage,
     // employeesPage, ...) insert this directly into their rendered markup;
     // smoothUpdateTaskProgressBars picks it up automatically on the next frame.
-    function createProgressBar(task) {
+    function createProgressBar(task: Task): HTMLDivElement {
         const percent = Math.min(100, Math.round((task.progress / task.totalTime) * 100));
         const color = taskTypeColors[task.type] || taskTypeColors.default;
 
@@ -132,7 +132,7 @@
         try {
             progressContainer.title = createTaskTooltip(task);
         } catch (error) {
-            console.error(`[taskbars.js] Error creating tooltip: ${error.message}`);
+            console.error(`[taskbars.js] Error creating tooltip: ${(error as Error).message}`);
             progressContainer.title = `Task: ${formatTaskType(task.type)} - Progress: ${percent}%`;
         }
 
@@ -140,7 +140,7 @@
     }
 
     // Create a tooltip for a task
-    function createTaskTooltip(task) {
+    function createTaskTooltip(task: Task): string {
         let tooltip = `Task: ${formatTaskType(task.type)}\n`;
         tooltip += `Progress: ${Math.round((task.progress / task.totalTime) * 100)}%\n`;
         tooltip += `Time Elapsed: ${task.progress.toFixed(1)} minutes\n`;
@@ -163,7 +163,7 @@
                     tooltip += `Customer ID: ${task.customerId}\n`;
                 }
             } catch (error) {
-                console.error(`[taskbars.js] Error getting customer info: ${error.message}`);
+                console.error(`[taskbars.js] Error getting customer info: ${(error as Error).message}`);
                 tooltip += `Customer ID: ${task.customerId}\n`;
             }
         }
@@ -176,7 +176,7 @@
     }
 
     // Format task type for display
-    function formatTaskType(type) {
+    function formatTaskType(type: string | undefined): string {
         if (!type) return 'Unknown';
 
         switch (type) {
@@ -190,7 +190,7 @@
     }
 
     // Add CSS styles for the progress bars (injected once)
-    function addTaskBarStyles() {
+    function addTaskBarStyles(): void {
         const style = document.createElement('style');
         style.textContent = `
             .task-progress-bar {
@@ -242,7 +242,7 @@
         document.head.appendChild(style);
     }
 
-    function init() {
+    function init(): void {
         console.log("[taskbars] Initializing task progress bars");
         addTaskBarStyles();
         lastSystemUpdate = performance.now();
@@ -252,7 +252,7 @@
         try {
             init();
         } catch (error) {
-            console.error(`[taskbars] Error during initialization: ${error.message}`);
+            console.error(`[taskbars] Error during initialization: ${(error as Error).message}`);
         }
     });
 

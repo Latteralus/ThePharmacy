@@ -98,6 +98,9 @@ interface InsuranceReimbursements {
 interface FinancesData {
   cash: number;
   dailyIncome: number;
+  pendingInsuranceIncome: number;
+  completedOrders: number;
+  pendingOrders: number;
   insuranceReimbursements?: InsuranceReimbursements;
 }
 
@@ -150,16 +153,142 @@ interface GameApi {
   getNewGameOptions?: () => Promise<unknown>;
 }
 
-interface Customer {
-  id: string;
-  insurance: InsurancePlan;
+interface CustomerTypeDef {
+  patience: number;
+  baseBoost: number;
 }
 
-// Partial — customers.js owns the real, much larger shape (see
-// customers.js:309's getRandomInsurance, activeCustomers usage elsewhere);
-// extend in place once it converts.
+interface Customer {
+  id: string;
+  type: string;
+  status: string;
+  arrivedAt: number;
+  insurance: InsurancePlan;
+  prescriptionId: string | null;
+  patience: number;
+  timer: ReturnType<typeof setInterval> | null;
+  firstName: string;
+  lastName: string;
+  mood: number;
+  lastStateChange: number;
+}
+
 interface CustomersApi {
   activeCustomers: Customer[];
+  customerTypes: Record<string, CustomerTypeDef>;
+  generateCustomer: (hour: number) => Customer;
+  assignPrescription: (customerId: string, prescriptionId: string | null) => void;
+  updateCustomerStatus: (customerId: string, newStatus: string) => void;
+  updateCustomerMood: (customerId: string, moodChange: number) => void;
+  extendPatience: (customerId: string, secondsToAdd: number) => void;
+  adjustPatienceDecayRate: (customer: Customer) => number;
+  customerLeaves: (customerId: string) => void;
+  startCustomerTimer: (customerId: string) => void;
+  updateReputationOnDeparture: (customer: Customer) => void;
+  getRandomCustomerType: () => string;
+  getRandomInsurance: () => InsurancePlan;
+  getCustomerById: (customerId: string) => Customer | undefined;
+  detectAndFixStuckCustomers: () => void;
+}
+
+// Partial — task shape is owned by taskManager.js/taskAssignment.js and the
+// various task-creating files (customers.js, prescriptions.js, ...), none
+// of which have converted yet. Only the fields converted .ts files actually
+// read are named; the index signature lets each creator keep attaching
+// whatever extra fields it needs (dependencyTaskId, quantityNeeded, etc.)
+// without every field being named here. Tighten once taskManager.js itself
+// converts and owns the authoritative shape.
+interface Task {
+  id: string;
+  type: string;
+  status: string;
+  progress: number;
+  totalTime: number;
+  customerId?: string;
+  prescriptionId?: string;
+  productId?: string;
+  productName?: string;
+  assignedTo?: string | null;
+  roleNeeded?: string;
+  priority?: string;
+  [key: string]: unknown;
+}
+
+// Partial — taskManager.js owns the real shape; extend in place once it
+// converts.
+interface TaskManagerApi {
+  tasks: Task[];
+  addTask: (task: Task) => void;
+}
+
+// Partial — taskAssignment.js owns the real shape; extend in place once it
+// converts.
+interface TaskAssignmentApi {
+  unassignTask: (taskId: string) => void;
+  autoAssignTasks: () => void;
+}
+
+interface Prescription {
+  id: string;
+  customerId: string;
+  productId: string;
+  productName: string;
+  dosage: number;
+  dosageForm: string;
+  frequency: string;
+  status: string;
+  doctorName: string;
+  refillsAllowed: number;
+  assignedEmployeeId: string | null;
+  createdAt: number;
+}
+
+// Partial — prescriptions.js owns the real shape; extend in place once it
+// converts.
+interface PrescriptionsApi {
+  activePrescriptions: Prescription[];
+  generatePrescription: (customerId: string) => string | null;
+  createConsultationTask: (customerId: string) => void;
+  removePrescriptionsByCustomer: (customerId: string) => void;
+  getPrescription: (prescriptionId: string) => Prescription | undefined;
+  createFillTaskForPrescription: (prescription: Prescription) => void;
+}
+
+// Named NotificationItem, not Notification — that name is already lib.dom's
+// browser Notification API and would silently declaration-merge with it.
+interface NotificationItem {
+  id: number;
+  message: string;
+  type: string;
+  timestamp: Date;
+  read: boolean;
+}
+
+interface NotificationsApi {
+  items: NotificationItem[];
+  unreadCount: number;
+  add: (message: string, type?: string) => number;
+  markAsRead: (id: number) => void;
+  markAllAsRead: () => void;
+  updateUI: () => void;
+}
+
+interface TaskbarsApi {
+  createProgressBar: (task: Task) => HTMLDivElement;
+}
+
+interface UiApi {
+  init: () => void;
+  formatDate: (dateObj: Date) => string;
+  formatTime: (dateObj: Date) => string;
+  formatDateTime: (dateObj: Date) => string;
+  updateTime: () => void;
+  updateFinances: () => void;
+  updateCustomers: () => void;
+  updatePrescriptions: () => void;
+  updateUI: (page?: string) => void;
+  forceUpdate: (page: string) => void;
+  refreshCache: () => void;
 }
 
 interface InsuranceClaim {
@@ -216,17 +345,40 @@ interface Window {
   brandReputation: BrandReputationApi;
   createPanel: (args: { title: string; body: string }) => HTMLDivElement;
   showDailySummaryModal: (onNextDay?: () => void) => void;
-  // Optional: owned by files that haven't converted yet (main.js, ui.js,
-  // taskManager.js, employees.js, topBar.js, sideBar.js). debug.js only
-  // ever does a `typeof window.x !== 'undefined'` existence check on
-  // these, never assumes a shape — tighten when each owner converts.
+  // Optional: owned by files that haven't converted yet (main.js,
+  // employees.js). debug.js only ever does a `typeof window.x !==
+  // 'undefined'` existence check on these, never assumes a shape — tighten
+  // when each owner converts.
   gameAPI?: GameApi;
   employeesData?: unknown;
-  ui?: unknown;
-  taskManager?: unknown;
-  showPage?: (...args: unknown[]) => void;
-  renderTopBar?: (...args: unknown[]) => void;
-  renderSidebar?: (...args: unknown[]) => void;
+  // Required even though their owning file (main.js/game-bootstrap.js)
+  // hasn't converted yet: sideBar.ts/topBar.ts/customers.ts call these
+  // unconditionally (no typeof guard), so they must always be defined by
+  // the time those files run — which script load order already guarantees
+  // at runtime. debug.ts's `typeof window.x !== 'undefined'` checks still
+  // compile fine against a required type.
+  showPage: (pageName: string) => void;
+  currentPage: string;
+  // Never actually assigned anywhere in the codebase (topBar.js always
+  // falls back to 'Manager') — a pre-existing "silently does nothing" gap,
+  // not something this migration fixes. See docs/Changelog.md.
+  username?: string;
+  saveGame?: () => void;
+  notifications?: NotificationsApi;
+  renderOperationsPage?: (container: HTMLElement) => void;
+  renderEmployees?: () => void;
+  ui: UiApi;
+  taskManager: TaskManagerApi;
+  taskAssignment: TaskAssignmentApi;
+  prescriptions: PrescriptionsApi;
+  taskbars: TaskbarsApi;
+  updateTaskProgressBars: () => void;
+  renderTopBar: () => HTMLElement;
+  renderSidebar: () => HTMLElement;
+  updateActiveNavItem: (pageName: string) => void;
+  updateSidebarReputation: () => void;
+  updateFinancialSummary: (financesData: FinancesData) => void;
+  updateTimeDisplay: (date: Date) => void;
   customers: CustomersApi;
   insuranceClaims: InsuranceClaimsApi;
   materialsData: Material[];

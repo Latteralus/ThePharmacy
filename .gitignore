@@ -51,3 +51,8 @@ main/components/panel.js
 main/modals/modal.js
 main/js/debug.js
 main/js/insuranceClaims.js
+main/components/sideBar.js
+main/components/topBar.js
+main/js/taskbars.js
+main/js/ui.js
+main/js/customers.js

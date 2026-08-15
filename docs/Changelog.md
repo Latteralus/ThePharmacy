@@ -22,7 +22,7 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (12 of 47 files converted so far, though 8 of
+and per-file progress tracker (17 of 47 files converted so far, though 8 of
 the remaining 35 turned out to be dead code excluded from the count — see
 that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
@@ -148,6 +148,76 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — TypeScript migration: fifth batch (sideBar, topBar, taskbars, ui, customers)
+
+Continued the migration, per the fourth batch's "fixed at 5 files" standing
+instruction. Moved out of `main/js/data/` into the UI/engine layer: converted
+`main/components/sideBar.js`, `main/components/topBar.js`,
+`main/js/taskbars.js`, `main/js/ui.js`, and `main/js/customers.js` — chosen in
+that order (near-leaf UI components first, then `ui.js` as the UI-layer
+analog of `helpers.ts` — touches nearly everything — then `customers.js` as
+the batch's real unlock, since it was one of three things blocking
+`employees.js`/`finances.js` from converting).
+
+Notable decisions, all verified behavior-preserving:
+- `NotificationItem` (not `Notification`) for topBar.ts's notification-panel
+  type — `Notification` is already lib.dom's browser Notification API;
+  naming it that silently declaration-merges instead of erroring, and did
+  produce a real compile error before the rename.
+- Two `textContent = someNumber` assignments (sideBar.ts's reputation
+  display, topBar.ts's unread-count badge) needed `String(...)` — strict DOM
+  typings require `textContent` to be a string, where the original relied on
+  implicit coercion. `String(n)` produces the identical string either way.
+- ui.ts's `domCache.lastValues.lastCustomerStatus` was never in the
+  original's initial object literal (JS silently added it as a dynamic
+  property on first write); strict mode requires it declared up front, so
+  it's initialized to `null` — confirmed this can't be observed as a
+  behavior change, since the first `updateCustomersList()` call always
+  short-circuits past the code path that would read it.
+- customers.ts's `if (customer.timer)` became `if (customer.timer !== null)`
+  — `timer` only ever holds `null` or a live interval handle, so the checks
+  are equivalent; strict mode just wants the explicit form.
+- `window.showPage`/`renderTopBar`/`renderSidebar`/`ui`/`taskManager` were
+  promoted from debug.ts's earlier loose/optional placeholders to required,
+  correctly-shaped ambient types, since this batch's files call them
+  unconditionally (no `typeof` guard) even though their owning files
+  (`main.js`, `ui.js` itself) either haven't converted yet or just did.
+  debug.ts's `typeof window.x !== 'undefined'` checks still compile fine
+  against a required type.
+- `customers.ts` makes `CustomersApi`/`Customer` the real, full types,
+  upgrading insuranceClaims.ts's earlier partial placeholder. It also
+  introduced partial `Task`/`TaskManagerApi`/`TaskAssignmentApi`/
+  `PrescriptionsApi` for the three still-plain-JS modules it drives
+  (`taskManager.js`, `taskAssignment.js`, `prescriptions.js`); `Task` uses a
+  `[key: string]: unknown` index signature since different not-yet-converted
+  task-creator files each attach different extra fields.
+
+Verified more thoroughly than prior batches given the size: `build:ts`
+clean, 8/8 Jest, 2/2 Playwright, plus a scripted before/after behavioral
+comparison (`vm`-sandboxed old-vs-new, one script per logic-bearing
+function) covering `ui.formatDate/formatTime/formatDateTime`,
+`taskbars.createProgressBar` (percent/time-remaining/tooltip math),
+`customers.adjustPatienceDecayRate` across all state/type combinations,
+`customers.getRandomCustomerType`'s weighting boundaries, and full
+`sideBar.renderSidebar()`/`topBar.renderTopBar()` DOM output including their
+update functions — all byte-identical old vs. new. Also manually launched
+the real Electron app via a Playwright driver script (reusing
+`test/e2e/newGame.spec.js`'s launch pattern): started a new game; confirmed
+the sidebar renders all 12 nav items plus Main Menu and its confirm-dialog
+click path works; confirmed the top bar shows cash/income/pending-insurance/
+time/username and the notifications bell opens/closes the panel; navigated
+to Operations, spawned a real customer via `window.customers.generateCustomer()`,
+and confirmed it renders correctly in the customer list; confirmed a task's
+progress bar renders the correct tooltip/percent/time-remaining and advances
+smoothly frame-to-frame (31% → 51% over 2 real seconds). No new console
+errors — only the pre-existing, already-documented preload.js "path module
+not available" noise.
+
+17 of 47 files converted so far (30 remaining). `main/js/data/` is fully
+converted except `employees.js`/`finances.js`; converting `customers.js`
+this batch removes one of the three things blocking those two
+(`window.gameState` from `main.js` and `prescriptions.js` still remain).
 
 ### 2026-08-15 — TypeScript migration started (tooling + first file)
 

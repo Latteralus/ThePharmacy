@@ -1,23 +1,47 @@
 // optimized-ui.js
 // Enhanced UI system with performance improvements for real-time updates
 
-window.ui = (function() {
+interface DomCache {
+    timeEl: HTMLElement | null;
+    cashEl: HTMLElement | null;
+    dailyIncomeEl: HTMLElement | null;
+    pendingInsuranceEl: HTMLElement | null;
+    completedOrdersEl: HTMLElement | null;
+    pendingOrdersEl: HTMLElement | null;
+    customersList: HTMLElement | null;
+    prescriptionsList: HTMLElement | null;
+    lastValues: {
+        time: string;
+        cash: number;
+        dailyIncome: number;
+        pendingInsurance: number;
+        completedOrders: number;
+        pendingOrders: number;
+        customerCount: number;
+        prescriptionCount: number;
+        lastCustomerStatus: string | null;
+    };
+}
+
+type UpdateType = 'time' | 'finances' | 'customers' | 'prescriptions' | 'operations' | 'employees';
+
+window.ui = (function(): UiApi {
     // Cache DOM references to minimize DOM lookups
-    const domCache = {
+    const domCache: DomCache = {
         // Time display
         timeEl: null,
-        
+
         // Financial displays
         cashEl: null,
         dailyIncomeEl: null,
         pendingInsuranceEl: null,
         completedOrdersEl: null,
         pendingOrdersEl: null,
-        
+
         // Customer and prescription lists
         customersList: null,
         prescriptionsList: null,
-        
+
         // Last updated values for change detection
         lastValues: {
             time: '',
@@ -27,74 +51,77 @@ window.ui = (function() {
             completedOrders: -1,
             pendingOrders: -1,
             customerCount: -1,
-            prescriptionCount: -1
+            prescriptionCount: -1,
+            lastCustomerStatus: null
         }
     };
-    
+
     // Update batching to minimize DOM operations
-    let updateQueue = new Set();
+    let updateQueue = new Set<UpdateType>();
     let updateScheduled = false;
 
     // Initialize UI system and cache DOM elements
-    function init() {
+    function init(): void {
         console.log("[ui.js] Initializing UI system");
-        
+
         // Initial cache of DOM elements
         refreshDomCache();
-        
+
         // Add a mutation observer to update the DOM cache when the page changes
         const observer = new MutationObserver((mutations) => {
             let needsRefresh = false;
-            
+
             for (const mutation of mutations) {
                 if (mutation.addedNodes.length > 0) {
                     // Important elements that might have been added
-                    for (const node of mutation.addedNodes) {
-                        if (node.id === 'gameTime' || 
-                            node.id === 'currentCash' ||
-                            node.id === 'customersList' || 
-                            node.id === 'prescriptionsList') {
+                    for (const node of Array.from(mutation.addedNodes)) {
+                        const el = node as Element;
+                        if (el.id === 'gameTime' ||
+                            el.id === 'currentCash' ||
+                            el.id === 'customersList' ||
+                            el.id === 'prescriptionsList') {
                             needsRefresh = true;
                             break;
                         }
-                        
+
                         // Check for container divs that might hold our elements
-                        if (node.nodeType === Node.ELEMENT_NODE && node.querySelector) {
-                            if (node.querySelector('#gameTime, #currentCash, #customersList, #prescriptionsList')) {
+                        if (node.nodeType === Node.ELEMENT_NODE && el.querySelector) {
+                            if (el.querySelector('#gameTime, #currentCash, #customersList, #prescriptionsList')) {
                                 needsRefresh = true;
                                 break;
                             }
                         }
                     }
                 }
-                
+
                 // If elements were removed, we might need to refresh
                 if (mutation.removedNodes.length > 0) {
-                    for (const node of mutation.removedNodes) {
-                        if (node.id === 'gameTime' || 
-                            node.id === 'currentCash' ||
-                            node.id === 'customersList' || 
-                            node.id === 'prescriptionsList') {
+                    for (const node of Array.from(mutation.removedNodes)) {
+                        const el = node as Element;
+                        if (el.id === 'gameTime' ||
+                            el.id === 'currentCash' ||
+                            el.id === 'customersList' ||
+                            el.id === 'prescriptionsList') {
                             needsRefresh = true;
                             break;
                         }
                     }
                 }
-                
+
                 if (needsRefresh) break;
             }
-            
+
             if (needsRefresh) {
                 refreshDomCache();
             }
         });
-        
+
         // Start observing the document
         observer.observe(document.body, { childList: true, subtree: true });
     }
-    
+
     // Refresh the DOM cache when the page changes
-    function refreshDomCache() {
+    function refreshDomCache(): void {
         domCache.timeEl = document.getElementById('gameTime');
         domCache.cashEl = document.getElementById('currentCash');
         domCache.dailyIncomeEl = document.getElementById('dailyIncome');
@@ -104,19 +131,19 @@ window.ui = (function() {
         domCache.customersList = document.getElementById('customersList');
         domCache.prescriptionsList = document.getElementById('prescriptionsList');
     }
-    
+
     // Schedule a batch update to minimize DOM operations
-    function scheduleUpdate(updateType) {
+    function scheduleUpdate(updateType: UpdateType): void {
         updateQueue.add(updateType);
-        
+
         if (!updateScheduled) {
             updateScheduled = true;
             requestAnimationFrame(processUpdates);
         }
     }
-    
+
     // Process all queued updates in a single animation frame
-    function processUpdates() {
+    function processUpdates(): void {
         // Process each update type in the queue
         updateQueue.forEach(updateType => {
             switch (updateType) {
@@ -134,7 +161,7 @@ window.ui = (function() {
                     break;
                 case 'operations':
                     if (window.renderOperationsPage && window.currentPage === 'operations') {
-                        const mainContent = document.querySelector('.main-content');
+                        const mainContent = document.querySelector<HTMLElement>('.main-content');
                         if (mainContent) {
                             window.renderOperationsPage(mainContent);
                         }
@@ -147,25 +174,25 @@ window.ui = (function() {
                     break;
             }
         });
-        
+
         // Clear the update queue and reset flag
         updateQueue.clear();
         updateScheduled = false;
     }
-    
+
     // Update time display with efficient DOM operations
-    function updateTimeDisplay() {
+    function updateTimeDisplay(): void {
         if (!domCache.timeEl) return;
-        
+
         const formatted = formatDateTime(window.gameState.currentDate);
         if (domCache.lastValues.time !== formatted) {
             domCache.timeEl.textContent = formatted;
             domCache.lastValues.time = formatted;
         }
     }
-    
+
     // Update all financial displays with change detection
-    function updateFinancialDisplays() {
+    function updateFinancialDisplays(): void {
         // Update cash display
         if (domCache.cashEl && window.financesData) {
             const cash = window.financesData.cash;
@@ -174,7 +201,7 @@ window.ui = (function() {
                 domCache.lastValues.cash = cash;
             }
         }
-        
+
         // Update daily income display
         if (domCache.dailyIncomeEl && window.financesData) {
             const dailyIncome = window.financesData.dailyIncome;
@@ -183,7 +210,7 @@ window.ui = (function() {
                 domCache.lastValues.dailyIncome = dailyIncome;
             }
         }
-        
+
         // Update pending insurance display
         if (domCache.pendingInsuranceEl && window.financesData) {
             const pendingInsurance = window.financesData.pendingInsuranceIncome;
@@ -192,7 +219,7 @@ window.ui = (function() {
                 domCache.lastValues.pendingInsurance = pendingInsurance;
             }
         }
-        
+
         // Update completed orders display
         if (domCache.completedOrdersEl && window.financesData) {
             const completedOrders = window.financesData.completedOrders;
@@ -201,7 +228,7 @@ window.ui = (function() {
                 domCache.lastValues.completedOrders = completedOrders;
             }
         }
-        
+
         // Update pending orders display
         if (domCache.pendingOrdersEl && window.financesData) {
             const pendingOrders = window.financesData.pendingOrders;
@@ -211,29 +238,29 @@ window.ui = (function() {
             }
         }
     }
-    
+
     // Update customers list with efficient rendering
-    function updateCustomersList() {
+    function updateCustomersList(): void {
         if (!domCache.customersList) return;
         if (!window.customers || !window.customers.activeCustomers) return;
-        
+
         const customers = window.customers.activeCustomers;
-        
+
         // Check if we need to update
         if (domCache.lastValues.customerCount === customers.length) {
             // Only update content if customers have changed
-            // This is a simple heuristic - for more accuracy we could hash 
+            // This is a simple heuristic - for more accuracy we could hash
             // customer statuses, but this is good enough for most cases
-            const firstCustomer = customers[0] || {};
-            if (domCache.lastValues.lastCustomerStatus === firstCustomer.status) {
+            const firstCustomer = customers[0];
+            if (domCache.lastValues.lastCustomerStatus === firstCustomer?.status) {
                 return; // Skip update if nothing changed
             }
         }
-        
+
         // Update tracking values
         domCache.lastValues.customerCount = customers.length;
         domCache.lastValues.lastCustomerStatus = customers[0]?.status || null;
-        
+
         // Clear existing list
         domCache.customersList.innerHTML = '';
 
@@ -286,25 +313,25 @@ window.ui = (function() {
 
         domCache.customersList.appendChild(fragment);
     }
-    
+
     // Update prescriptions list with efficient rendering
-    function updatePrescriptionsList() {
+    function updatePrescriptionsList(): void {
         if (!domCache.prescriptionsList) return;
         if (!window.prescriptions || !window.prescriptions.activePrescriptions) return;
-        
+
         const prescriptions = window.prescriptions.activePrescriptions;
-        
+
         // Check if we need to update
         if (domCache.lastValues.prescriptionCount === prescriptions.length) {
             // Only update content if prescriptions have changed
-            // This is a simple heuristic - for more accuracy we could track 
+            // This is a simple heuristic - for more accuracy we could track
             // individual prescription statuses, but this is good enough for most cases
             return; // Skip update if count hasn't changed
         }
-        
+
         // Update tracking values
         domCache.lastValues.prescriptionCount = prescriptions.length;
-        
+
         // Clear existing list
         domCache.prescriptionsList.innerHTML = '';
 
@@ -378,22 +405,22 @@ window.ui = (function() {
 
         domCache.prescriptionsList.appendChild(fragment);
     }
-    
+
     // --- Helper functions for formatting ---
-    function formatDate(dateObj) {
+    function formatDate(dateObj: Date): string {
         const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
         const dd = String(dateObj.getDate()).padStart(2, '0');
         const excisedYear = dateObj.getFullYear();
         return `${mm}/${dd}/${excisedYear}`;
     }
 
-    function formatTime(dateObj) {
+    function formatTime(dateObj: Date): string {
         const hours = String(dateObj.getHours()).padStart(2, '0');
         const minutes = String(dateObj.getMinutes()).padStart(2, '0');
         return `${hours}:${minutes}`;
     }
 
-    function formatDateTime(dateObj) {
+    function formatDateTime(dateObj: Date): string {
         const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
         const dd = String(dateObj.getDate()).padStart(2, '0');
         const excisedYear = dateObj.getFullYear();
@@ -401,61 +428,61 @@ window.ui = (function() {
         const minutes = String(dateObj.getMinutes()).padStart(2, '0');
         return `[${mm}/${dd}/${excisedYear}] [${hours}:${minutes}]`;
     }
-    
+
     // --- Public API ---
     return {
         // Initialize the UI system
         init,
-        
+
         // Helper formatting functions
         formatDate,
         formatTime,
         formatDateTime,
-        
+
         // Public update methods that use the batching system
         updateTime: function() {
             scheduleUpdate('time');
         },
-        
+
         updateFinances: function() {
             scheduleUpdate('finances');
         },
-        
+
         updateCustomers: function() {
             scheduleUpdate('customers');
         },
-        
+
         updatePrescriptions: function() {
             scheduleUpdate('prescriptions');
         },
-        
+
         // Updated window.updateUI function with batching
         updateUI: function(page = "") {
             if (page === "finances") {
                 scheduleUpdate('finances');
             }
-            
+
             if (page === "customers") {
                 scheduleUpdate('customers');
             }
-            
+
             if (page === "prescriptions") {
                 scheduleUpdate('prescriptions');
             }
-            
+
             if (page === "time") {
                 scheduleUpdate('time');
             }
-            
+
             if (page === "operations") {
                 scheduleUpdate('operations');
             }
-            
+
             if (page === "employees") {
                 scheduleUpdate('employees');
             }
         },
-        
+
         // Force an immediate update (for critical changes)
         forceUpdate: function(page) {
             switch (page) {
@@ -473,7 +500,7 @@ window.ui = (function() {
                     break;
             }
         },
-        
+
         // Re-cache DOM elements (call when page structure changes)
         refreshCache: refreshDomCache
     };
@@ -481,7 +508,7 @@ window.ui = (function() {
 
 // Bare global alias: most game modules call window.updateUI(page) directly
 // rather than window.ui.updateUI(page).
-window.updateUI = function(page) {
+window.updateUI = function(page: string): void {
     window.ui.updateUI(page);
 };
 
