@@ -18,19 +18,18 @@ Single-player, offline, no accounts.
 a `<script>` tag loaded by `main.html` (game screen), `index.html` (main
 menu), or `settings.html`. Modules communicate by hanging objects/functions
 off `window` (`window.taskManager`, `window.finances`, `window.updateUI`,
-etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
-starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
-`.js` in place with no bundler, so this architecture doesn't change, files
-just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (41 of 46 files converted so far —
-every renderer-side `<script>`-tag file, including `main/js/pages/`, is now
-fully typed; the one remaining main-process file, `main/ipcMain.js`, turned
-out to be entirely dead code and was deleted rather than converted, which is
-why the denominator dropped by one — though a chunk of the remainder besides
-that turned out to be dead code excluded from the count too — see that
-file); a much
-larger Webpack/React/Redux rewrite was considered and explicitly rejected —
-see that file for why.
+etc.) rather than `import`/`export`. As of 2026-08-15 the codebase has
+finished an **incremental TypeScript migration** — `tsc` compiles `.ts` →
+`.js` in place with no bundler, so this architecture didn't change, files
+just gained types one at a time. `docs/revision.md` has the full history and
+final per-file table: every live `<script>`-tag file in the app is now
+TypeScript, and the confirmed-dead files that were never wired into any HTML
+page (`main/js/data.js`, `fallback.js`, `gameLogic.js`, the unused
+`main/components/*Card.js` files, `main/ipcMain.js`, and others — see that
+file's "Deleted (dead code)" note) were deleted outright during a
+post-migration cleanup pass rather than left around unconverted. A much
+larger Webpack/React/Redux rewrite was considered early on and explicitly
+rejected — see `docs/revision.md` for why.
 
 **It works.** New game, load game, save game, the tasking/production loop,
 and the UI all run without crashing as of this writing. That was not true
@@ -132,21 +131,26 @@ is visible — it never calls `renderMaterials()`, so the grid is empty until
 the filter input fires at least once. Pre-existing in the original `.js`,
 confirmed via manual launch, not fixed.
 
-**Confirmed dead code** (zero callers, safe to delete): the four
-`main/components/*Card.js` files plus `card.js` (not loaded by any HTML
-file, and use ES-module syntax that would throw if they were);
+**Confirmed dead code, deleted (2026-08-15 post-migration cleanup):** the
+four `main/components/*Card.js` files plus `card.js` (not loaded by any HTML
+file, and used ES-module syntax that would have thrown if they ever were);
 `main/js/data.js`, `dataInitialization.js`, `events.js`, `fallback.js`,
-`inventory.js`, `ipcRenderer.js`, `ipcTypes.js`, and `orders.js` (found
-2026-08-15 while scoping the TS migration — none referenced by any
-`<script>` tag or `require`/`import` anywhere live; `orders.js` even
-`import`s `inventory.js` via ES-module syntax, which would throw if either
-were ever actually loaded); `main/components/panel.js`'s `window.createPanel` (loaded, never called);
-`employees.js`'s `promoteEmployee`, `updateEmployeeSkills`, and a duplicate
+`gameLogic.js` (an entire unused Web Worker), `inventory.js`, `ipcRenderer.js`,
+`ipcTypes.js`, `orders.js`, and `main/js/data/dosageForms.js` — none
+referenced by any `<script>` tag or `require`/`import` anywhere live
+(`orders.js` even `import`ed `inventory.js` via ES-module syntax, which
+would have thrown if either were ever actually loaded). Found while scoping
+the TS migration, deleted once the migration itself was done rather than
+left around as unconverted clutter — see `docs/revision.md`'s "Deleted (dead
+code)" note.
+
+**Confirmed dead code, still present** (small pieces inside otherwise-live,
+already-converted files — not worth a file-level deletion): `main/components/panel.js`'s `window.createPanel` (loaded, never called);
+`employees.ts`'s `promoteEmployee`, `updateEmployeeSkills`, and a duplicate
 `calculateEmployeeEfficiency` (the one actually used lives in
-`taskAssignment.js:455` — two copies exist, risk of drift); `gameLogic.js`
-(an entire unused Web Worker); `task.priority` (set by every task creator,
-read by nothing — `taskAssignment.js` uses its own hardcoded priority
-table instead).
+`taskAssignment.ts:455` — two copies exist, risk of drift); `task.priority`
+(set by every task creator, read by nothing — `taskAssignment.ts` uses its
+own hardcoded priority table instead).
 
 **Stub pages:** Dashboard, Orders, Customers, Marketing, Statistics are
 one-line placeholders sitting in the same sidebar as fully-built pages.
@@ -175,6 +179,44 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — Post-migration cleanup: deleted dead code, fixed stale git tracking
+
+With the TS migration itself finished (previous two entries), went back
+through every `.js` file in the repo to decide what's actually still needed.
+
+Deleted 14 confirmed-dead source files outright, rather than continuing to
+leave them as unconverted clutter now that "not yet converted" no longer
+applies to anything live: the four `main/components/*Card.js` files,
+`main/js/data.js`, `dataInitialization.js`, `events.js`, `fallback.js`,
+`gameLogic.js`, `inventory.js`, `ipcRenderer.js`, `ipcTypes.js`, `orders.js`,
+and `main/js/data/dosageForms.js`. Re-verified reachability before deleting
+anything (grepped every basename across the whole repo, not just `main/`) —
+all still zero hits outside their own files, consistent with the audit that
+originally found them. `test/unit/gameLogic.test.js` is misleadingly named
+but doesn't actually test `gameLogic.js` (it tests `materials.ts`/
+`products.ts`/`ui.ts`/`finances.ts`) — confirmed it stays, left the name
+alone since renaming it wasn't part of what was asked.
+
+Also found and fixed a smaller, separate issue while auditing: five files
+converted in earlier batches (`dashboardPage.js`, `ordersPage.js`,
+`taskAssignment.js`, `taskManager.js`, `timeEvents.js`) were still *tracked
+in git* as committed blobs, even though each has a `.ts` source and a
+correctly-`.gitignore`d compiled `.js` sitting right next to it. Near as this
+session could tell, whatever `git mv`/`git add` sequence converted each file
+left the pre-conversion tracked blob behind instead of cleanly retiring it —
+`.gitignore` only blocks *new* files from being added, so once a path is
+already tracked, `.gitignore` doesn't stop it from continuing to pick up
+commits. Content-wise these were already correct (identical to the current
+compiled output, not stale pre-conversion code), so this wasn't a behavior
+bug, just repo hygiene: `git rm --cached` on all five, which drops them from
+git's index without touching the files on disk (the compiled `.js` still
+needs to physically exist there for `main.html`'s `<script>` tags to load).
+
+Verified: `build:ts` clean, 8/8 Jest, 2/2 Playwright, `git status` clean
+except the intended deletions. `dist/win-unpacked/` (a ~450MB local
+`electron-builder` output directory, already `.gitignore`d and untracked)
+was noted but left alone — outside the scope of "review `.js` files."
 
 ### 2026-08-15 — TypeScript migration: eleventh batch (electron-integration) + `main/ipcMain.js` deleted as dead code
 
