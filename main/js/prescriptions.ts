@@ -1,7 +1,92 @@
 // prescriptions.js
 
+// Shared by generatePrescription and generateRefillPrescription: creates
+// either a compound+dependent-fill task pair (out of stock) or a single
+// fill task (in stock) for a prescription that's already been pushed onto
+// activePrescriptions.
+function buildTasksForPrescription(prescription: Prescription, product: Product): void {
+    if (product.inventory <= 0) {
+        console.log(`[prescriptions.js] Product ${product.name} is out of stock. Creating compound task first.`);
+
+        // Create a compound task to make the product first
+        const compoundTask: Task = {
+            id: `compound-${prescription.id}`,
+            type: 'compound',
+            prescriptionId: prescription.id,
+            productId: product.id,
+            productName: product.name,
+            totalTime: product.productionTime,
+            progress: 0,
+            roleNeeded: 'Lab Technician',
+            status: 'pending',
+            assignedTo: null,
+            quantityToMake: Math.max(1, prescription.dosage),
+            fillTaskDependency: true,
+            customerId: prescription.customerId // Link directly to customer
+        };
+        window.taskManager.addTask(compoundTask);
+        console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
+
+        // Create fill task, but mark it as dependent (won't be assigned until compound completes)
+        const fillTask: Task = {
+            id: `fill-${prescription.id}`,
+            type: 'fillPrescription',
+            prescriptionId: prescription.id,
+            productId: product.id,
+            productName: product.name,
+            totalTime: 8, // Slightly faster than normal fill time
+            progress: 0,
+            roleNeeded: 'Lab Technician',
+            status: 'pending-dependent', // Special status marking dependency
+            assignedTo: null,
+            requiredEquipment: product.equipmentNeeded,
+            quantityNeeded: Math.max(1, prescription.dosage),
+            customerId: prescription.customerId,
+            dependencyTaskId: compoundTask.id
+        };
+        window.taskManager.addTask(fillTask);
+        console.log(`[prescriptions.js] Created dependent fillPrescription task: ${fillTask.id}`);
+    } else {
+        console.log(`[prescriptions.js] Product ${product.name} is in stock (inventory: ${product.inventory}). Creating fill task directly.`);
+
+        // Create fill task directly if in stock
+        window.prescriptions.createFillTaskForPrescription(prescription);
+    }
+}
+
+// Registers a pending refill opportunity if the just-filled prescription
+// still has refills owed. Snapshots the customer's name/insurance since
+// the Customer object itself will be gone once they leave the pharmacy -
+// see customers.ts's generateCustomer for how this gets consumed later.
+function registerRefillIfEligible(prescription: Prescription, customer: Customer): void {
+    if (prescription.refillsAllowed <= 0) return;
+
+    const cooldownDays = 1 + Math.floor(Math.random() * 3); // 1-3 in-game days
+    const eligibleAfterTime = window.gameState.currentDate.getTime() + cooldownDays * 24 * 60 * 60 * 1000;
+
+    const record: RefillRecord = {
+        id: `refill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        customerFirstName: customer.firstName,
+        customerLastName: customer.lastName,
+        insurancePlanName: customer.insurance.planName,
+        productId: prescription.productId,
+        productName: prescription.productName,
+        dosage: prescription.dosage,
+        dosageForm: prescription.dosageForm,
+        frequency: prescription.frequency,
+        doctorName: prescription.doctorName,
+        refillsAvailable: prescription.refillsAllowed,
+        eligibleAfterTime,
+        sourcePrescriptionId: prescription.id
+    };
+
+    window.prescriptions.refillRegistry.push(record);
+    console.log(`[prescriptions.js] Registered refill opportunity for ${customer.firstName} ${customer.lastName} (${prescription.productName}, ${prescription.refillsAllowed} refill(s) remaining)`);
+}
+
 window.prescriptions = {
     activePrescriptions: [],
+    refillRegistry: [],
 
     generatePrescription(customerId) {
         console.log(`[prescriptions.js] Generating prescription for customer: ${customerId}`);
@@ -51,54 +136,47 @@ window.prescriptions = {
 
         console.log(`[prescriptions.js] Created prescription: ${newPrescription.id} for customer: ${customerId}`);
 
-        // Check if product is in stock
-        if (product.inventory <= 0) {
-            console.log(`[prescriptions.js] Product ${product.name} is out of stock. Creating compound task first.`);
+        buildTasksForPrescription(newPrescription, product);
 
-            // Create a compound task to make the product first
-            const compoundTask: Task = {
-                id: `compound-${newPrescription.id}`,
-                type: 'compound',
-                prescriptionId: newPrescription.id,
-                productId: product.id,
-                productName: product.name,
-                totalTime: product.productionTime,
-                progress: 0,
-                roleNeeded: 'Lab Technician',
-                status: 'pending',
-                assignedTo: null,
-                quantityToMake: Math.max(1, newPrescription.dosage),
-                fillTaskDependency: true,
-                customerId: customerId // Link directly to customer
-            };
-            window.taskManager.addTask(compoundTask);
-            console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
+        // Auto-assign tasks
+        window.taskAssignment.autoAssignTasks();
 
-            // Create fill task, but mark it as dependent (won't be assigned until compound completes)
-            const fillTask: Task = {
-                id: `fill-${newPrescription.id}`,
-                type: 'fillPrescription',
-                prescriptionId: newPrescription.id,
-                productId: product.id,
-                productName: product.name,
-                totalTime: 8, // Slightly faster than normal fill time
-                progress: 0,
-                roleNeeded: 'Lab Technician',
-                status: 'pending-dependent', // Special status marking dependency
-                assignedTo: null,
-                requiredEquipment: product.equipmentNeeded,
-                quantityNeeded: Math.max(1, newPrescription.dosage),
-                customerId: customerId,
-                dependencyTaskId: compoundTask.id
-            };
-            window.taskManager.addTask(fillTask);
-            console.log(`[prescriptions.js] Created dependent fillPrescription task: ${fillTask.id}`);
-        } else {
-            console.log(`[prescriptions.js] Product ${product.name} is in stock (inventory: ${product.inventory}). Creating fill task directly.`);
+        return newPrescription.id;
+    },
 
-            // Create fill task directly if in stock
-            this.createFillTaskForPrescription(newPrescription);
+    // Same shape as generatePrescription, but for a customer returning to
+    // refill a prescription they were previously given refills on - uses
+    // the stored product/dosage/etc. from the RefillRecord instead of
+    // picking a random product.
+    generateRefillPrescription(customerId, record) {
+        console.log(`[prescriptions.js] Generating refill prescription for customer: ${customerId} (product ${record.productId})`);
+
+        const product = window.productsData.find(p => p.id === record.productId);
+        if (!product) {
+            console.error(`[prescriptions.js] No product found for generateRefillPrescription: ${record.productId}`);
+            return null;
         }
+
+        const newPrescription: Prescription = {
+            id: `pres-${Date.now()}`,
+            customerId: customerId,
+            productId: record.productId,
+            productName: record.productName,
+            dosage: record.dosage,
+            dosageForm: record.dosageForm,
+            frequency: record.frequency,
+            status: 'pending',
+            doctorName: record.doctorName,
+            refillsAllowed: Math.max(0, record.refillsAvailable - 1),
+            assignedEmployeeId: null,
+            createdAt: Date.now(),
+            isRefill: true
+        };
+        this.activePrescriptions.push(newPrescription);
+
+        console.log(`[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`);
+
+        buildTasksForPrescription(newPrescription, product);
 
         // Auto-assign tasks
         window.taskAssignment.autoAssignTasks();
@@ -156,6 +234,13 @@ window.prescriptions = {
         if (!customer) {
             console.warn(`[prescriptions.js] Customer not found during prescriptionFilled: ${customerId}`);
             return;
+        }
+
+        // If refills are owed, register the opportunity for this customer
+        // to come back for another fill later (see customers.generateCustomer).
+        const prescription = this.getPrescription(prescriptionId);
+        if (prescription) {
+            registerRefillIfEligible(prescription, customer);
         }
 
         // Mark them ready for checkout
@@ -230,5 +315,24 @@ window.prescriptions = {
 
         // Update UI if needed
         window.ui.updatePrescriptions();
+    },
+
+    // Returns the first refill opportunity that's both owed and past its
+    // cooldown, or undefined if none is ready yet.
+    getEligibleRefillRecord(currentTime) {
+        return this.refillRegistry.find(r => r.refillsAvailable > 0 && r.eligibleAfterTime <= currentTime);
+    },
+
+    // Removes and returns a refill record - it's being turned into an
+    // active prescription now (see customers.generateCustomer), so it's no
+    // longer "pending." If the resulting prescription itself has refills
+    // left, prescriptionFilled will register a fresh record for it when it
+    // gets filled, continuing the chain.
+    consumeRefillRecord(recordId) {
+        const index = this.refillRegistry.findIndex(r => r.id === recordId);
+        if (index === -1) return undefined;
+        const [record] = this.refillRegistry.splice(index, 1);
+        console.log(`[prescriptions.js] Consumed refill record ${recordId} for ${record.customerFirstName} ${record.customerLastName}`);
+        return record;
     }
 };

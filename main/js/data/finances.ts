@@ -138,7 +138,9 @@ window.finances = {
         }
 
         const price = product.price * prescription.dosage;
-        const copayPercentage = customer.insurance.copayPercentage;
+        const formulary = customer.insurance.formulary;
+        const isCovered = !formulary || formulary.includes(product.id);
+        const copayPercentage = isCovered ? customer.insurance.copayPercentage : 100;
         const copay = price * (copayPercentage / 100);
 
         // Deduct copay from customer
@@ -161,29 +163,36 @@ window.finances = {
             type: 'income',
             category: 'copay',
             amount: copay,
-            description: `Copay for ${prescription.productName} (Prescription ID: ${prescription.id})`,
+            description: isCovered
+                ? `Copay for ${prescription.productName} (Prescription ID: ${prescription.id})`
+                : `Full price for ${prescription.productName}, not on insurance formulary (Prescription ID: ${prescription.id})`,
             customerId: customerId,
             prescriptionId: prescription.id
         });
 
-        // Add insurance claim
-        window.insuranceClaims.addClaim(customerId, prescriptionId, price, copay);
+        // If the product isn't on the customer's formulary, they've already
+        // paid the full price above as "copay" - there's nothing left for
+        // the insurer to owe, so skip filing a claim entirely.
+        if (isCovered) {
+            // Add insurance claim
+            window.insuranceClaims.addClaim(customerId, prescriptionId, price, copay);
 
-        // Update pending insurance income
-        window.financesData.pendingInsuranceIncome += (price - copay);
-        window.financesData.insuranceReimbursements.pending += (price - copay);
+            // Update pending insurance income
+            window.financesData.pendingInsuranceIncome += (price - copay);
+            window.financesData.insuranceReimbursements.pending += (price - copay);
 
-        // Add insurance income transaction (pending)
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
-            type: 'income',
-            category: 'insurance',
-            amount: price - copay,
-            description: `Pending insurance claim for ${prescription.productName} (Prescription ID: ${prescription.id})`,
-            customerId: customerId,
-            prescriptionId: prescription.id,
-            pending: true
-        });
+            // Add insurance income transaction (pending)
+            window.finances.addTransaction({
+                date: new Date(window.gameState.currentDate),
+                type: 'income',
+                category: 'insurance',
+                amount: price - copay,
+                description: `Pending insurance claim for ${prescription.productName} (Prescription ID: ${prescription.id})`,
+                customerId: customerId,
+                prescriptionId: prescription.id,
+                pending: true
+            });
+        }
 
         // Update prescription status to completed
         window.prescriptions.updatePrescriptionStatus(prescriptionId, 'completed');

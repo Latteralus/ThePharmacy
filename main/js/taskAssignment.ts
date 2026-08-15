@@ -3,6 +3,19 @@
 window.taskAssignment = (function(): TaskAssignmentApi {
 
     /**
+     * Keeps Prescription.assignedEmployeeId in sync with a fillPrescription
+     * task's own assignedTo - Task remains the source of truth, this just
+     * mirrors it onto the prescription so it's no longer permanently null.
+     */
+    function syncPrescriptionAssignedEmployee(task: Task, employeeId: string | null): void {
+        if (task.type !== 'fillPrescription' || !task.prescriptionId) return;
+        const prescription = window.prescriptions?.getPrescription(task.prescriptionId);
+        if (prescription) {
+            prescription.assignedEmployeeId = employeeId;
+        }
+    }
+
+    /**
      * Assigns a task to an employee, updating both the task and employee objects.
      */
     function assignTaskToEmployee(taskId: string, employeeId: string): boolean {
@@ -36,6 +49,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
             if (prevTask && prevTask.assignedTo === employee.id) {
                 prevTask.assignedTo = null;
                 prevTask.status = 'pending';
+                syncPrescriptionAssignedEmployee(prevTask, null);
             }
             employee.currentTaskId = null;
         }
@@ -44,6 +58,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         task.assignedTo = employeeId;
         task.status = 'inProgress';
         employee.currentTaskId = taskId;
+        syncPrescriptionAssignedEmployee(task, employeeId);
 
         // Set a timestamp for when the task was assigned
         task.assignedAt = Date.now();
@@ -77,6 +92,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         // Reset the task
         task.assignedTo = null;
         task.status = 'pending';
+        syncPrescriptionAssignedEmployee(task, null);
         console.log(`[unassignTask] Task ${taskId} (${task.type}) is now unassigned and pending.`);
 
         // Schedule auto-assignment to find a new employee
@@ -547,6 +563,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
             if (task.status === 'inProgress') {
                 task.status = 'pending';
                 task.assignedTo = null;
+                syncPrescriptionAssignedEmployee(task, null);
             }
         });
 

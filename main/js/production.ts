@@ -2,6 +2,21 @@
 
 window.production = (function(): ProductionApi {
 
+    const DURABILITY_DECAY_PER_USE = 0.5;
+
+    // Wears down the equipment used to make a product by a small flat
+    // amount per completed task. Purely informational for now - durability
+    // has no gameplay effect yet, it just actually moves instead of
+    // sitting at 100 forever.
+    function decayEquipmentDurability(equipmentIds: string[]): void {
+        equipmentIds.forEach(eqId => {
+            const eq = window.equipmentData.find(e => e.id === eqId);
+            if (eq) {
+                eq.durability = Math.max(0, eq.durability - DURABILITY_DECAY_PER_USE);
+            }
+        });
+    }
+
     // Function to check if a product can be compounded based on material availability
     function canCompound(product: Product): boolean {
         if (!product) return false;
@@ -128,6 +143,7 @@ window.production = (function(): ProductionApi {
                 product.inventory += task.quantityToMake!;
                 console.log(`[production.js] Compounding completed for ${task.quantityToMake} units of ${product.name}. Inventory updated.`);
 
+                decayEquipmentDurability(product.equipmentNeeded);
                 refreshInventoryUI();
 
                 // Check if this compound task was for a prescription
@@ -148,6 +164,7 @@ window.production = (function(): ProductionApi {
                 product.inventory -= task.quantityNeeded!;
                 console.log(`[production.js] ${task.quantityNeeded} units of ${product.name} used to fill prescription. Inventory updated.`);
 
+                decayEquipmentDurability(product.equipmentNeeded);
                 refreshInventoryUI();
             }
         }

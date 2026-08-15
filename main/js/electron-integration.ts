@@ -66,9 +66,11 @@
                         materialsData: window.materialsData,
                         equipmentData: (window.equipmentData || []).map(({ isUnlocked, ...rest }) => rest),
                         brandReputation: {
-                            brandScore: window.brandReputation.brandScore,
                             reputationScore: window.brandReputation.reputationScore
                         },
+                        researchData: window.researchData,
+                        activePrescriptions: window.prescriptions ? window.prescriptions.activePrescriptions : [],
+                        refillRegistry: window.prescriptions ? window.prescriptions.refillRegistry : [],
                         timestamp: Date.now()
                     };
                     
@@ -113,6 +115,17 @@
                         window.productsData = gameData.productsData!;
                         window.materialsData = gameData.materialsData!;
                         window.equipmentData = gameData.equipmentData!;
+
+                        // researchData and the prescription/refill state weren't
+                        // part of older saves - fall back to safe defaults
+                        // rather than leaving these undefined.
+                        if (gameData.researchData) {
+                            window.researchData = gameData.researchData;
+                        }
+                        if (window.prescriptions) {
+                            window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
+                            window.prescriptions.refillRegistry = gameData.refillRegistry || [];
+                        }
 
                         // The save file round-trips through JSON, so Date fields
                         // come back as plain strings - revive them.

@@ -116,7 +116,6 @@ window.initializeNewGame = function(gameOptions: NewGameOptions): boolean {
         if (typeof window.brandReputation === 'undefined') {
             console.error("[gameInitializer] brandReputation is not defined! Creating a default object.");
             window.brandReputation = {
-                brandScore: 10,
                 reputationScore: 10,
                 calcCustomers: function(hour: number) {
                     return 2; // Default customer generation rate
@@ -129,12 +128,10 @@ window.initializeNewGame = function(gameOptions: NewGameOptions): boolean {
         console.log("[gameInitializer] Applying difficulty modifiers to reputation and overhead");
         if (gameOptions.difficulty === "easy") {
             window.brandReputation.reputationScore = 15; // Higher starting reputation
-            window.brandReputation.brandScore = 15;
             window.financesData.overhead = 400; // Lower overhead costs
             console.log("[gameInitializer] Applied easy difficulty settings: reputation=15, overhead=400");
         } else if (gameOptions.difficulty === "hard") {
             window.brandReputation.reputationScore = 5; // Lower starting reputation
-            window.brandReputation.brandScore = 5;
             window.financesData.overhead = 650; // Higher overhead costs
             console.log("[gameInitializer] Applied hard difficulty settings: reputation=5, overhead=650");
         } else {
@@ -188,6 +185,18 @@ window.loadSavedGame = async function(): Promise<boolean> {
                 window.productsData = gameData.productsData!;
                 window.materialsData = gameData.materialsData!;
                 window.equipmentData = gameData.equipmentData!;
+
+                // researchData (currentLevel + any in-progress research
+                // timer) and the prescription/refill state weren't part of
+                // older saves - fall back to safe defaults rather than
+                // leaving these undefined.
+                if (gameData.researchData) {
+                    window.researchData = gameData.researchData;
+                }
+                if (window.prescriptions) {
+                    window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
+                    window.prescriptions.refillRegistry = gameData.refillRegistry || [];
+                }
 
                 // The save file round-trips through JSON, so Date fields come
                 // back as plain strings - revive them or anything that calls
@@ -483,7 +492,6 @@ window.runFallbackInitialization = function(): boolean {
         // Basic brand reputation
         if (!window.brandReputation) {
             window.brandReputation = {
-                brandScore: 10,
                 reputationScore: 10,
                 calcCustomers: function() { return 2; },
                 gainReputation: function() {},

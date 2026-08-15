@@ -93,20 +93,19 @@ re-run a codebase audit rather than assuming this list is exhaustive, since
 some of it may have been addressed in a session this file wasn't updated
 for).
 
-**Silently-does-nothing features** (UI saves a value, nothing reads it):
-equipment auto-purchase threshold/amount, equipment durability display
-(never decrements), research pacing (unlock happens instantly on click;
-the multi-day timer is cosmetic only), `brandReputation.brandScore`
-(frozen at its starting value forever — only `reputationScore` actually
-moves), insurance plan `formulary` (always null, every plan covers
-everything), prescription `refillsAllowed`/`assignedEmployeeId` (generated,
-never read). **Newly found while converting `taskAssignment.js` to TS
-(2026-08-15):** `canFillPrescription`'s inventory check reads
-`prescription.quantityNeeded` — but `quantityNeeded` only ever exists on the
-fill *Task* object (set in `prescriptions.js`), never on the `Prescription`
-itself, so that lookup is always `undefined` and the check silently falls
-through to `prescription.dosage` instead. Not fixed (out of scope for a
-migration pass), preserved via a local cast in `taskAssignment.ts`.
+**Resolved (2026-08-15, "complete the stubbed features" session):** all six
+of the "silently-does-nothing" items formerly listed here — equipment
+auto-purchase threshold/amount, equipment durability display, research
+pacing, `brandReputation.brandScore`, insurance plan `formulary`, and
+prescription `refillsAllowed`/`assignedEmployeeId` — are now implemented.
+See the session log entry below for what each does and which files
+changed. The `canFillPrescription`/`prescription.quantityNeeded` note that
+used to live in this paragraph was already stale before this session: that
+dead read was removed in the `a0afcfc` "Bug Fixes 8/15/26" commit —
+`taskAssignment.ts`'s `canFillPrescription` has read `prescription.dosage
+|| 1` directly (no cast, no dead `quantityNeeded` lookup) since before this
+session started.
+
 **Correction to a prior entry:** `gameInitializer.js` calling
 `window.runFallbackInitialization` was previously listed here as dead —
 that was wrong. `gameInitializer.js` *defines*
@@ -179,6 +178,116 @@ on every launch; CSP present on `index.html` only.
 
 Newest first. Each entry is what changed and why — check `git log` for the
 full diff, this is the narrative version.
+
+### 2026-08-15 — Completed all six "silently does nothing" stubbed features
+
+User asked to review `docs/` and complete every feature flagged in Known
+Issues as "UI saves a value, nothing reads it." Three research passes
+(equipment, research/brand, insurance/prescriptions) confirmed the exact
+scope and found one item already resolved before this session started:
+`canFillPrescription`'s dead `quantityNeeded` read had already been removed
+in the `a0afcfc` "Bug Fixes 8/15/26" commit — the Known Issues text
+describing it was just stale.
+
+Four of the remaining items had genuine design forks with real gameplay
+implications, so those were resolved directly with the user before writing
+any code (see the exit-plan-mode summary in this session's transcript for
+the alternatives considered):
+
+- **Insurance formulary** — `main/js/data/insurance.ts`'s 5 real plans now
+  carry actual `Product.id` lists (`pd001`-`pd025`, breadth scaled loosely
+  to copay tier: cheaper copay → broader coverage); `Uninsured` stays
+  `formulary: null` since self-pay is already 100% regardless.
+  `main/js/data/finances.ts`'s `completePrescription` now checks the
+  prescribed product against it — an uncovered drug charges the customer
+  full price and skips filing an insurance claim entirely (nothing left
+  for an insurer to owe).
+- **`Prescription.assignedEmployeeId`** — was set once to `null` at
+  creation and never touched again. `main/js/taskAssignment.ts` now keeps
+  it in sync with the backing fillPrescription task's own `assignedTo` at
+  every assign/unassign/reassign/force-reassignment site (`Task` stays the
+  source of truth; this just mirrors it). Surfaced in the prescription
+  detail panel (`main/js/ui.ts`) alongside a new "Refills Remaining" line.
+- **Equipment auto-purchase** — `autoPurchaseThreshold`/`autoPurchaseAmount`
+  were saved by `equipmentPage.ts` on every "Confirm Purchase" click but
+  never read anywhere. Added `autoPurchaseEquipmentCheck()` to
+  `main/js/timeEvents.ts`, called hourly alongside the existing (and
+  already-working) materials `autoOrderCheck()` it mirrors almost
+  line-for-line: buys `autoPurchaseAmount` units whenever `owned` drops
+  below `autoPurchaseThreshold`, if cash allows.
+- **Equipment durability decay** — chosen scope: decay only, no gameplay
+  consequence yet (no repair mechanic either). `main/js/production.ts`'s
+  `handleTaskCompletion` now knocks 0.5 points off the durability of every
+  equipment id in `product.equipmentNeeded` on each completed
+  compound/fillPrescription task, floored at 0.
+- **Research pacing** — chosen scope: make it real, a genuine gameplay
+  pacing change. Clicking "Start Research" used to deduct cash and bump
+  `researchData.currentLevel` in the same synchronous call; the multi-day
+  progress bar was a `setInterval` animation using real wall-clock seconds,
+  completely decoupled from the actual (already-applied) level-up.
+  `main/js/data/research.ts`'s `researchNextLevel()` now only deducts cash
+  and sets a new `researchData.inProgress` timer
+  (`{targetLevel, startDayIndex, daysRequired}`); a new
+  `checkResearchCompletion()` commits the level once
+  `gameState.dayIndex - startDayIndex >= daysRequired`, called from
+  `timeEvents.ts`'s `startDaySystems()` once per in-game day (guarded
+  direct call, not the event-listener system — `research.js` loads before
+  `timeEvents.js` in `main.html`, so it can't subscribe to `timeEvents`'
+  own events at its own module-load time). `main/js/pages/researchPage.ts`
+  was rewritten to read `researchData.inProgress` directly instead of
+  animating a local variable that `innerHTML = ''` re-renders were already
+  silently destroying on page navigation.
+- **`brandReputation.brandScore`** — chosen scope: retire it. No design
+  doc (`docs/overview.md`) ever described a pharmacy "brand score" distinct
+  from reputation; it was set once at game start (10, or 15/5 by
+  difficulty) and never touched again by any gameplay code, while only
+  `reputationScore` actually moved (via `customers.ts`'s three
+  gain/loseReputation call sites). The one place that referenced it by
+  name outside init code, `marketingPage.ts`'s stub placeholder text
+  ("...affecting brandScore"), was reworded to say "reputation" instead of
+  naming a field that no longer exists. Removed from
+  `BrandReputationApi`/`brandReputation.ts`/`gameInitializer.ts`'s four
+  init sites/`electron-integration.ts`'s save payload; `calcCustomers`
+  drops the `brandFactor` term and keys off `reputationScore` alone.
+- **Prescription refills** — chosen scope: full return-visit system (the
+  most involved of the four forks, since there was no customer-identity or
+  return-visit concept anywhere in the codebase to hook into).
+  `refillsAllowed` (0-2, random) had never been read. Added a new
+  `RefillRecord` registry (`window.prescriptions.refillRegistry`):
+  `prescriptions.ts`'s `prescriptionFilled` now registers one, snapshotting
+  the customer's name + insurance plan name, whenever a filled prescription
+  still has refills owed, with a randomized 1-3 in-game-day cooldown before
+  it's eligible. `customers.ts`'s `generateCustomer` checks for an eligible
+  record before generating a normal random walk-in; ~50% of the time when
+  one exists, it builds the customer from the record's stored identity
+  instead (tagged `isReturning: true`, shown as "(Returning)" in the
+  operations customer list) and calls a new
+  `prescriptions.generateRefillPrescription()` (same task-creation path as
+  a fresh prescription, factored into a shared `buildTasksForPrescription`
+  helper, but using the record's stored product/dosage instead of a random
+  pick, with `refillsAllowed` decremented by one). The chain continues
+  naturally — a refill prescription that itself still has refills left
+  re-registers itself in `prescriptionFilled` when it's filled, no separate
+  bookkeeping needed.
+- **Save/load gap fixed as part of the above:** `researchData` and
+  `prescriptions.activePrescriptions` were previously absent from the save
+  payload entirely (a pre-existing gap, not introduced this session) —
+  meaning research-in-progress and, now, the refill registry would have
+  evaporated on every reload. Added all three
+  (`researchData`/`activePrescriptions`/`refillRegistry`) to both
+  independent load paths (`electron-integration.ts`'s `loadGame()` for
+  Ctrl+L, and `gameInitializer.ts`'s `loadSavedGame()` for the main-menu
+  Load button — same two-implementations trap the 2026-08-15 save/load fix
+  session hit), with `|| []` fallbacks for saves written before this
+  session.
+
+Verified: `build:ts` clean, 8/8 Jest, 2/2 Playwright (including
+`saveLoad.spec.js`'s real save→quit→relaunch→load round trip). Manual
+in-app verification of each feature (auto-purchase triggering, durability
+visibly decrementing, research actually taking multiple days, a returning
+customer spawning, a formulary denial charging full price) was **not**
+completed this session — flagged to the user as still outstanding rather
+than claimed as done.
 
 ### 2026-08-15 — Post-migration cleanup: deleted dead code, fixed stale git tracking
 

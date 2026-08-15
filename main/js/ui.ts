@@ -284,7 +284,9 @@ window.ui = (function(): UiApi {
             customerItem.style.backgroundColor = '#f9f9f9';
 
             const customerName = document.createElement('strong');
-            customerName.textContent = `${customer.firstName} ${customer.lastName}`;
+            customerName.textContent = customer.isReturning
+                ? `${customer.firstName} ${customer.lastName} (Returning)`
+                : `${customer.firstName} ${customer.lastName}`;
             customerItem.appendChild(customerName);
 
             // Make customer status more prominent
@@ -387,6 +389,19 @@ window.ui = (function(): UiApi {
             const doctorName = document.createElement('p');
             doctorName.textContent = `Doctor: ${prescription.doctorName}`;
             detailsDiv.appendChild(doctorName);
+
+            const refills = document.createElement('p');
+            refills.textContent = prescription.isRefill
+                ? `Refills Remaining: ${prescription.refillsAllowed} (this is a refill visit)`
+                : `Refills Remaining: ${prescription.refillsAllowed}`;
+            detailsDiv.appendChild(refills);
+
+            const assignedEmployee = document.createElement('p');
+            const assignedEmp = prescription.assignedEmployeeId
+                ? window.employeesData.find(e => e.id === prescription.assignedEmployeeId)
+                : undefined;
+            assignedEmployee.textContent = `Assigned To: ${assignedEmp ? `${assignedEmp.firstName} ${assignedEmp.lastName}` : 'Unassigned'}`;
+            detailsDiv.appendChild(assignedEmployee);
 
             prescriptionItem.appendChild(detailsDiv);
 

@@ -129,6 +129,14 @@ window.timeEvents = (function(): TimeEventsApi {
             window.production.checkAndCreateCompoundTasks();
         }
 
+        // Check whether any in-progress research has finished (day-based
+        // pacing - research.ts loads before this file, so it can't
+        // subscribe to the startOfDay event itself; called into directly
+        // like the other guarded calls in this function)
+        if (window.research && window.research.checkResearchCompletion) {
+            window.research.checkResearchCompletion(gameState);
+        }
+
         // Start the customer spawn timer
         startCustomerSpawnTimer(gameState);
 
@@ -176,6 +184,9 @@ window.timeEvents = (function(): TimeEventsApi {
         try {
             // Check for auto-ordering materials
             autoOrderCheck();
+
+            // Check for auto-purchasing equipment
+            autoPurchaseEquipmentCheck();
 
             // Every 3 hours, do inventory check and create production tasks
             if (hour % 3 === 0) {
@@ -415,6 +426,68 @@ window.timeEvents = (function(): TimeEventsApi {
         }
     }
 
+    // ---------------------------------------------------------
+    // Check if we need to auto-purchase equipment (same pattern as
+    // autoOrderCheck, for equipment.autoPurchaseThreshold/autoPurchaseAmount
+    // instead of materials.autoOrderThreshold/autoOrderAmount)
+    // ---------------------------------------------------------
+    function autoPurchaseEquipmentCheck(): void {
+        if (!window.equipmentData || !window.financesData) {
+            return;
+        }
+
+        console.log("[timeEvents] Running auto-purchase equipment check");
+
+        let totalPurchaseCost = 0;
+        let purchasesPlaced = 0;
+
+        window.equipmentData.forEach(eq => {
+            if (eq.autoPurchaseThreshold > 0 && eq.autoPurchaseAmount > 0 &&
+                eq.owned < eq.autoPurchaseThreshold) {
+
+                const cost = eq.cost * eq.autoPurchaseAmount;
+
+                if (window.financesData.cash >= cost) {
+                    window.financesData.cash -= cost;
+                    eq.owned += eq.autoPurchaseAmount;
+                    totalPurchaseCost += cost;
+                    purchasesPlaced++;
+
+                    if (window.finances && window.finances.addTransaction) {
+                        window.finances.addTransaction({
+                            date: new Date(window.gameState.currentDate),
+                            type: 'expense',
+                            category: 'auto-purchase-equipment',
+                            amount: cost,
+                            description: `Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name}`
+                        });
+                    }
+
+                    console.log(`[autoPurchaseEquipmentCheck] Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name} for $${cost.toFixed(2)}`);
+                } else {
+                    console.warn(`[autoPurchaseEquipmentCheck] Not enough cash to auto-purchase ${eq.name}. Needed: $${cost.toFixed(2)}, Available: $${window.financesData.cash.toFixed(2)}`);
+                }
+            }
+        });
+
+        if (purchasesPlaced > 0) {
+            window.financesData.dailyIncome -= totalPurchaseCost;
+
+            if (window.updateUI) {
+                window.updateUI("finances");
+
+                if (window.currentPage === 'equipment') {
+                    window.showPage(window.currentPage); // Refresh the equipment page
+                }
+            }
+
+            events.emit('autoEquipmentPurchased', {
+                totalCost: totalPurchaseCost,
+                purchasesCount: purchasesPlaced
+            });
+        }
+    }
+
     // Force a time-step update to ensure task progress
     function forceTimeUpdate(minutes: number = 1): boolean {
         console.log(`[timeEvents] Forcing time update of ${minutes} minutes`);
@@ -449,6 +522,7 @@ window.timeEvents = (function(): TimeEventsApi {
         spawnCustomersForHour,
         startOfDay,
         autoOrderCheck,
+        autoPurchaseEquipmentCheck,
         forceTimeUpdate,
         CONFIG, // Expose configuration settings
 
@@ -461,7 +535,8 @@ window.timeEvents = (function(): TimeEventsApi {
             START_OF_DAY: 'startOfDay',
             END_OF_DAY: 'endOfDay',
             HOURLY_CHECK: 'hourlyCheck',
-            AUTO_ORDERS_PLACED: 'autoOrdersPlaced'
+            AUTO_ORDERS_PLACED: 'autoOrdersPlaced',
+            AUTO_EQUIPMENT_PURCHASED: 'autoEquipmentPurchased'
         }
     };
 })();

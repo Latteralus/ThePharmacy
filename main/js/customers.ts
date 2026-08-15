@@ -22,8 +22,18 @@ window.customers = {
         // Determine customer type
         const customerType = this.getRandomCustomerType();
 
-        // Assign insurance
-        const insurance = this.getRandomInsurance();
+        // If a previous customer is eligible to come back for a refill,
+        // there's a chance this spawn is them returning instead of a
+        // brand-new walk-in.
+        const refillRecord = window.prescriptions && window.prescriptions.getEligibleRefillRecord
+            ? window.prescriptions.getEligibleRefillRecord(window.gameState.currentDate.getTime())
+            : undefined;
+        const isReturning = !!refillRecord && Math.random() < 0.5;
+
+        // Assign insurance - a returning customer keeps their original plan
+        const insurance = isReturning && refillRecord
+            ? this.getInsuranceByPlanName(refillRecord.insurancePlanName)
+            : this.getRandomInsurance();
 
         // Base mood 0-10, with type-based adjustment
         const baseMood = Math.min(10, Math.max(1, 7 + (this.customerTypes[customerType].baseBoost / 10)));
@@ -37,17 +47,21 @@ window.customers = {
             prescriptionId: null,
             patience: this.customerTypes[customerType].patience,
             timer: null,
-            firstName: window.getRandomFirstName(),
-            lastName: window.getRandomLastName(),
+            firstName: isReturning && refillRecord ? refillRecord.customerFirstName : window.getRandomFirstName(),
+            lastName: isReturning && refillRecord ? refillRecord.customerLastName : window.getRandomLastName(),
             mood: baseMood,
-            lastStateChange: Date.now() // Track when state last changed
+            lastStateChange: Date.now(), // Track when state last changed
+            isReturning: isReturning
         };
 
         this.activeCustomers.push(newCustomer);
-        console.log(`[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience})`);
+        console.log(`[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`);
 
-        // Generate and assign a prescription
-        const prescriptionId = window.prescriptions.generatePrescription(newCustomer.id);
+        // Generate and assign a prescription - a returning customer gets a
+        // refill of their previous product instead of a random pick.
+        const prescriptionId = isReturning && refillRecord
+            ? window.prescriptions.generateRefillPrescription(newCustomer.id, window.prescriptions.consumeRefillRecord(refillRecord.id)!)
+            : window.prescriptions.generatePrescription(newCustomer.id);
         this.assignPrescription(newCustomer.id, prescriptionId);
 
         // Start the customer's patience timer
@@ -310,6 +324,13 @@ window.customers = {
         const plans = window.insuranceData;
         const randomIndex = Math.floor(Math.random() * plans.length);
         return plans[randomIndex];
+    },
+
+    // Used to give a returning customer back their original plan. Falls
+    // back to a random plan if the name isn't found (the plan list could
+    // theoretically change between saves).
+    getInsuranceByPlanName(planName) {
+        return window.insuranceData.find(p => p.planName === planName) || this.getRandomInsurance();
     },
 
     getCustomerById(customerId) {

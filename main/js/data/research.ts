@@ -1,6 +1,7 @@
 // /js/data/research.js
 window.researchData = {
     currentLevel: 0,
+    inProgress: null,
     levels: [
         {
             level: 0,
@@ -110,24 +111,62 @@ window.research = {
         return unlocked;
     },
 
+    // Starts research toward the next level. Cash is deducted immediately,
+    // but the level itself only unlocks once checkResearchCompletion()
+    // observes that enough in-game days have passed - see
+    // ResearchInProgress in global.d.ts.
     researchNextLevel: function() {
+        if (window.researchData.inProgress) {
+            console.log("Research already in progress.");
+            return;
+        }
+
         const nextLevel = window.researchData.currentLevel + 1;
         if (nextLevel < window.researchData.levels.length) {
-            const cost = window.researchData.levels[nextLevel].cost;
-            if (window.financesData.cash >= cost) {
-                window.financesData.cash -= cost;
-                window.researchData.currentLevel = nextLevel;
+            const levelData = window.researchData.levels[nextLevel];
+            if (window.financesData.cash >= levelData.cost) {
+                window.financesData.cash -= levelData.cost;
+                window.researchData.inProgress = {
+                    targetLevel: nextLevel,
+                    startDayIndex: window.gameState.dayIndex,
+                    daysRequired: levelData.researchTime
+                };
 
-                // Update UI to reflect new research level and finances
+                // Update UI to reflect the cash deduction and the new "in progress" state
                 window.updateUI("finances");
-                window.updateUI("research"); // Assuming you have a research page
+                window.updateUI("research");
 
-                console.log(`Researched level ${nextLevel}.`);
+                console.log(`Started researching level ${nextLevel} (${levelData.researchTime} days).`);
             } else {
                 console.log("Not enough money to research the next level.");
             }
         } else {
             console.log("Max research level reached.");
+        }
+    },
+
+    // Called once per in-game day (see timeEvents.ts's startDaySystems) to
+    // check whether an in-progress research level has finished.
+    checkResearchCompletion: function(gameState: GameState) {
+        const inProgress = window.researchData.inProgress;
+        if (!inProgress) return;
+
+        const daysElapsed = gameState.dayIndex - inProgress.startDayIndex;
+        if (daysElapsed >= inProgress.daysRequired) {
+            window.researchData.currentLevel = inProgress.targetLevel;
+            window.researchData.inProgress = null;
+
+            console.log(`Research complete: reached level ${window.researchData.currentLevel}.`);
+
+            window.updateUI("research");
+            window.updateUI("finances");
+
+            // Force a re-render if the player is currently looking at the
+            // Research page, since its progress bar reflects inProgress
+            // directly rather than polling on its own.
+            if (window.currentPage === 'research') {
+                window.showPage('research');
+            }
         }
     }
 };

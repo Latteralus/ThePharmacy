@@ -60,15 +60,27 @@ interface ResearchLevel {
   description: string;
 }
 
+// Tracks an in-progress research level-up so it can be paced over real
+// in-game days instead of applying instantly. startDayIndex is
+// GameState.dayIndex at the moment research began; the level unlocks once
+// dayIndex - startDayIndex >= daysRequired.
+interface ResearchInProgress {
+  targetLevel: number;
+  startDayIndex: number;
+  daysRequired: number;
+}
+
 interface ResearchData {
   currentLevel: number;
   levels: ResearchLevel[];
+  inProgress: ResearchInProgress | null;
 }
 
 interface ResearchApi {
   getUnlockedProducts: () => string[];
   getUnlockedEquipment: () => string[];
   researchNextLevel: () => void;
+  checkResearchCompletion: (gameState: GameState) => void;
 }
 
 interface EquipmentItem {
@@ -270,6 +282,9 @@ interface SavedGameData {
   materialsData?: Material[];
   equipmentData?: EquipmentItem[];
   brandReputation?: Partial<BrandReputationApi>;
+  researchData?: ResearchData;
+  activePrescriptions?: Prescription[];
+  refillRegistry?: RefillRecord[];
 }
 
 interface HelpersApi {
@@ -319,7 +334,6 @@ interface EmployeesApi {
 }
 
 interface BrandReputationApi {
-  brandScore: number;
   reputationScore: number;
   calcCustomers: (hour: number) => number;
   gainReputation: (amount: number) => void;
@@ -370,6 +384,9 @@ interface Customer {
   lastName: string;
   mood: number;
   lastStateChange: number;
+  // True when this customer was generated from an eligible RefillRecord
+  // rather than as a brand-new walk-in.
+  isReturning?: boolean;
 }
 
 interface CustomersApi {
@@ -390,6 +407,7 @@ interface CustomersApi {
   updateReputationOnDeparture: (customer: Customer) => void;
   getRandomCustomerType: () => string;
   getRandomInsurance: () => InsurancePlan;
+  getInsuranceByPlanName: (planName: string) => InsurancePlan;
   getCustomerById: (customerId: string) => Customer | undefined;
   detectAndFixStuckCustomers: () => void;
 }
@@ -476,11 +494,36 @@ interface Prescription {
   refillsAllowed: number;
   assignedEmployeeId: string | null;
   createdAt: number;
+  // True when this prescription was generated from a RefillRecord rather
+  // than freshly picked at random (see PrescriptionsApi.generateRefillPrescription).
+  isRefill?: boolean;
+}
+
+// A pending refill opportunity, registered when a prescription with
+// refillsAllowed > 0 is filled. Lets a customer "return" later for another
+// fill of the same product without the game tracking full customer
+// identity/history beyond what's snapshotted here.
+interface RefillRecord {
+  id: string;
+  customerFirstName: string;
+  customerLastName: string;
+  insurancePlanName: string;
+  productId: string;
+  productName: string;
+  dosage: number;
+  dosageForm: string;
+  frequency: string;
+  doctorName: string;
+  refillsAvailable: number;
+  eligibleAfterTime: number;
+  sourcePrescriptionId: string;
 }
 
 interface PrescriptionsApi {
   activePrescriptions: Prescription[];
+  refillRegistry: RefillRecord[];
   generatePrescription: (customerId: string) => string | null;
+  generateRefillPrescription: (customerId: string, record: RefillRecord) => string | null;
   createFillTaskForPrescription: (prescription: Prescription) => string | null;
   updatePrescriptionStatus: (prescriptionId: string, newStatus: string) => void;
   prescriptionFilled: (prescriptionId: string, customerId: string) => void;
@@ -488,6 +531,8 @@ interface PrescriptionsApi {
   getPrescription: (prescriptionId: string) => Prescription | undefined;
   getRandomFrequency: () => string;
   removePrescriptionsByCustomer: (customerId: string) => void;
+  getEligibleRefillRecord: (currentTime: number) => RefillRecord | undefined;
+  consumeRefillRecord: (recordId: string) => RefillRecord | undefined;
 }
 
 // production.js's public API. canCompound/createCompoundTask/
@@ -607,6 +652,7 @@ interface TimeEventsApi {
   hourlyCheck: (gameState: GameState, hour: number) => void;
   spawnCustomersForHour: (hour: number) => void;
   autoOrderCheck: () => void;
+  autoPurchaseEquipmentCheck: () => void;
   forceTimeUpdate: (minutes?: number) => boolean;
   CONFIG: TimeEventsConfig;
   addEventListener: (event: string, callback: (data: unknown) => void) => void;
@@ -616,6 +662,7 @@ interface TimeEventsApi {
     END_OF_DAY: string;
     HOURLY_CHECK: string;
     AUTO_ORDERS_PLACED: string;
+    AUTO_EQUIPMENT_PURCHASED: string;
   };
 }
 
