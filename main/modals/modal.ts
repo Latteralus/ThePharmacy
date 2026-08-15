@@ -1,5 +1,5 @@
 // /components/modal.js (basic summary approach in the text)
-window.showDailySummaryModal = function(onNextDay) {
+window.showDailySummaryModal = function(onNextDay?: () => void): void {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
 

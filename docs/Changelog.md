@@ -22,7 +22,9 @@ etc.) rather than `import`/`export`. As of 2026-08-15 the codebase is
 starting an **incremental TypeScript migration** — `tsc` compiles `.ts` →
 `.js` in place with no bundler, so this architecture doesn't change, files
 just gain types one at a time. `docs/revision.md` is the live migration plan
-and per-file progress tracker (7 of 47 files converted so far); a much
+and per-file progress tracker (12 of 47 files converted so far, though 8 of
+the remaining 35 turned out to be dead code excluded from the count — see
+that file); a much
 larger Webpack/React/Redux rewrite was considered and explicitly rejected —
 see that file for why.
 
@@ -95,12 +97,21 @@ the multi-day timer is cosmetic only), `brandReputation.brandScore`
 (frozen at its starting value forever — only `reputationScore` actually
 moves), insurance plan `formulary` (always null, every plan covers
 everything), prescription `refillsAllowed`/`assignedEmployeeId` (generated,
-never read).
+never read); `gameInitializer.js` calls `window.runFallbackInitialization`
+(found 2026-08-15), which doesn't exist anywhere live — its only definition
+is in the dead, unloaded `fallback.js` (see Confirmed dead code below) —
+presumably guarded by a `typeof` check elsewhere since this hasn't crashed
+anything.
 
 **Confirmed dead code** (zero callers, safe to delete): the four
 `main/components/*Card.js` files plus `card.js` (not loaded by any HTML
 file, and use ES-module syntax that would throw if they were);
-`main/components/panel.js`'s `window.createPanel` (loaded, never called);
+`main/js/data.js`, `dataInitialization.js`, `events.js`, `fallback.js`,
+`inventory.js`, `ipcRenderer.js`, `ipcTypes.js`, and `orders.js` (found
+2026-08-15 while scoping the TS migration — none referenced by any
+`<script>` tag or `require`/`import` anywhere live; `orders.js` even
+`import`s `inventory.js` via ES-module syntax, which would throw if either
+were ever actually loaded); `main/components/panel.js`'s `window.createPanel` (loaded, never called);
 ~250 lines of placeholder IPC handlers in `main/ipcMain.js` (namespaced
 `game:*`/`tasks:*`/etc. channels nothing in the renderer ever invokes);
 `employees.js`'s `promoteEmployee`, `updateEmployeeSkills`, and a duplicate
@@ -245,6 +256,51 @@ that ordering materials from the Inventory page still works.
 outside `data/` (`main.js`'s `gameState`, `customers.js`, `prescriptions.js`,
 `insuranceClaims.js`) and are high-traffic enough to warrant converting
 their dependencies first. 7 of 47 files converted so far.
+
+### 2026-08-15 — TypeScript migration: fourth batch (brandReputation, panel, modal, debug, insuranceClaims)
+
+User asked to standardize future batches at 5 files each going forward.
+Before picking files, checked which of the remaining 40 were actually
+*loaded* — found 8 previously-undocumented dead files (`data.js`,
+`dataInitialization.js`, `events.js`, `fallback.js`, `inventory.js`,
+`ipcRenderer.js`, `ipcTypes.js`, `orders.js`), none referenced by any
+`<script>` tag or `require`/`import`. Folded into "Known issues" above
+rather than converting them — typing unreachable code can't be verified
+against the running app and has no payoff. Also surfaced a new
+silently-does-nothing bug in the process: `gameInitializer.js` calls
+`window.runFallbackInitialization`, which only ever existed in the now-
+confirmed-dead `fallback.js`.
+
+Converted the 5 next leaf-most *live* files: `brandReputation.js`,
+`main/components/panel.js`, `main/modals/modal.js`, `main/js/debug.js`, and
+`main/js/insuranceClaims.js`. The last introduced the batch's only real
+ambient-typing decisions: added `InsuranceClaim`/`InsuranceClaimsApi`/
+`ClaimStats` types, a partial `CustomersApi` (customers.js is still plain
+JS), extended `TransactionInput` with optional `customerId`/`prescriptionId`,
+and narrowed `GameState.currentDate` from `string | Date` to `Date` — this
+file calls `.getTime()` on it directly with no `new Date(...)` wrapper,
+which needed the narrower type to compile; confirmed both that this matches
+the actual runtime invariant (dates are revived before gameplay logic runs)
+and that `new Date(aDateValue)` — helpers.ts's usage pattern — still
+compiles fine against `Date`.
+
+Verified the same way as prior batches: `build:ts` clean, 8/8 Jest, 2/2
+Playwright, plus a scripted before/after behavioral comparison for all 5
+files (using Jest's jsdom environment for the two DOM-touching ones,
+panel.ts and modal.ts, after an early version of the comparison script hit
+a `global.window` reassignment gotcha in that environment — jsdom's
+`window`/`global` share identity, so replacing `global.window` wholesale
+doesn't do what it looks like it does; setting properties directly on the
+existing `window` object instead fixed it). Manually launched the app and
+confirmed: the debug toggle tab renders correctly (from the 2026-08-15
+"Save/load fixed" session's fix, now typed), `brandReputation`'s
+`calcCustomers`/`gainReputation` work, the daily summary modal renders with
+correct values, and `insuranceClaims`' API surface is live and callable —
+no console errors.
+
+12 of 47 files converted so far (39, once the 8 newly-found dead files are
+excluded from the denominator — see `docs/revision.md` for the running
+list). Going forward, batches are fixed at 5 files unless told otherwise.
 
 ### 2026-08-15 — Save/load fixed, three high-severity bugs fixed
 
