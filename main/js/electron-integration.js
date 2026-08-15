@@ -109,6 +109,26 @@
                         window.productsData = gameData.productsData;
                         window.materialsData = gameData.materialsData;
                         window.equipmentData = gameData.equipmentData;
+
+                        // The save file round-trips through JSON, so Date fields
+                        // come back as plain strings - revive them.
+                        if (window.gameState) {
+                            if (window.gameState.currentDate) {
+                                window.gameState.currentDate = new Date(window.gameState.currentDate);
+                            }
+                            if (window.gameState.dateCreated) {
+                                window.gameState.dateCreated = new Date(window.gameState.dateCreated);
+                            }
+                        }
+
+                        // isUnlocked() couldn't survive IPC (see saveGame) -
+                        // re-attach it so equipmentPage.js's eq.isUnlocked() calls
+                        // keep working after a load.
+                        window.equipmentData.forEach(item => {
+                            item.isUnlocked = function() {
+                                return window.researchData.currentLevel >= this.researchLevelRequired;
+                            };
+                        });
                         // Merge saved data into the existing brandReputation module
                         // instead of replacing it, so its methods (calcCustomers,
                         // gainReputation, loseReputation) survive the load.

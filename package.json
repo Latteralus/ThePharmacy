@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "electron-main.js",
   "description": "Pharmacy management simulation game",
-  "author": "",
-  "license": "ISC",
+  "author": "Latteralus",
+  "license": "MIT",
   "homepage": "https://github.com/Latteralus/ThePharmacy#readme",
   "repository": {
     "type": "git",

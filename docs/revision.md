@@ -1,10 +1,105 @@
-# PharmaSim Electron Transformation Plan
+# Electron Rewrite Plan (Archived, Never Implemented)
+
+> **Status: historical / not current.** This document describes a planned TypeScript + React + Redux + Webpack rewrite of the game, sketched out across two files (`structure.txt`, dated 3/7/2025, and this one) early in the project's life. **None of it was ever built.** The codebase today is still the original architecture: plain JavaScript files loaded as `<script>` tags off the `window` global, no bundler, no framework, no TypeScript. See `Changelog.md` for what the project actually is right now.
+>
+> Kept for reference in case this direction gets picked up again later — otherwise safe to ignore or delete.
+
+---
+
+## Part 1 — Early structure sketch (originally `structure.txt`, 3/7/2025)
+
+This was an early draft of what a rewritten project layout might look like, written before the plan below was fleshed out. It also does not match the current repo (e.g. it assumes a `PharmaSim` root folder, a `src/` split, and Electron Forge — the real project uses electron-builder and a flat root layout).
+
+```
+/PharmaSim
+├── package.json             # Electron app configuration and dependencies
+├── main.js                 # Electron main process entry point
+├── preload.js              # Preload script for renderer process
+├── LICENSE                 # Project licensing information
+├── README.md               # Project overview and documentation
+├── INSTALL.md              # Installation instructions
+
+## Source Code Directories
+├── src/                    # Main source code directory
+│   ├── renderer/           # Renderer process (frontend) code
+│   │   ├── index.html      # Main HTML entry point
+│   │   ├── styles/         # CSS stylesheets
+│   │   │   └── main.css
+│   │   └── js/             # Frontend JavaScript files
+│   │       ├── main.js
+│   │       ├── ui.js
+│   │       └── ... (other frontend scripts)
+│   │
+│   ├── main/               # Main game logic
+│   │   ├── js/             # Game logic JavaScript files
+│   │   │   ├── gameLogic.js
+│   │   │   ├── timeEvents.js
+│   │   │   ├── taskManager.js
+│   │   │   └── ... (other game logic scripts)
+│   │   │
+│   │   └── data/           # Game data and configuration
+│   │       ├── names.js
+│   │       ├── products.js
+│   │       └── ... (other data files)
+│   │
+│   └── assets/             # Static assets
+│       ├── images/
+│       ├── icons/
+│       └── fonts/
+
+## Build and Distribution
+├── build/                  # Build output directory
+│   ├── win/                # Windows build
+│   ├── mac/                # macOS build
+│   └── linux/              # Linux build
+
+## Development Tools
+├── scripts/                # Build and development scripts
+│   ├── build.js
+│   ├── dev.js
+│   └── package.js
+
+## Configuration and Docs
+├── docs/                   # Documentation
+│   ├── README.md
+│   ├── INSTALL.md
+│   └── CHANGELOG.md
+
+## Testing
+├── tests/                  # Unit and integration tests
+│   ├── main/
+│   └── renderer/
+
+## Node Modules
+├── node_modules/           # npm dependencies
+
+## Electron Packaging
+├── forge.config.js         # Electron Forge configuration
+└── .gitignore
+```
+
+**Recent updates (as of 3/7/2025):**
+- Migrated from browser-based to Electron desktop application
+- Added multi-platform build support
+- Restructured project for Electron architecture
+- Updated build and packaging scripts
+- Enhanced installation and documentation
+
+**Upcoming features (as of 3/7/2025):**
+- Electron auto-update implementation
+- Cross-platform build optimizations
+- Enhanced logging and error reporting
+- Performance improvements for desktop environment
+
+---
+
+## Part 2 — Full transformation plan (originally `revision.md`)
 
 This document outlines a comprehensive plan to transform PharmaSim from its current web-based implementation to a robust Electron desktop application, while preserving all existing gameplay elements.
 
-## Phase 1: Architecture Foundation (4 weeks)
+### Phase 1: Architecture Foundation (4 weeks)
 
-### Week 1: Project Setup & Module System
+**Week 1: Project Setup & Module System**
 - [ ] Create a new Electron project structure
 - [ ] Set up TypeScript configuration
 - [ ] Configure Webpack for bundling
@@ -12,7 +107,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Create ModuleRegistry system for dependency management
 - [ ] Define IPC communication patterns between main and renderer processes
 
-### Week 2: Core State Management
+**Week 2: Core State Management**
 - [ ] Implement Redux store architecture
 - [ ] Create reducers for key game systems (finances, inventory, employees, etc.)
 - [ ] Develop action creators for game events
@@ -20,7 +115,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Implement selectors for accessing game state
 - [ ] Create persistence layer for saving/loading game state
 
-### Week 3: Game Loop & Simulation Engine
+**Week 3: Game Loop & Simulation Engine**
 - [ ] Develop main process simulation engine
 - [ ] Create event-based game loop decoupled from UI
 - [ ] Implement time scaling and controls
@@ -28,7 +123,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Set up event emission system for game state changes
 - [ ] Create debugging tools for simulation monitoring
 
-### Week 4: UI Framework Foundation
+**Week 4: UI Framework Foundation**
 - [ ] Set up React and component structure
 - [ ] Create basic layout components (topbar, sidebar, main content)
 - [ ] Implement theme system
@@ -36,9 +131,9 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Create component library for common UI elements
 - [ ] Build responsive container system
 
-## Phase 2: Feature Migration (8 weeks)
+### Phase 2: Feature Migration (8 weeks)
 
-### Week 5: Core Game Systems
+**Week 5: Core Game Systems**
 - [ ] Migrate financial system to new architecture
 - [ ] Implement inventory and material management
 - [ ] Rebuild employee management system
@@ -46,7 +141,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Create task management system
 - [ ] Set up game initialization and configuration
 
-### Week 6: Primary UI Components
+**Week 6: Primary UI Components**
 - [ ] Develop operations page with real-time updates
 - [ ] Create inventory management interface
 - [ ] Build employee management screens
@@ -54,7 +149,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Develop marketplace and purchasing interface
 - [ ] Create equipment management screen
 
-### Week 7: Task & Customer Systems
+**Week 7: Task & Customer Systems**
 - [ ] Implement task assignment system
 - [ ] Develop customer generation and management
 - [ ] Create prescription handling workflow
@@ -62,7 +157,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Implement task progress visualization
 - [ ] Develop customer satisfaction metrics
 
-### Week 8: Production & Research Systems
+**Week 8: Production & Research Systems**
 - [ ] Migrate production system to new architecture
 - [ ] Implement production queuing and management
 - [ ] Create research and development interface
@@ -70,7 +165,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Implement equipment usage and maintenance
 - [ ] Develop supplier relationships
 
-### Week 9: Financial & Analytics
+**Week 9: Financial & Analytics**
 - [ ] Create detailed financial reporting
 - [ ] Implement profit and loss tracking
 - [ ] Develop cash flow management
@@ -78,7 +173,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Create expense tracking
 - [ ] Implement financial projections
 
-### Week 10: Save/Load & Game Management
+**Week 10: Save/Load & Game Management**
 - [ ] Develop robust save/load system using Electron's file system
 - [ ] Implement autosave functionality
 - [ ] Create game configuration options
@@ -86,7 +181,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Implement difficulty settings
 - [ ] Create game state migration for updates
 
-### Week 11: Polishing Game Mechanics
+**Week 11: Polishing Game Mechanics**
 - [ ] Refine game balance
 - [ ] Improve employee efficiency calculations
 - [ ] Enhance customer patience system
@@ -94,7 +189,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Refine financial formulas
 - [ ] Improve product pricing strategies
 
-### Week 12: Testing & Feedback Loop
+**Week 12: Testing & Feedback Loop**
 - [ ] Implement comprehensive testing of game systems
 - [ ] Create automated tests for core logic
 - [ ] Set up test scenarios for game progression
@@ -102,9 +197,9 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Test save/load functionality
 - [ ] Verify cross-platform compatibility
 
-## Phase 3: Enhancement & Optimization (4 weeks)
+### Phase 3: Enhancement & Optimization (4 weeks)
 
-### Week 13: Performance Optimization
+**Week 13: Performance Optimization**
 - [ ] Profile application performance
 - [ ] Optimize render performance
 - [ ] Improve simulation efficiency
@@ -112,7 +207,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Optimize startup time
 - [ ] Implement resource cleanup
 
-### Week 14: User Experience Enhancements
+**Week 14: User Experience Enhancements**
 - [ ] Add animations and transitions
 - [ ] Plan for audio integration (future feature)
 - [ ] Create improved tutorial system
@@ -120,7 +215,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Enhance notifications
 - [ ] Improve accessibility
 
-### Week 15: Advanced Features
+**Week 15: Advanced Features**
 - [ ] Implement data export/import
 - [ ] Create scenario editor
 - [ ] Improve configuration options
@@ -128,7 +223,7 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Build statistics and history tracking
 - [ ] Improve local save management
 
-### Week 16: Packaging & Distribution
+**Week 16: Packaging & Distribution**
 - [ ] Configure electron-builder for application packaging
 - [ ] Set up auto-update mechanism
 - [ ] Create installers for all platforms
@@ -136,14 +231,13 @@ This document outlines a comprehensive plan to transform PharmaSim from its curr
 - [ ] Prepare store listings
 - [ ] Build update distribution system
 
-## Implementation Details
+### Implementation Details
 
-### Core Architectural Changes
+#### Core Architectural Changes
 
-#### Module System
-Replace global window properties with proper imports/exports:
+**Module System** — replace global window properties with proper imports/exports:
 
-```
+```js
 // Before
 window.finances = { ... }
 window.updateUI("finances");
@@ -159,10 +253,9 @@ export default financeManager;
 updateUI('finances');
 ```
 
-#### State Management
-Implement Redux for central state management:
+**State Management** — implement Redux for central state management:
 
-```
+```js
 // Redux store structure
 {
   simulation: {
@@ -195,10 +288,9 @@ Implement Redux for central state management:
 }
 ```
 
-#### IPC Communication
-Use Electron's IPC for process communication:
+**IPC Communication** — use Electron's IPC for process communication:
 
-```
+```js
 // In main process
 ipcMain.handle('simulation:advance', (event, minutes) => {
   return gameSimulation.advanceTime(minutes);
@@ -211,7 +303,7 @@ const advanceSimulation = async (minutes) => {
 };
 ```
 
-### UI Component Structure
+#### UI Component Structure
 
 ```
 /components
@@ -248,7 +340,7 @@ const advanceSimulation = async (minutes) => {
     Notifications.jsx
 ```
 
-### Data Flow Architecture
+#### Data Flow Architecture
 
 1. User interaction triggers an action
 2. Action is dispatched to Redux store
@@ -257,9 +349,9 @@ const advanceSimulation = async (minutes) => {
 5. Results are returned to renderer process
 6. UI updates based on new state
 
-## Migration Strategy
+### Migration Strategy
 
-Rather than starting from scratch, the migration will follow these guidelines:
+Rather than starting from scratch, the migration would follow these guidelines:
 
 1. Extract core game logic from existing code
 2. Adapt it to the new architecture
@@ -267,7 +359,7 @@ Rather than starting from scratch, the migration will follow these guidelines:
 4. Develop feature parity tests to ensure gameplay remains intact
 5. Gradually replace old systems with new implementations
 
-## Testing & Quality Assurance
+### Testing & Quality Assurance
 
 - Implement Jest for unit testing core game logic
 - Use React Testing Library for component tests
@@ -276,7 +368,7 @@ Rather than starting from scratch, the migration will follow these guidelines:
 - Implement save compatibility tests
 - Add performance benchmarks
 
-## Risks & Contingencies
+### Risks & Contingencies
 
 | Risk | Mitigation |
 |------|------------|
@@ -286,37 +378,34 @@ Rather than starting from scratch, the migration will follow these guidelines:
 | Scope creep | Strict adherence to feature parity before adding enhancements |
 | Technical debt | Code reviews and architectural oversight |
 
-## Definition of Done
+### Definition of Done
 
-A feature is considered complete when:
+A feature would be considered complete when:
 1. It matches or exceeds the functionality of the current implementation
 2. It passes all tests
 3. It integrates with the new architecture
 4. It has been reviewed and approved
 5. It performs at least as well as the current implementation
 
-This transformation plan focuses on preserving the core gameplay experience while significantly improving the technical foundation, maintainability, and user experience of PharmaSim as a native Electron application.
+### Proposed Naming Convention and File Structure
 
-## Proposed File Structure
-# PharmaSim Naming Convention and File Structure
+**General naming conventions:**
 
-## General Naming Conventions
+- **File Names**: kebab-case (e.g., `game-state.ts`, `employee-service.ts`)
+- **Component Names**: PascalCase (e.g., `EmployeeList.tsx`, `InventoryPanel.tsx`)
+- **Class Names**: PascalCase (e.g., `GameSimulation`, `EmployeeManager`)
+- **Interface Names**: PascalCase with `I` prefix (e.g., `IEmployeeData`, `IGameState`)
+- **Type Names**: PascalCase with `T` prefix (e.g., `TEmployeeRole`, `TInventoryItem`)
+- **Enum Names**: PascalCase (e.g., `EmployeeRole`, `GameDifficulty`)
+- **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_EMPLOYEES`, `DEFAULT_CAPITAL`)
+- **Functions**: camelCase (e.g., `calculateProfit()`, `handleEmployeeHire()`)
+- **Variables**: camelCase (e.g., `employeeList`, `currentInventory`)
+- **Redux Actions**: UPPER_SNAKE_CASE (e.g., `HIRE_EMPLOYEE`, `UPDATE_INVENTORY`)
+- **Redux Action Creators**: camelCase with descriptive verbs (e.g., `hireEmployee()`, `updateInventory()`)
+- **Redux Reducers**: camelCase with `Reducer` suffix (e.g., `employeeReducer`, `inventoryReducer`)
+- **Redux Selectors**: camelCase with `select` prefix (e.g., `selectAllEmployees`, `selectInventoryItems`)
 
-- **File Names**: Use kebab-case for file names (e.g., `game-state.ts`, `employee-service.ts`)
-- **Component Names**: Use PascalCase for React components and their files (e.g., `EmployeeList.tsx`, `InventoryPanel.tsx`)
-- **Class Names**: Use PascalCase for classes (e.g., `GameSimulation`, `EmployeeManager`)
-- **Interface Names**: Use PascalCase with 'I' prefix (e.g., `IEmployeeData`, `IGameState`)
-- **Type Names**: Use PascalCase with 'T' prefix for complex types (e.g., `TEmployeeRole`, `TInventoryItem`)
-- **Enum Names**: Use PascalCase (e.g., `EmployeeRole`, `GameDifficulty`)
-- **Constants**: Use UPPER_SNAKE_CASE for constants (e.g., `MAX_EMPLOYEES`, `DEFAULT_CAPITAL`)
-- **Functions**: Use camelCase for functions (e.g., `calculateProfit()`, `handleEmployeeHire()`)
-- **Variables**: Use camelCase for variables (e.g., `employeeList`, `currentInventory`)
-- **Redux Actions**: Use UPPER_SNAKE_CASE for action types (e.g., `HIRE_EMPLOYEE`, `UPDATE_INVENTORY`)
-- **Redux Action Creators**: Use camelCase with descriptive verbs (e.g., `hireEmployee()`, `updateInventory()`)
-- **Redux Reducers**: Use camelCase with 'Reducer' suffix (e.g., `employeeReducer`, `inventoryReducer`)
-- **Redux Selectors**: Use camelCase with 'select' prefix (e.g., `selectAllEmployees`, `selectInventoryItems`)
-
-## Directory Structure
+**Proposed directory structure:**
 
 ```
 thepharmacy/
@@ -359,134 +448,49 @@ thepharmacy/
 │       ├── store/                 # Redux store
 │       │   ├── index.ts           # Store configuration
 │       │   ├── actions/           # Redux actions
-│       │   │   ├── employee-actions.ts
-│       │   │   ├── inventory-actions.ts
-│       │   │   └── ...
 │       │   ├── reducers/          # Redux reducers
-│       │   │   ├── employee-reducer.ts
-│       │   │   ├── inventory-reducer.ts
-│       │   │   └── ...
 │       │   ├── thunks/            # Redux Thunk middleware functions
-│       │   │   ├── finance-thunks.ts
-│       │   │   └── ...
 │       │   └── selectors/         # Redux selectors
-│       │       ├── employee-selectors.ts
-│       │       ├── inventory-selectors.ts
-│       │       └── ...
-│       ├── components/            # React components
-│       │   ├── core/              # Core UI components
-│       │   │   ├── Layout.tsx
-│       │   │   ├── TopBar.tsx
-│       │   │   ├── SideBar.tsx
-│       │   │   └── ...
-│       │   ├── finances/          # Finance-related components
-│       │   │   ├── FinancesDashboard.tsx
-│       │   │   ├── TransactionList.tsx
-│       │   │   └── ...
-│       │   ├── employees/         # Employee-related components
-│       │   │   ├── EmployeeList.tsx
-│       │   │   ├── EmployeeCard.tsx
-│       │   │   └── ...
-│       │   ├── inventory/         # Inventory-related components
-│       │   │   ├── InventoryList.tsx
-│       │   │   ├── ProductCard.tsx
-│       │   │   └── ...
-│       │   └── ui/                # General UI components
-│       │       ├── Button.tsx
-│       │       ├── Card.tsx
-│       │       ├── ProgressBar.tsx
-│       │       └── ...
+│       ├── components/            # React components (core, finances, employees, inventory, ui)
 │       ├── pages/                 # Page components
 │       │   ├── DashboardPage.tsx
 │       │   ├── OperationsPage.tsx
 │       │   ├── FinancesPage.tsx
 │       │   └── ...
 │       ├── hooks/                 # Custom React hooks
-│       │   ├── useGameTime.ts
-│       │   ├── useEmployees.ts
-│       │   └── ...
 │       ├── utils/                 # Utility functions
-│       │   ├── formatters.ts
-│       │   ├── calculations.ts
-│       │   └── ...
 │       ├── api/                   # IPC client for renderer
-│       │   ├── finances.ts
-│       │   ├── employees.ts
-│       │   └── ...
 │       └── styles/                # CSS/SCSS styles
-│           ├── global.scss
-│           ├── theme.ts
-│           └── components/
-│               ├── button.scss
-│               └── ...
 ├── assets/                        # Static assets
-│   ├── images/
-│   ├── icons/
-│   └── fonts/
 ├── build/                         # Build configuration
-│   ├── webpack.main.config.js
-│   └── webpack.renderer.config.js
 ├── dist/                          # Distribution packages
-└── tests/                         # Tests
-    ├── unit/
-    ├── integration/
-    └── e2e/
+└── tests/                         # Tests (unit, integration, e2e)
 ```
 
-## Specific File Naming Map for Current Files
+**Specific file naming map for files that existed at the time of writing:**
 
-| Current File | New File Location | 
+| Current file | Proposed new location |
 |-------------|-------------------|
 | electron-main.js | src/main/index.ts |
 | preload.js | src/main/preload.ts |
 | game-integration.js | src/main/services/game-service.ts |
 | electron-integration.js | src/renderer/api/electron-bridge.ts |
 | index.html | src/renderer/index.html |
-| main.html | src/renderer/game.html (initially) → Later refactored into React components |
-| settings.html | src/renderer/settings.html (initially) → Later refactored to SettingsPage.tsx |
+| main.html | src/renderer/game.html (initially) → later refactored into React components |
+| settings.html | src/renderer/settings.html (initially) → later refactored to SettingsPage.tsx |
 
-## Data Models and Interfaces
+### Data Models and Interfaces (proposed)
 
-### Game State
-- `IGameState` - Main game state interface
-- `IFinancesData` - Financial data structure
-- `IEmployeesData` - Employee data structure
-- `IInventoryData` - Inventory data structure
+**Game State:** `IGameState`, `IFinancesData`, `IEmployeesData`, `IInventoryData`
 
-### Employees
-- `IEmployee` - Base employee interface
-- `IPharmacist` - Pharmacist-specific interface
-- `ITechnician` - Technician-specific interface
-- `TEmployeeRole` - Employee role type (enum)
+**Employees:** `IEmployee`, `IPharmacist`, `ITechnician`, `TEmployeeRole`
 
-### Inventory
-- `IProduct` - Product interface
-- `IMaterial` - Raw material interface
-- `IEquipment` - Equipment interface
+**Inventory:** `IProduct`, `IMaterial`, `IEquipment`
 
-### Operations
-- `ITask` - Task interface
-- `IPrescription` - Prescription interface
-- `IOrder` - Order interface
+**Operations:** `ITask`, `IPrescription`, `IOrder`
 
-### Customers
-- `ICustomer` - Customer interface
-- `IInsurance` - Insurance interface
+**Customers:** `ICustomer`, `IInsurance`
 
-## Redux Structure
+**Redux slices:** `gameSlice`, `employeesSlice`, `inventorySlice`, `financesSlice`, `customersSlice`, `uiSlice`
 
-### Slices
-- `gameSlice` - Game simulation state
-- `employeesSlice` - Employee management
-- `inventorySlice` - Inventory management
-- `financesSlice` - Financial management
-- `customersSlice` - Customer management
-- `uiSlice` - UI state management
-
-### Action Types (example)
-- `EMPLOYEES/HIRE_EMPLOYEE`
-- `EMPLOYEES/FIRE_EMPLOYEE`
-- `INVENTORY/ADD_ITEM`
-- `FINANCES/RECORD_TRANSACTION`
-
-This naming convention and file structure provides a clear, consistent framework that will scale with the project and prevent the need for renaming later.
+**Example action types:** `EMPLOYEES/HIRE_EMPLOYEE`, `EMPLOYEES/FIRE_EMPLOYEE`, `INVENTORY/ADD_ITEM`, `FINANCES/RECORD_TRANSACTION`

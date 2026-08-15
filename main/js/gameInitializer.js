@@ -188,8 +188,37 @@ window.loadSavedGame = async function() {
                 window.productsData = gameData.productsData;
                 window.materialsData = gameData.materialsData;
                 window.equipmentData = gameData.equipmentData;
-                window.brandReputation = gameData.brandReputation;
-                
+
+                // The save file round-trips through JSON, so Date fields come
+                // back as plain strings - revive them or anything that calls
+                // .getMonth()/.getTime()/etc. on currentDate will throw.
+                if (window.gameState) {
+                    if (window.gameState.currentDate) {
+                        window.gameState.currentDate = new Date(window.gameState.currentDate);
+                    }
+                    if (window.gameState.dateCreated) {
+                        window.gameState.dateCreated = new Date(window.gameState.dateCreated);
+                    }
+                }
+
+                // equipmentData items normally carry an isUnlocked() method that
+                // can't survive JSON/IPC - re-attach it so equipmentPage.js's
+                // eq.isUnlocked() calls keep working.
+                if (Array.isArray(window.equipmentData)) {
+                    window.equipmentData.forEach(item => {
+                        item.isUnlocked = function() {
+                            return window.researchData.currentLevel >= this.researchLevelRequired;
+                        };
+                    });
+                }
+
+                // Merge into the existing brandReputation module instead of
+                // replacing it, so its methods (calcCustomers, gainReputation,
+                // loseReputation) survive the load.
+                if (window.brandReputation && gameData.brandReputation) {
+                    Object.assign(window.brandReputation, gameData.brandReputation);
+                }
+
                 console.log("[gameInitializer] Game data restored:", {
                     gameState: !!window.gameState,
                     financesData: !!window.financesData,
