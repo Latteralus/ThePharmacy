@@ -62,8 +62,7 @@ window.customers = {
             progress: 0,
             roleNeeded: 'Cashier',
             status: 'pending',
-            assignedTo: null,
-            priority: 'high' // Higher priority for check-in
+            assignedTo: null
         };
         window.taskManager.addTask(checkInTask);
         console.log(`[customers.js] Created check-in task: ${checkInTask.id}`);
@@ -351,8 +350,7 @@ window.customers = {
                             progress: 0,
                             roleNeeded: 'Cashier',
                             status: 'pending',
-                            assignedTo: null,
-                            priority: 'highest' // Emergency priority
+                            assignedTo: null
                         };
                         window.taskManager.addTask(checkInTask);
                         console.log(`[customers.js] Created recovery check-in task: ${checkInTask.id}`);
@@ -378,8 +376,7 @@ window.customers = {
                             progress: 0,
                             roleNeeded: 'Cashier',
                             status: 'pending',
-                            assignedTo: null,
-                            priority: 'highest' // Emergency priority
+                            assignedTo: null
                         };
                         window.taskManager.addTask(checkoutTask);
                         console.log(`[customers.js] Created recovery checkout task: ${checkoutTask.id}`);

@@ -325,12 +325,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         }
 
         // Check if there's enough product inventory (assuming dosage=1 if not specified).
-        // `quantityNeeded` isn't actually a field the Prescription type carries
-        // (that field only ever lives on the fillPrescription Task, see
-        // prescriptions.ts) — this lookup has always evaluated to undefined
-        // and fallen through to `dosage`. Preserved as-is rather than fixed;
-        // cast keeps the exact original property access intact.
-        const requiredAmount = (prescription as Prescription & { quantityNeeded?: number }).quantityNeeded || prescription.dosage || 1;
+        const requiredAmount = prescription.dosage || 1;
         return product.inventory >= requiredAmount;
     }
 

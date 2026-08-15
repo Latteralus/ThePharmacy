@@ -69,7 +69,11 @@ window.employees = {
         return `${employee.firstName} ${employee.lastName}`;
     },
 
-    // Calculate employee efficiency (based on skills and morale)
+    // Calculate employee efficiency (based on skills and morale).
+    // Deliberately not merged with taskAssignment.ts's same-named function:
+    // that one also factors in morale for candidate selection, this one is
+    // skill-only since calculateTaskCompletionTime below applies its own
+    // separate morale adjustment.
     calculateEmployeeEfficiency(employee) {
         let skillSum = 0;
         let skillCount = 0;
@@ -77,9 +81,8 @@ window.employees = {
             skillSum += employee.skills[skill as keyof EmployeeSkills];
             skillCount++;
         }
-        const avgSkill = skillSum / skillCount;
         // We'll treat avgSkill ~ 0..100 as the general skill level
-        return avgSkill; // Return 0..100 range if typical
+        return skillCount > 0 ? skillSum / skillCount : 50; // Return 0..100 range if typical
     },
 
     // Calculates task completion time with:
@@ -152,19 +155,6 @@ window.employees = {
             } else {
                 employee.mood = "😡";
             }
-        }
-    },
-
-    // Promote an employee
-    promoteEmployee(employeeId, newSalary, newRole = null) {
-        const employee = this.getEmployeeById(employeeId);
-        if (employee) {
-            employee.salary = newSalary;
-            if (newRole) {
-                employee.role = newRole;
-            }
-            // Increase morale a bit
-            this.updateEmployeeMorale(employeeId, 10);
         }
     },
 
@@ -266,21 +256,5 @@ window.employees = {
         } else {
             console.error(`Employee not found with ID: ${employeeId}`);
         }
-    },
-
-    // Update employee skills
-    updateEmployeeSkills(employeeId, newSkills) {
-        const employee = this.getEmployeeById(employeeId);
-        if (!employee) {
-            console.error('Employee not found!');
-            return;
-        }
-        for (const skill in newSkills) {
-            const key = skill as keyof EmployeeSkills;
-            if (employee.skills.hasOwnProperty(key)) {
-                employee.skills[key] = newSkills[key]!;
-            }
-        }
-        console.log('Employee skills updated:', employee.firstName, employee.lastName, employee.skills);
     }
 };

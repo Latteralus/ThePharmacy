@@ -160,6 +160,10 @@ window.setGameSpeed = function(speedMultiplier: number): void {
     console.log(`Game speed set to ${speedMultiplier}x`);
 };
 
+window.getGameSpeed = function(): number {
+    return GAME_CONFIG.SIMULATION_SPEED;
+};
+
 // Pause/resume game simulation
 window.toggleGamePause = function(): void {
     window.gameState.isPaused = !window.gameState.isPaused;

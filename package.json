@@ -37,8 +37,19 @@
     "electron-updater": "^6.8.9"
   },
   "build": {
-    "appId": "com.yourcompany.thepharmacy",
+    "appId": "com.latteralus.thepharmacy",
     "productName": "ThePharmacy",
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "game-integration.js",
+      "index.html",
+      "main.html",
+      "settings.html",
+      "main/**/*.js",
+      "main/**/*.html",
+      "main/**/*.css"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"

@@ -69,7 +69,6 @@ window.prescriptions = {
                 assignedTo: null,
                 quantityToMake: Math.max(1, newPrescription.dosage),
                 fillTaskDependency: true,
-                priority: 'high', // Mark as high priority
                 customerId: customerId // Link directly to customer
             };
             window.taskManager.addTask(compoundTask);
@@ -90,8 +89,7 @@ window.prescriptions = {
                 requiredEquipment: product.equipmentNeeded,
                 quantityNeeded: Math.max(1, newPrescription.dosage),
                 customerId: customerId,
-                dependencyTaskId: compoundTask.id,
-                priority: 'high' // Mark as high priority
+                dependencyTaskId: compoundTask.id
             };
             window.taskManager.addTask(fillTask);
             console.log(`[prescriptions.js] Created dependent fillPrescription task: ${fillTask.id}`);
@@ -128,8 +126,7 @@ window.prescriptions = {
             assignedTo: null,
             requiredEquipment: product.equipmentNeeded,
             quantityNeeded: Math.max(1, prescription.dosage),
-            customerId: prescription.customerId,
-            priority: 'high' // Mark as high priority
+            customerId: prescription.customerId
         };
         window.taskManager.addTask(fillTask);
         console.log(`[prescriptions.js] Created fillPrescription task: ${fillTask.id}`);
@@ -173,8 +170,7 @@ window.prescriptions = {
             progress: 0,
             roleNeeded: 'Cashier',
             status: 'pending',
-            assignedTo: null,
-            priority: 'highest' // Mark as highest priority
+            assignedTo: null
         };
         window.taskManager.addTask(checkoutTask);
         console.log(`[prescriptions.js] Created checkout task: ${checkoutTask.id}`);
@@ -195,8 +191,7 @@ window.prescriptions = {
             progress: 0,
             roleNeeded: 'Pharmacist',
             status: 'pending',
-            assignedTo: null,
-            priority: 'very-high' // Mark as very high priority
+            assignedTo: null
         };
         window.taskManager.addTask(consultationTask);
         console.log(`[prescriptions.js] Created consultation task: ${consultationTask.id}`);

@@ -47,7 +47,6 @@ main/js/data/research.js
 main/js/data/equipment.js
 main/js/data/helpers.js
 main/js/brandReputation.js
-main/components/panel.js
 main/modals/modal.js
 main/js/debug.js
 main/js/insuranceClaims.js

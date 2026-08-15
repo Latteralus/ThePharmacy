@@ -84,7 +84,7 @@ window.renderSettingsPage = function(mainContent: HTMLElement): void {
         optElement.textContent = option.label;
 
         // Set currently selected option
-        if (window.GAME_CONFIG && option.value === window.GAME_CONFIG.SIMULATION_SPEED) {
+        if (option.value === window.getGameSpeed()) {
             optElement.selected = true;
         } else if (option.value === 1.0) {
             // Default to normal speed if config not available
@@ -95,7 +95,7 @@ window.renderSettingsPage = function(mainContent: HTMLElement): void {
     });
 
     speedSelect.onchange = function() {
-        setGameSpeed(parseFloat(speedSelect.value));
+        window.setGameSpeed(parseFloat(speedSelect.value));
     };
     
     speedControl.appendChild(speedSelect);
@@ -523,20 +523,6 @@ const toggleGamePause = function(): boolean {
         if (window.gameState.simulationAccumulator !== undefined) window.gameState.simulationAccumulator = 0;
     }
 
-    return true;
-};
-
-// Set game simulation speed. Always fails (see the GAME_CONFIG note in
-// global.d.ts) — same `const` reasoning as toggleGamePause above, applied to
-// window.setGameSpeed's identical shadowing.
-const setGameSpeed = function(speed: number): boolean {
-    if (!window.GAME_CONFIG) {
-        console.error('Game config not found');
-        return false;
-    }
-
-    window.GAME_CONFIG.SIMULATION_SPEED = speed;
-    console.log(`Game speed set to ${speed}x`);
     return true;
 };
 

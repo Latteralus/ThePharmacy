@@ -312,12 +312,10 @@ interface EmployeesApi {
   calculateEmployeeEfficiency: (employee: Employee) => number;
   calculateTaskCompletionTime: (baseTime: number, employeeId: string, taskType: string) => number;
   updateEmployeeMorale: (employeeId: string, moraleChange: number) => void;
-  promoteEmployee: (employeeId: string, newSalary: number, newRole?: string | null) => void;
   updateEmployeeMoodOnTaskCompletion: (employeeId: string, taskType: string) => void;
   hireEmployee: (role: string, skillLevel: string) => void;
   hireSelectedEmployee: (employeeData: Employee) => void;
   fireEmployee: (employeeId: string) => void;
-  updateEmployeeSkills: (employeeId: string, newSkills: Partial<EmployeeSkills>) => void;
 }
 
 interface BrandReputationApi {
@@ -412,7 +410,6 @@ interface Task {
   productName?: string;
   assignedTo?: string | null;
   roleNeeded?: string;
-  priority?: string;
   quantityToMake?: number;
   quantityNeeded?: number;
   dependencyTaskId?: string;
@@ -638,7 +635,6 @@ interface BootstrapApi {
 interface Window {
   insuranceData: InsurancePlan[];
   brandReputation: BrandReputationApi;
-  createPanel: (args: { title: string; body: string }) => HTMLDivElement;
   showDailySummaryModal: (onNextDay?: () => void) => void;
   gameAPI?: GameApi;
   electronAPI?: ElectronApi;
@@ -734,19 +730,12 @@ interface Window {
   isGameInitialized: boolean;
   gameLoop: (timestamp: number) => void;
   setGameSpeed: (speedMultiplier: number) => void;
+  getGameSpeed: () => number;
   toggleGamePause: () => void;
   initializeNewGame: (gameOptions: NewGameOptions) => boolean;
   loadSavedGame: () => Promise<boolean>;
   runFallbackInitialization: () => boolean;
   bootstrapGame: BootstrapApi;
-  // Read by settingsPage.ts's simulation-speed dropdown, but never actually
-  // set anywhere — main.ts keeps its own SIMULATION_SPEED config in a
-  // script-local `const GAME_CONFIG`, not on `window`. window.GAME_CONFIG is
-  // therefore always undefined; settingsPage.ts's own setGameSpeed always
-  // hits its "Game config not found" branch and never changes the speed.
-  // Pre-existing, confirmed while converting settingsPage.js — see
-  // docs/Changelog.md.
-  GAME_CONFIG?: { SIMULATION_SPEED: number };
   // Set by settingsPage.ts's setCustomerFrequency the first time the
   // frequency dropdown changes.
   customerFrequencyMultiplier?: number;

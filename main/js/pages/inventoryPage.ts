@@ -298,6 +298,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
         materialsTab.classList.remove('active');
         productsGrid.style.display = 'grid';
         materialsGrid.style.display = 'none';
+        renderProducts();
     });
 
     materialsTab.addEventListener('click', () => {
@@ -305,6 +306,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
         productsTab.classList.remove('active');
         productsGrid.style.display = 'none';
         materialsGrid.style.display = 'grid';
+        renderMaterials();
     });
 
     // Filter event listener
