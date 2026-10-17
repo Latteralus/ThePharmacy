@@ -167,8 +167,6 @@ window.employees = {
                 this.updateEmployeeMorale(employeeId, 3);
             } else if (taskType === 'consultation') {
                 this.updateEmployeeMorale(employeeId, 2);
-            } else if (taskType === 'production') {
-                this.updateEmployeeMorale(employeeId, 5);
             }
         }
     },

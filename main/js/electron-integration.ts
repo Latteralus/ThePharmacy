@@ -170,10 +170,13 @@
                     window.saveGame!();
                 }
 
-                // Ctrl+L for load
+                // Ctrl+L for load. Asks first: loading throws away everything
+                // since the last save.
                 if (event.ctrlKey && event.key === 'l') {
                     event.preventDefault();
-                    window.loadGame!();
+                    window.showConfirmModal('Load your last save? Anything since then will be lost.', 'Load', () =>
+                        window.loadGame!(),
+                    );
                 }
             });
         }

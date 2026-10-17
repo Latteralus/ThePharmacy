@@ -14,6 +14,8 @@ if (contextBridge && ipcRenderer) {
   // Expose protected methods that allow the renderer process to use
   // the ipcRenderer without exposing the entire object
   contextBridge.exposeInMainWorld('gameAPI', {
+    // True when running unpackaged (npm start, tests). See electron-main.js.
+    isDev: process.argv.includes('--thepharmacy-dev'),
     saveGame: (gameData) => {
       return ipcRenderer.invoke('save-game', gameData);
     },

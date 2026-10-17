@@ -157,8 +157,7 @@ interface LedgerEntry {
     requireFunds?: boolean;
 }
 
-// addTransaction always assigns an id if missing, so every transaction that
-// ends up in FinancesData.transactions has one.
+// transact() gives every logged transaction an id.
 interface Transaction extends TransactionInput {
     id: string;
 }
@@ -226,10 +225,7 @@ interface FinancesApi {
     processInsuranceClaims: () => void;
     addIncome: (amount: number, category?: string, description?: string) => void;
     addExpense: (amount: number, category?: string, description?: string) => boolean;
-    setCash: (amount: number) => void;
     startNewDay: (previousDate: Date, newDate: Date) => void;
-    // Appends to the log only, without moving money. Use transact().
-    addTransaction: (transaction: TransactionInput) => void;
     // Refuse (return false) a price that isn't above $0 / a negative markup.
     updateProductPrice: (productId: string, newPrice: number) => boolean;
     setToSuggestedPrices: () => void;
@@ -294,6 +290,9 @@ interface GameState {
     // The next number window.nextId hands out (ids.ts). Missing in a new
     // game and in saves from before the counter; both start at 1.
     nextId?: number;
+    // Customers who left today, by reason (for the daily summary). Reset
+    // when a new day starts; missing until the first departure.
+    customersToday?: Partial<Record<DepartureReason, number>>;
 }
 
 // Options passed from the new-game form, through gameAPI, to
@@ -370,7 +369,6 @@ interface SaveFileApi {
 interface HelpersApi {
     calculatePotentialProduction: (productId: string) => number;
     calculateMaterialsNeeded: (productId: string, quantity: number) => Record<string, number>;
-    orderMaterialsForProduct: (productId: string, quantity: number) => void;
     calculateOrderCost: (materialsNeeded: Record<string, number>) => number;
     calculateStartingWage: (role: string, skillLevel: string) => number;
     generateNewEmployeeId: () => string;
@@ -423,6 +421,8 @@ interface BrandReputationApi {
 // Partial — preload.js (not yet converted) owns the real, larger shape.
 // loadGame returns whatever JSON is on disk (any save version) or null.
 interface GameApi {
+    // Running unpackaged: developer tools (the debug overlay) are available.
+    isDev?: boolean;
     getNewGameOptions?: () => Promise<unknown>;
     loadGame?: () => Promise<unknown>;
     saveGame?: (gameData: SaveFile) => Promise<{ success: boolean } | undefined>;
@@ -511,7 +511,7 @@ interface CustomersApi {
     getInsuranceByPlanName: (planName: string) => InsurancePlan;
     getCustomerById: (customerId: string) => Customer | undefined;
     // Creates any task a customer's status or prescription needs but lacks
-    // (after a load, a debug reset, or a bug). Returns how many it repaired.
+    // (after a load, or a bug). Returns how many it repaired.
     reconcileTasks: () => number;
 }
 
@@ -663,6 +663,8 @@ interface PrescriptionsApi {
     removePrescriptionsByCustomer: (customerId: string) => void;
     getEligibleRefillRecord: (currentTime: number) => RefillRecord | undefined;
     consumeRefillRecord: (recordId: string) => RefillRecord | undefined;
+    // New stock of productId: waiting fills whose compound hasn't started take it.
+    useStockForWaitingFills: (productId: string) => void;
 }
 
 // production.js's public API. canCompound/createCompoundTask/
@@ -809,9 +811,10 @@ interface TimeEventsApi {
     minuteCheck: (gameState: GameState) => void;
     hourlyCheck: (gameState: GameState, hour: number) => void;
     spawnCustomersForHour: (hour: number) => void;
+    // Cancels this hour's arrivals that haven't happened yet (used on load).
+    cancelPendingArrivals: () => void;
     autoOrderCheck: () => void;
     autoPurchaseEquipmentCheck: () => void;
-    forceTimeUpdate: (minutes?: number) => boolean;
     CONFIG: TimeEventsConfig;
     addEventListener: (event: string, callback: (data: unknown) => void) => void;
     removeEventListener: (event: string, callback: (data: unknown) => void) => void;
@@ -844,6 +847,7 @@ interface Window {
     insuranceData: InsurancePlan[];
     brandReputation: BrandReputationApi;
     showDailySummaryModal: (onNextDay?: () => void) => void;
+    showConfirmModal: (message: string, confirmLabel: string, onConfirm: () => void) => void;
     gameAPI?: GameApi;
     electronAPI?: ElectronApi;
     employeesData: Employee[];
@@ -902,9 +906,6 @@ interface Window {
     clock: ClockApi;
     // A new id, `${prefix}-${n}`, from the counter saved on gameState (ids.ts).
     nextId: (prefix: string) => string;
-    // Debug-only global set by timeEvents.ts (console-driven time skip), no
-    // callers elsewhere in the codebase.
-    forceTimeForward?: (minutes?: number) => boolean;
     ui: UiApi;
     taskManager: TaskManagerApi;
     taskAssignment: TaskAssignmentApi;

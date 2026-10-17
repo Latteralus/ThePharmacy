@@ -186,13 +186,14 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
 
     // Initialize notifications system if it doesn't exist
     if (!window.notifications) {
+        let nextNotificationId = 1;
         window.notifications = {
             items: [],
             unreadCount: 0,
 
             add: function (message: string, type = 'info'): number {
                 const notification: NotificationItem = {
-                    id: Date.now(),
+                    id: nextNotificationId++,
                     message,
                     type,
                     timestamp: new Date(),

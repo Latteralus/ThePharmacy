@@ -1,6 +1,9 @@
-// Add this to the beginning of main.html before any other scripts
+// Developer log overlay. Loads first in main.html so it captures every
+// log line. Only in unpackaged runs (gameAPI.isDev): players don't get it.
 
 (function () {
+    if (!window.gameAPI?.isDev) return;
+
     console.log('Debug script running in main.html');
 
     // Create a debug overlay to show loading progress

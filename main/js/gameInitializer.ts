@@ -424,7 +424,7 @@ window.runFallbackInitialization = function (): boolean {
         // leaving the rest (transactions, revenue, expenses, ...) undefined
         // at runtime — a crash waiting to happen the moment anything in
         // finances.ts touched them (e.g. `transactions.push` in
-        // addTransaction). Filled in with zeroed defaults, matching the
+        // the ledger). Filled in with zeroed defaults, matching the
         // shape initializeNewGame builds above, so this last-resort
         // fallback is actually safe to run rather than just type-checking.
         if (!window.financesData) {

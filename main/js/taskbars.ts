@@ -188,8 +188,6 @@
                 return 'Consultation';
             case 'compound':
                 return 'Compounding';
-            case 'production':
-                return 'Production';
             default:
                 return type.charAt(0).toUpperCase() + type.slice(1);
         }

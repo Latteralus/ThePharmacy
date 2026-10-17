@@ -14,6 +14,11 @@ window.timeEvents = (function (): TimeEventsApi {
     // real time, which is half a game minute at 1x).
     const CUSTOMER_ARRIVAL_SPACING_MINUTES = 0.5;
 
+    // Clock jobs for this hour's customers who haven't arrived yet. Loading
+    // a save cancels them (cancelPendingArrivals), so the old session's
+    // customers don't walk into the loaded game.
+    const pendingArrivals = new Set<number>();
+
     // Event system for time-related events
     const events = {
         listeners: {} as Record<string, TimeEventListener[]>,
@@ -90,6 +95,7 @@ window.timeEvents = (function (): TimeEventsApi {
         gameState.currentDate.setHours(CONFIG.OPENING_HOUR, 0, 0, 0);
         gameState.dayIndex++;
         gameState.isDayActive = true;
+        gameState.customersToday = {};
 
         // Roll over today / this week / this month, and the daily counters
         if (window.finances && window.finances.startNewDay) {
@@ -209,10 +215,17 @@ window.timeEvents = (function (): TimeEventsApi {
 
         for (let i = 0; i < count; i++) {
             // Space the arrivals out so they don't all walk in at once
-            window.clock.after(i * CUSTOMER_ARRIVAL_SPACING_MINUTES, () => {
+            const job = window.clock.after(i * CUSTOMER_ARRIVAL_SPACING_MINUTES, () => {
+                pendingArrivals.delete(job);
                 window.customers.generateCustomer();
             });
+            pendingArrivals.add(job);
         }
+    }
+
+    function cancelPendingArrivals(): void {
+        pendingArrivals.forEach((job) => window.clock.cancel(job));
+        pendingArrivals.clear();
     }
 
     // ---------------------------------------------------------
@@ -348,17 +361,6 @@ window.timeEvents = (function (): TimeEventsApi {
         }
     }
 
-    // Force a time-step update to ensure task progress
-    function forceTimeUpdate(minutes: number = 1): boolean {
-        console.log(`[timeEvents] Forcing time update of ${minutes} minutes`);
-
-        if (window.taskManager && window.taskManager.updateTasks) {
-            window.taskManager.updateTasks(minutes);
-        }
-
-        return true;
-    }
-
     // ---------------------------------------------------------
     // Add an event listener for time-related events
     // ---------------------------------------------------------
@@ -380,10 +382,10 @@ window.timeEvents = (function (): TimeEventsApi {
         minuteCheck,
         hourlyCheck,
         spawnCustomersForHour,
+        cancelPendingArrivals,
         startOfDay,
         autoOrderCheck,
         autoPurchaseEquipmentCheck,
-        forceTimeUpdate,
         CONFIG, // Expose configuration settings
 
         // Event system
@@ -400,30 +402,3 @@ window.timeEvents = (function (): TimeEventsApi {
         },
     };
 })();
-
-// Helper function to manually force time forward (for debugging)
-window.forceTimeForward = function (minutes: number = 5): boolean {
-    console.log(`[FORCE] Manually advancing time by ${minutes} minutes`);
-
-    // Update game time
-    const msToAdd = minutes * 60 * 1000;
-    window.gameState.currentDate.setTime(window.gameState.currentDate.getTime() + msToAdd);
-
-    // Force task updates
-    if (window.taskManager && window.taskManager.updateTasks) {
-        window.taskManager.updateTasks(minutes);
-    }
-
-    // Force UI updates
-    if (window.ui && window.ui.updateTime) {
-        window.ui.updateTime();
-    }
-
-    if (window.ui && window.ui.forceUpdate) {
-        window.ui.forceUpdate('time');
-        window.ui.forceUpdate('customers');
-        window.ui.forceUpdate('prescriptions');
-    }
-
-    return true;
-};

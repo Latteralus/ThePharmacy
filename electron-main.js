@@ -43,6 +43,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       // Enable DevTools in production for debugging
       devTools: true,
+      // Tells the renderer (via preload's gameAPI.isDev) to load developer
+      // tools such as the debug overlay. Packaged builds don't get them.
+      additionalArguments: app.isPackaged ? [] : ['--thepharmacy-dev'],
     },
   });
 

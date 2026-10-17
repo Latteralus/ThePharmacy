@@ -387,6 +387,16 @@ describe('migrating v1 saves', () => {
     expect(window.customers.reconcileTasks).toHaveBeenCalledTimes(1);
   });
 
+  test("loading cancels the current session's customers who haven't arrived yet", () => {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    loadModules();
+    window.timeEvents = { cancelPendingArrivals: jest.fn() };
+    window.saveFile.apply(save);
+    expect(window.timeEvents.cancelPendingArrivals).toHaveBeenCalledTimes(1);
+    delete window.timeEvents;
+  });
+
   test('rejects something that is not a save, or a save from a newer game', () => {
     expect(() => window.saveFile.migrate(null)).toThrow('Not a save file');
     expect(() => window.saveFile.migrate({ foo: 1 })).toThrow('Not a save file');

@@ -38,7 +38,7 @@ See [install-instructions.md](install-instructions.md) for details.
 - **Navigation:** use the sidebar to move between pages. Operations shows customers, tasks and staff.
 - **Speed and pause:** on the Settings page.
 - **Saving:** the Save button in the top bar, or Ctrl+S. The game also autosaves every 5 minutes of play at 1x speed. There is one save slot.
-- **Loading:** Load Game on the main menu, or Ctrl+L in game.
+- **Loading:** Load Game on the main menu, or Ctrl+L in game (it asks first, since anything since your last save is lost).
 - **End of day:** at 22:00 the store closes, wages and overhead are charged, and a summary of the day appears.
 
 ## Troubleshooting
@@ -54,7 +54,7 @@ Report problems on the [GitHub issues page](https://github.com/Latteralus/ThePha
 
 ## License
 
-MIT License. The license text is in [main/LICENSE](../main/LICENSE).
+MIT License. The license text is in [LICENSE](../LICENSE).
 
 ## Version
 

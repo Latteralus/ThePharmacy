@@ -205,7 +205,7 @@ window.saveFile = (function (): SaveFileApi {
     }
 
     // JSON turns every Date into a string. A transaction date left as a
-    // string makes addTransaction's sort throw, which softlocks end of day.
+    // string makes the transaction log's sort throw, which softlocks end of day.
     function reviveDates(save: SaveFile): void {
         save.gameState.currentDate = new Date(save.gameState.currentDate);
         if (save.gameState.dateCreated) save.gameState.dateCreated = new Date(save.gameState.dateCreated);
@@ -252,6 +252,10 @@ window.saveFile = (function (): SaveFileApi {
             currentLevel: save.research.currentLevel,
             inProgress: save.research.inProgress,
         };
+
+        // Customers the current session has scheduled to arrive belong to
+        // it, not to the loaded game.
+        window.timeEvents?.cancelPendingArrivals();
 
         // In place: taskManager's closure holds this array.
         const tasks = window.taskManager.tasks;

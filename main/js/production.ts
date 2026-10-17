@@ -190,7 +190,9 @@ window.production = (function (): ProductionApi {
                 decayEquipmentDurability(product.equipmentNeeded);
                 refreshInventoryUI();
                 // A prescription's fill waiting on this compound is released
-                // by taskManager (releaseDependents), which runs next.
+                // by taskManager (releaseDependents), which runs next. A
+                // restock can supply other customers' waiting fills.
+                if (!task.prescriptionId) window.prescriptions.useStockForWaitingFills(product.id);
             }
         } else if (task.type === 'fillPrescription') {
             // The stock left inventory when the fill took it (takeStock).
@@ -218,11 +220,12 @@ window.production = (function (): ProductionApi {
         if (fill.type !== 'fillPrescription' || !fill.stockTaken) return;
 
         const product = window.productsData.find((p) => p.id === fill.productId);
+        fill.stockTaken = false;
         if (product) {
             product.inventory += fill.quantityNeeded ?? 1;
             refreshInventoryUI();
+            window.prescriptions.useStockForWaitingFills(product.id);
         }
-        fill.stockTaken = false;
     }
 
     // Initialize the production module

@@ -40,48 +40,15 @@ function setupIpcListeners() {
     return loadSettings();
   });
 
-  // Handle get saved games list
+  // The game has one save slot (saveGameState always writes
+  // pharmacy_save.json, and load-game always reads it), so the Load menu
+  // lists that file alone, not every *.json in the folder.
   ipcMain.handle('get-saved-games', async () => {
-    try {
-      const userDataPath = getUserDataPath();
-      const savePath = path.join(userDataPath, 'saves');
-
-      if (!fs.existsSync(savePath)) {
-        return [];
-      }
-
-      const files = fs.readdirSync(savePath);
-      const saveFiles = files.filter((file) => file.endsWith('.json'));
-
-      const savedGames = saveFiles
-        .map((file) => {
-          try {
-            const filePath = path.join(savePath, file);
-            const data = fs.readFileSync(filePath, 'utf8');
-            const saveData = JSON.parse(data);
-            return {
-              name: file,
-              path: filePath,
-              lastSaved: saveData.timestamp || null,
-              pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
-              difficulty: saveData.gameState?.difficulty || 'normal',
-              cash: saveData.financesData?.cash || 0,
-            };
-          } catch (err) {
-            log.error(`Error reading save file ${file}:`, err);
-            return null;
-          }
-        })
-        .filter(Boolean);
-
-      return savedGames;
-    } catch (error) {
-      log.error('Error getting saved games:', error);
-      return [];
-    }
+    return getSavedGames();
   });
 
-  // Handle delete saved game
+  // Deletes the save slot. The index is kept for the preload API's shape;
+  // there is only ever one entry.
   ipcMain.handle('delete-saved-game', async (event, index) => {
     try {
       const savedGames = getSavedGames();
@@ -122,18 +89,11 @@ function setupIpcListeners() {
 // Save game state to file
 function saveGameState(gameData) {
   try {
-    const userDataPath = getUserDataPath();
-    const savePath = path.join(userDataPath, 'saves');
-
-    // Create saves directory if it doesn't exist
-    if (!fs.existsSync(savePath)) {
-      fs.mkdirSync(savePath, { recursive: true });
-    }
+    const saveFile = getSaveFilePath();
+    fs.mkdirSync(path.dirname(saveFile), { recursive: true });
 
     // Write to a temp file and rename it into place, so a crash mid-write
-    // can't corrupt the save. The previous save is kept as a .bak (outside
-    // the *.json pattern the Load menu lists).
-    const saveFile = path.join(savePath, 'pharmacy_save.json');
+    // can't corrupt the save. The previous save is kept as a .bak.
     const tmpFile = saveFile + '.tmp';
     fs.writeFileSync(tmpFile, JSON.stringify(gameData, null, 2));
     if (fs.existsSync(saveFile)) {
@@ -152,8 +112,7 @@ function saveGameState(gameData) {
 // Load game state from file
 function loadGameState() {
   try {
-    const userDataPath = getUserDataPath();
-    const savePath = path.join(userDataPath, 'saves', 'pharmacy_save.json');
+    const savePath = getSaveFilePath();
 
     // Check if save file exists
     if (fs.existsSync(savePath)) {
@@ -210,45 +169,34 @@ function loadSettings() {
   }
 }
 
-// Get saved games list
+// The save slot, as a one-entry list for the Load menu (empty if there's
+// no save yet, or it can't be read).
 function getSavedGames() {
-  try {
-    const userDataPath = getUserDataPath();
-    const savePath = path.join(userDataPath, 'saves');
-
-    if (!fs.existsSync(savePath)) {
-      return [];
-    }
-
-    const files = fs.readdirSync(savePath);
-    const saveFiles = files.filter((file) => file.endsWith('.json'));
-
-    const savedGames = saveFiles
-      .map((file) => {
-        try {
-          const filePath = path.join(savePath, file);
-          const data = fs.readFileSync(filePath, 'utf8');
-          const saveData = JSON.parse(data);
-          return {
-            name: file,
-            path: filePath,
-            lastSaved: saveData.timestamp || null,
-            pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
-            difficulty: saveData.gameState?.difficulty || 'normal',
-            cash: saveData.financesData?.cash || 0,
-          };
-        } catch (err) {
-          log.error(`Error reading save file ${file}:`, err);
-          return null;
-        }
-      })
-      .filter(Boolean);
-
-    return savedGames;
-  } catch (error) {
-    log.error('Error getting saved games:', error);
+  const filePath = getSaveFilePath();
+  if (!fs.existsSync(filePath)) {
     return [];
   }
+
+  try {
+    const saveData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return [
+      {
+        name: path.basename(filePath),
+        path: filePath,
+        lastSaved: saveData.timestamp || null,
+        pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
+        difficulty: saveData.gameState?.difficulty || 'normal',
+        cash: saveData.financesData?.cash || 0,
+      },
+    ];
+  } catch (error) {
+    log.error('Error reading save file:', error);
+    return [];
+  }
+}
+
+function getSaveFilePath() {
+  return path.join(getUserDataPath(), 'saves', 'pharmacy_save.json');
 }
 
 // Helper to get user data path

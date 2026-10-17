@@ -38,6 +38,9 @@ function settleClaim(claim: InsuranceClaim, rejected: boolean): boolean {
     return true;
 }
 
+// How many settled claims processedClaims keeps (most recent).
+const MAX_PROCESSED_CLAIMS = 500;
+
 window.insuranceClaims = {
     pendingClaims: [], // Array to store pending claims
     processedClaims: [], // History of processed claims
@@ -137,6 +140,13 @@ window.insuranceClaims = {
         this.pendingClaims = this.pendingClaims.filter(
             (claim) => !claimsToProcess.some((processed) => processed.id === claim.id),
         );
+
+        // Keep only recent history; it's saved with the game and would
+        // otherwise grow forever. Lifetime totals are in
+        // financesData.insuranceReimbursements.
+        if (this.processedClaims.length > MAX_PROCESSED_CLAIMS) {
+            this.processedClaims = this.processedClaims.slice(-MAX_PROCESSED_CLAIMS);
+        }
 
         console.log(
             `[insuranceClaims.js] Processed ${claimsToProcess.length} claims. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`,

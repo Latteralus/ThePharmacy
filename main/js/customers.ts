@@ -23,7 +23,7 @@ const DEPARTURE_PENALTY: Record<Exclude<DepartureReason, 'served'>, number> = {
     impatient: 1.5,
     closing: 1,
     price: 0.5, // refused the price at check-in
-    reset: 0,
+    reset: 0, // sent home by reconcileTasks (no prescription): not their choice
 };
 
 function createInteractionTask(customerId: string, interaction: 'checkIn' | 'checkout'): void {
@@ -148,11 +148,13 @@ window.customers = {
         // refill of their previous product instead of a random pick.
         const prescriptionId =
             isReturning && refillRecord
-                ? window.prescriptions.generateRefillPrescription(
-                      newCustomer.id,
-                      window.prescriptions.consumeRefillRecord(refillRecord.id)!,
-                  )
+                ? window.prescriptions.generateRefillPrescription(newCustomer.id, refillRecord)
                 : window.prescriptions.generatePrescription(newCustomer.id);
+        // The refill is used up only once it's been written, so a failure
+        // leaves it for a later visit.
+        if (prescriptionId && isReturning && refillRecord) {
+            window.prescriptions.consumeRefillRecord(refillRecord.id);
+        }
 
         if (!prescriptionId) {
             // Nothing we could fill for them (an unlocked product with no
@@ -278,6 +280,12 @@ window.customers = {
 
             this.updateReputationOnDeparture(customer, reason);
 
+            // Counted for the daily summary
+            if (window.gameState) {
+                const today = (window.gameState.customersToday ??= {});
+                today[reason] = (today[reason] ?? 0) + 1;
+            }
+
             // UI update
             window.ui.updateCustomers();
 
@@ -399,8 +407,8 @@ window.customers = {
         return this.activeCustomers.find((c) => c.id === customerId);
     },
 
-    // Run by taskManager.js's integrity check, after a load, and after the
-    // Settings resets. With the state machine this should find nothing.
+    // Run by taskManager.js's integrity check and after a load. With the
+    // state machine this should find nothing.
     reconcileTasks() {
         let repaired = 0;
 

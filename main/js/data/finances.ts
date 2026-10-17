@@ -62,6 +62,17 @@ function bucketFor<T extends object>(buckets: T, category: string): keyof T {
     return (category in buckets ? category : 'other') as keyof T;
 }
 
+// Appends to the transaction log (newest first, last 1000 kept). Only
+// transact() calls it, so every entry matches a change in cash.
+function logTransaction(transaction: Transaction): void {
+    const data = window.financesData;
+    data.transactions.push(transaction);
+    data.transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+    if (data.transactions.length > 1000) {
+        data.transactions = data.transactions.slice(0, 1000);
+    }
+}
+
 function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
     periods.today += amount;
     periods.thisWeek += amount;
@@ -112,7 +123,8 @@ window.finances = {
             data.expenseCategories[bucketFor(data.expenseCategories, entry.category)] += amount;
         }
 
-        this.addTransaction({
+        logTransaction({
+            id: window.nextId('trans'),
             date: new Date(window.gameState.currentDate),
             type: entry.type,
             category: entry.category,
@@ -264,17 +276,6 @@ window.finances = {
         return this.transact({ type: 'expense', amount, category, description, requireFunds: true });
     },
 
-    // Debug "Set Cash": books the difference as an adjustment.
-    setCash(amount) {
-        const delta = amount - window.financesData.cash;
-        this.transact({
-            type: delta >= 0 ? 'income' : 'expense',
-            category: 'other',
-            amount: Math.abs(delta),
-            description: `Cash adjusted to $${amount.toFixed(2)}`,
-        });
-    },
-
     // Rolls the period totals over when a new day starts: "today" every day,
     // "this week" on Sundays, "this month" on the 1st.
     startNewDay(previousDate, newDate) {
@@ -282,25 +283,6 @@ window.finances = {
         if (newDate.getDay() === 0) this.startNewWeek();
         if (newDate.getMonth() !== previousDate.getMonth() || newDate.getFullYear() !== previousDate.getFullYear()) {
             this.startNewMonth();
-        }
-    },
-
-    // Appends to the transaction log only. Use transact() to move money.
-    addTransaction(transaction) {
-        // Make sure the transaction has a unique ID
-        if (!transaction.id) {
-            transaction.id = window.nextId('trans');
-        }
-
-        // Add the transaction
-        window.financesData.transactions.push(transaction as Transaction);
-
-        // Keep transactions sorted by date (newest first)
-        window.financesData.transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-        // Limit transaction history to prevent performance issues (keep last 1000)
-        if (window.financesData.transactions.length > 1000) {
-            window.financesData.transactions = window.financesData.transactions.slice(0, 1000);
         }
     },
 

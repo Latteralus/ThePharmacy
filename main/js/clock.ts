@@ -69,7 +69,7 @@ window.clock = (function (): ClockApi {
         const t = gameTime();
         if (t === null) return;
 
-        // Time went backwards (an in-game load, a debug reset): shift every
+        // Time went backwards (an in-game load): shift every
         // job by the same amount so each keeps its remaining delay instead of
         // waiting out the gap.
         if (lastTickAt !== null && t < lastTickAt) {
@@ -98,7 +98,7 @@ window.clock = (function (): ClockApi {
                 jobs.delete(job.id);
             } else {
                 // Don't replay missed runs after a time jump (the overnight
-                // skip, "+1 Hour"): run once and re-align to now.
+                // skip, a load): run once and re-align to now.
                 job.dueAt! += job.delayMs;
                 if (job.dueAt! <= t) job.dueAt = t + job.delayMs;
             }

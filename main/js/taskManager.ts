@@ -476,7 +476,7 @@ window.taskManager = (function (): TaskManagerApi {
 
             // 3. Every customer has the tasks their status needs. With the
             // state machines this should find nothing; it's here for loads
-            // of older saves and the Settings resets.
+            // of older saves.
             const repaired = window.customers.reconcileTasks();
             if (repaired > 0) {
                 console.warn(`[taskManager.js] Integrity check repaired ${repaired} missing customer tasks`);

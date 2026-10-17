@@ -106,7 +106,7 @@ function updateGameTime(msElapsed: number): void {
     }
 
     // Check for end of day (22:00 is 10 PM). `>=` rather than an exact
-    // 22:00 match, so a time jump (Settings' "+1 Hour", a load) that lands
+    // 22:00 match, so a time jump (a load) that lands
     // past 22:00 still ends the day instead of running on through the night.
     const currentHour = window.gameState.currentDate.getHours();
 

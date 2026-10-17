@@ -70,8 +70,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // plus state older saves dropped or reset (C5): a customer in the store,
   // a custom price, and the game speed.
   const customerId = await page1.evaluate(() => {
-    window.finances.addTransaction({
-      date: new Date(window.gameState.currentDate),
+    window.finances.transact({
       type: 'expense',
       category: 'other',
       amount: 1,
@@ -91,7 +90,7 @@ test('saving writes a real save file, and loading it restores game state', async
   expect(fs.existsSync(savedFile)).toBe(true);
   const saved = JSON.parse(fs.readFileSync(savedFile, 'utf8'));
   expect(saved.gameState.pharmacyName).toBe('Round Trip Pharmacy');
-  expect(saved.financesData.cash).toBe(100000);
+  expect(saved.financesData.cash).toBe(99999);
   expect(saved.financesData.transactions.length).toBeGreaterThan(0);
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
@@ -163,7 +162,7 @@ test('saving writes a real save file, and loading it restores game state', async
   );
 
   expect(loaded.pharmacyName).toBe('Round Trip Pharmacy');
-  expect(loaded.cash).toBe(100000);
+  expect(loaded.cash).toBe(99999);
   expect(loaded.currentDateIsDate).toBe(true);
   expect(loaded.transactionDatesAreDates).toBe(true);
   expect(loaded.clockAdvanced).toBe(true);

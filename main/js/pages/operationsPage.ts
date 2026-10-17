@@ -189,8 +189,6 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
                         taskTypeDescription = 'Consultation';
                     } else if (taskTypeDescription === 'compound') {
                         taskTypeDescription = 'Compounding';
-                    } else if (taskTypeDescription === 'production') {
-                        taskTypeDescription = 'Production';
                     }
 
                     taskInfo.textContent = `Current Task: ${taskTypeDescription}`;
@@ -270,8 +268,6 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
                 taskTypeDescription = 'Consultations';
             } else if (taskTypeDescription === 'compound') {
                 taskTypeDescription = 'Compounding';
-            } else if (taskTypeDescription === 'production') {
-                taskTypeDescription = 'Production Tasks';
             }
 
             groupHeader.textContent = taskTypeDescription;

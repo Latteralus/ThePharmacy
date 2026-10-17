@@ -36,6 +36,17 @@ function createCompoundForFill(fill: Task, product: Product): Task {
     };
     window.taskManager.addTask(compoundTask);
     console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
+
+    // It will wait until materials are bought, and the customer's patience
+    // runs down meanwhile, so tell the player.
+    if (!window.production.canStartCompound(compoundTask)) {
+        const customer = fill.customerId ? window.customers.getCustomerById(fill.customerId) : undefined;
+        const who = customer ? `${customer.firstName} ${customer.lastName}'s` : 'a';
+        window.notifications?.add(
+            `Not enough materials to make ${product.name} for ${who} prescription. Buy them in the Marketplace.`,
+            'warning',
+        );
+    }
     return compoundTask;
 }
 
@@ -90,12 +101,14 @@ window.prescriptions = {
             return null;
         }
 
-        // Pick an available product
+        const dosage = Math.floor(Math.random() * 3) + 1; // 1-3 units
+
+        // Prefer a product we can supply in full: enough stock for the
+        // dosage, or the materials to compound it.
         const unlockedProducts = window.research.getUnlockedProducts();
         const availableProducts = unlockedProducts.filter((id) => {
             const product = window.productsData.find((p) => p.id === id);
-            // Only consider products that are in stock or can be compounded
-            return product && (product.inventory > 0 || window.production.canCompound(product));
+            return product && (product.inventory >= dosage || window.production.canCompound(product, dosage));
         });
 
         // If no products available or can be compounded, use any unlocked product
@@ -117,7 +130,7 @@ window.prescriptions = {
             customerId: customerId,
             productId: productId,
             productName: product.name,
-            dosage: Math.floor(Math.random() * 3) + 1, // Random dosage between 1-3
+            dosage,
             dosageForm: product.dosageForm,
             frequency: this.getRandomFrequency(),
             status: 'pending',
@@ -234,6 +247,30 @@ window.prescriptions = {
 
         const compound = findPrescriptionCompound(fill.prescriptionId!) ?? createCompoundForFill(fill, product);
         fill.dependencyTaskId = compound.id;
+    },
+
+    // Stock of a product just came in (a restock finished, or a departing
+    // customer's fill put theirs back). Fills still waiting on a compound
+    // that hasn't started take it instead, oldest first, and their compound
+    // is dropped. A compound already under way holds its materials and
+    // finishes as planned.
+    useStockForWaitingFills(productId) {
+        window.taskManager.tasks
+            .filter(
+                (t) => t.type === 'fillPrescription' && t.productId === productId && t.status === 'pending-dependent',
+            )
+            .forEach((fill) => {
+                const compound = fill.dependencyTaskId
+                    ? window.taskManager.getTaskById(fill.dependencyTaskId)
+                    : undefined;
+                if (compound && (compound.status !== 'pending' || compound.materialsTaken)) return;
+                if (!window.production.takeStock(fill)) return;
+
+                fill.dependencyTaskId = undefined; // so cancelling the compound leaves the fill alone
+                window.taskManager.setStatus(fill, 'pending');
+                if (compound) window.taskManager.cancelTask(compound.id);
+                console.log(`[prescriptions.js] ${fill.id} took ${fill.productName} from stock instead of waiting.`);
+            });
     },
 
     updatePrescriptionStatus(prescriptionId, newStatus) {

@@ -56,6 +56,7 @@ function loadGame({ employees = FULL_STAFF(), stock = 5, random = 0 } = {}) {
   require('../../main/js/data/names.js');
   require('../../main/js/data/materials.js');
   require('../../main/js/data/products.js');
+  require('../../main/js/data/equipment.js'); // completed tasks wear it down
   require('../../main/js/data/helpers.js');
   require('../../main/js/data/insurance.js');
   require('../../main/js/data/finances.js');
@@ -337,8 +338,10 @@ describe('repairs (M11)', () => {
     loadGame({ stock: 1 });
     const a = window.customers.generateCustomer();
     const b = window.customers.generateCustomer();
-    // As loaded from a v2 save: no fill holds stock yet
-    [fillFor(a), fillFor(b)].forEach((fill) => window.production.returnStock(fill));
+    // As loaded from a v2 save: no fill holds stock yet. Set directly:
+    // returnStock would hand a's unit straight to b's waiting fill.
+    fillFor(a).stockTaken = false;
+    product().inventory += fillFor(a).quantityNeeded;
     [...tasks()].filter((t) => t.type === 'compound').forEach((t) => window.taskManager.cancelTask(t.id));
     expect(fillFor(b)).toBeUndefined(); // cancelling the compound took its waiting fill with it
 
@@ -528,5 +531,140 @@ describe('price affects whether customers buy (H3)', () => {
     expect(product().price).toBe(10);
     expect(window.finances.updateProductPrice('pd001', 12.5)).toBe(true);
     expect(product().price).toBe(12.5);
+  });
+});
+
+describe('stock that comes in goes to fills still waiting', () => {
+  test('a restock supplies a fill whose compound has not started, and that compound is dropped', () => {
+    loadGame({ stock: 1 });
+    window.customers.generateCustomer();
+    const waiting = window.customers.generateCustomer();
+    expect(fillFor(waiting).status).toBe('pending-dependent');
+
+    window.production.handleTaskCompletion({ type: 'compound', productId: 'pd001', quantityToMake: 3 });
+
+    expect(fillFor(waiting)).toMatchObject({ status: 'pending', stockTaken: true, dependencyTaskId: undefined });
+    expect(task(`compound-${waiting.prescriptionId}`)).toBeUndefined();
+    expect(product().inventory).toBe(2);
+    expect(refusals()).toHaveLength(0);
+  });
+
+  test('a compound already under way is kept, and its fill keeps waiting for it', () => {
+    loadGame({ stock: 1 });
+    window.customers.generateCustomer();
+    const waiting = window.customers.generateCustomer();
+    const compoundId = `compound-${waiting.prescriptionId}`;
+    expect(window.taskAssignment.assignTaskToEmployee(compoundId, LAB_TECH)).toBe(true);
+
+    window.production.handleTaskCompletion({ type: 'compound', productId: 'pd001', quantityToMake: 3 });
+
+    expect(fillFor(waiting).status).toBe('pending-dependent');
+    expect(task(compoundId).status).toBe('inProgress');
+    expect(product().inventory).toBe(3);
+  });
+
+  test('a customer who walks out hands their stock to the next fill waiting for it', () => {
+    loadGame({ stock: 1 });
+    const leaving = window.customers.generateCustomer();
+    const waiting = window.customers.generateCustomer();
+
+    window.customers.customerLeaves(leaving.id, 'impatient');
+
+    expect(fillFor(waiting)).toMatchObject({ status: 'pending', stockTaken: true });
+    expect(task(`compound-${waiting.prescriptionId}`)).toBeUndefined();
+    expect(product().inventory).toBe(0);
+  });
+});
+
+describe('loose ends from earlier phases', () => {
+  afterEach(() => {
+    delete window.notifications;
+  });
+
+  test("the player is told when a customer's compound has no materials", () => {
+    loadGame({ stock: 0 });
+    materialsFor(0);
+    window.notifications = { add: jest.fn() };
+
+    const customer = window.customers.generateCustomer();
+
+    expect(task(`compound-${customer.prescriptionId}`).status).toBe('pending');
+    expect(window.notifications.add).toHaveBeenCalledWith(expect.stringContaining('Not enough materials'), 'warning');
+  });
+
+  test('no warning when the materials are there', () => {
+    loadGame({ stock: 0 });
+    window.notifications = { add: jest.fn() };
+
+    window.customers.generateCustomer();
+
+    expect(window.notifications.add).not.toHaveBeenCalled();
+  });
+
+  test('a prescription goes to a product that can supply the whole dosage', () => {
+    loadGame({ stock: 1, random: 0.5 }); // dosage 2
+    materialsFor(0); // pd001: 1 in stock, nothing to compound more
+    window.productsData.find((p) => p.id === 'pd002').inventory = 5;
+    window.research.getUnlockedProducts = () => ['pd002', 'pd001'];
+
+    const customer = window.customers.generateCustomer();
+
+    // Picking pd001 (in stock, but not 2) would leave a compound with no materials.
+    expect(window.prescriptions.getPrescription(customer.prescriptionId).productId).toBe('pd002');
+  });
+
+  test('a refill is only used up once its prescription has been written', () => {
+    loadGame(); // random() = 0: the next arrival is a returning customer
+    const record = {
+      id: 'refill-1',
+      customerFirstName: 'Rita',
+      customerLastName: 'Refill',
+      insurancePlanName: window.insuranceData[0].planName,
+      productId: 'pd999', // not a product (yet)
+      productName: 'Missing',
+      dosage: 1,
+      dosageForm: 'Tablet',
+      frequency: 'once daily',
+      doctorName: 'Dr. Test',
+      refillsAvailable: 1,
+      eligibleAfterTime: 0,
+      sourcePrescriptionId: 'pres-0',
+    };
+    window.prescriptions.refillRegistry.push(record);
+
+    expect(window.customers.generateCustomer()).toBeNull();
+    expect(window.prescriptions.refillRegistry).toEqual([record]);
+
+    record.productId = 'pd001';
+    const customer = window.customers.generateCustomer();
+    expect(customer).toMatchObject({ firstName: 'Rita', isReturning: true });
+    expect(window.prescriptions.refillRegistry).toHaveLength(0);
+  });
+
+  test('departures are counted by reason for the daily summary, and reset the next day', () => {
+    loadGame({ stock: 5 });
+    window.ui.updateTime = jest.fn();
+    require('../../main/js/timeEvents.js');
+    const reasons = ['served', 'served', 'impatient', 'price'];
+    reasons.forEach((reason) => window.customers.customerLeaves(window.customers.generateCustomer().id, reason));
+
+    expect(window.gameState.customersToday).toEqual({ served: 2, impatient: 1, price: 1 });
+
+    window.timeEvents.skipToNextDay(window.gameState);
+    expect(window.gameState.customersToday).toEqual({});
+  });
+
+  test("loading a save cancels the old session's customers who haven't arrived yet", () => {
+    loadGame();
+    require('../../main/js/timeEvents.js');
+    window.brandReputation.calcCustomers = () => 3;
+
+    window.timeEvents.spawnCustomersForHour(9);
+    run(0.25, { autoAssign: false });
+    expect(window.customers.activeCustomers).toHaveLength(1); // spaced half a minute apart
+
+    window.timeEvents.cancelPendingArrivals();
+    run(5, { autoAssign: false });
+    expect(window.customers.activeCustomers).toHaveLength(1);
   });
 });

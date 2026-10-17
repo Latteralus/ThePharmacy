@@ -25,23 +25,13 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
     // 1. Game Time Controls
     const timeSection = createSettingsSection('Game Time Controls');
 
-    // Day Activation Setting
-    const dayActiveControl = createSettingItem('Day Status:');
+    // Whether the store is open (read-only: days end at closing time)
+    const dayActiveControl = createSettingItem('Store:');
 
     const dayStatus = document.createElement('span');
     dayStatus.id = 'day-status-indicator';
     updateDayStatus(dayStatus);
     dayActiveControl.appendChild(dayStatus);
-
-    const toggleDayButton = document.createElement('button');
-    toggleDayButton.textContent = window.gameState?.isDayActive ? 'End Day' : 'Start Day';
-    toggleDayButton.className = 'settings-button';
-    toggleDayButton.onclick = function () {
-        toggleDayActive();
-        updateDayStatus(dayStatus);
-        toggleDayButton.textContent = window.gameState?.isDayActive ? 'End Day' : 'Start Day';
-    };
-    dayActiveControl.appendChild(toggleDayButton);
 
     timeSection.appendChild(dayActiveControl);
 
@@ -95,27 +85,6 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
     speedControl.appendChild(speedSelect);
     timeSection.appendChild(speedControl);
 
-    // Advanced Time Control
-    const advanceTimeControl = createSettingItem('Manual Time Control:');
-
-    const advanceHourButton = document.createElement('button');
-    advanceHourButton.textContent = '+1 Hour';
-    advanceHourButton.className = 'settings-button';
-    advanceHourButton.onclick = function () {
-        advanceGameTimeByHour();
-    };
-    advanceTimeControl.appendChild(advanceHourButton);
-
-    const advanceDayButton = document.createElement('button');
-    advanceDayButton.textContent = 'Skip to Next Day';
-    advanceDayButton.className = 'settings-button';
-    advanceDayButton.onclick = function () {
-        skipToNextDay();
-    };
-    advanceTimeControl.appendChild(advanceDayButton);
-
-    timeSection.appendChild(advanceTimeControl);
-
     // Current Time Display
     const currentTimeItem = createSettingItem('Current Game Time:');
     const timeDisplay = document.createElement('span');
@@ -161,30 +130,6 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
     customerFreqControl.appendChild(customerFreqSelect);
     difficultySection.appendChild(customerFreqControl);
 
-    // Starting Cash
-    const cashControl = createSettingItem('Modify Cash:');
-
-    const cashInput = document.createElement('input');
-    cashInput.type = 'number';
-    cashInput.min = '0';
-    cashInput.step = '1000';
-    cashInput.value = String(window.financesData?.cash || 10000);
-    cashInput.className = 'settings-input';
-
-    const setCashButton = document.createElement('button');
-    setCashButton.textContent = 'Set Cash';
-    setCashButton.className = 'settings-button';
-    setCashButton.onclick = function () {
-        const value = parseFloat(cashInput.value);
-        if (!isNaN(value) && value >= 0) {
-            setGameCash(value);
-        }
-    };
-
-    cashControl.appendChild(cashInput);
-    cashControl.appendChild(setCashButton);
-    difficultySection.appendChild(cashControl);
-
     // Operating Costs
     const costsControl = createSettingItem('Operating Costs:');
 
@@ -217,81 +162,19 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
     // Add difficulty section to page
     settingsSections.appendChild(difficultySection);
 
-    // 3. Debug Options
-    const debugSection = createSettingsSection('Debug Options');
-
-    // Add employees
-    const addEmployeeControl = createSettingItem('Quick Add Employee:');
-
-    const roleSelect = document.createElement('select');
-    roleSelect.className = 'settings-select';
-
-    const roles = ['Pharmacist', 'Lab Technician', 'Cashier'];
-    roles.forEach((role) => {
-        const option = document.createElement('option');
-        option.value = role;
-        option.textContent = role;
-        roleSelect.appendChild(option);
-    });
-
-    const addEmployeeButton = document.createElement('button');
-    addEmployeeButton.textContent = 'Add Employee';
-    addEmployeeButton.className = 'settings-button';
-    addEmployeeButton.onclick = function () {
-        addRandomEmployee(roleSelect.value);
-    };
-
-    addEmployeeControl.appendChild(roleSelect);
-    addEmployeeControl.appendChild(addEmployeeButton);
-    debugSection.appendChild(addEmployeeControl);
-
-    // Reset game state
-    const resetControl = createSettingItem('Reset Options:');
-
-    const resetTasksButton = document.createElement('button');
-    resetTasksButton.textContent = 'Reset All Tasks';
-    resetTasksButton.className = 'settings-button warning';
-    resetTasksButton.onclick = function () {
-        resetAllTasks();
-    };
-
-    const resetCustomersButton = document.createElement('button');
-    resetCustomersButton.textContent = 'Reset Customers';
-    resetCustomersButton.className = 'settings-button warning';
-    resetCustomersButton.onclick = function () {
-        resetAllCustomers();
-    };
-
-    resetControl.appendChild(resetTasksButton);
-    resetControl.appendChild(resetCustomersButton);
-    debugSection.appendChild(resetControl);
-
-    // Full reset
-    const fullResetControl = createSettingItem('Factory Reset:');
-
-    const fullResetButton = document.createElement('button');
-    fullResetButton.textContent = 'Reset Game State';
-    fullResetButton.className = 'settings-button danger';
-    fullResetButton.onclick = function () {
-        if (confirm('This will reset the entire game state. This cannot be undone. Continue?')) {
-            resetGameState();
-        }
-    };
-
-    fullResetControl.appendChild(fullResetButton);
-    debugSection.appendChild(fullResetControl);
-
-    // Add debug section to page
-    settingsSections.appendChild(debugSection);
-
     // Add the container to the main content
     mainContent.appendChild(container);
 
     // Add CSS styling
     addStyles(mainContent);
 
-    // Set up automatic time display updates
-    setInterval(() => {
+    // Keep the time and status current. showPage has no teardown hook, so the
+    // interval stops itself once this page has been replaced (M16).
+    const refreshInterval = setInterval(() => {
+        if (!container.isConnected) {
+            clearInterval(refreshInterval);
+            return;
+        }
         updateTimeDisplay(document.getElementById('current-time-display'));
         updateDayStatus(document.getElementById('day-status-indicator'));
         updatePauseStatus(document.getElementById('pause-status-indicator'));
@@ -335,7 +218,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
         if (!element) return;
 
         const isActive = window.gameState?.isDayActive || false;
-        element.textContent = isActive ? '🟢 Active' : '🔴 Inactive';
+        element.textContent = isActive ? '🟢 Open' : '🔴 Closed';
         element.style.color = isActive ? '#4caf50' : '#f44336';
         element.className = 'settings-value';
     }
@@ -429,23 +312,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
                 background-color: var(--secondary);
             }
             
-            .settings-button.warning {
-                background-color: var(--warning);
-            }
-            
-            .settings-button.warning:hover {
-                background-color: #e68a00;
-            }
-            
-            .settings-button.danger {
-                background-color: var(--danger);
-            }
-            
-            .settings-button.danger:hover {
-                background-color: #d32f2f;
-            }
-            
-            .settings-select, .settings-input {
+            .settings-select {
                 padding: 8px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
@@ -460,27 +327,6 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
 // -----------------------------------
 // Game Settings Functions
 // -----------------------------------
-
-// Toggle day active state
-function toggleDayActive(): boolean {
-    if (!window.gameState) {
-        console.error('Game state not found');
-        return false;
-    }
-
-    window.gameState.isDayActive = !window.gameState.isDayActive;
-    console.log(`Day is now ${window.gameState.isDayActive ? 'active' : 'inactive'}`);
-
-    // If day was just activated, reset timing variables to prevent large time jumps
-    if (window.gameState.isDayActive) {
-        const now = performance.now();
-        if (window.gameState.lastFrameTime !== undefined) window.gameState.lastFrameTime = now;
-        if (window.gameState.lastSimulationTime !== undefined) window.gameState.lastSimulationTime = now;
-        if (window.gameState.simulationAccumulator !== undefined) window.gameState.simulationAccumulator = 0;
-    }
-
-    return true;
-}
 
 // Toggle game pause
 //
@@ -514,71 +360,10 @@ const toggleGamePause = function (): boolean {
     return true;
 };
 
-// Advance game time by one hour
-function advanceGameTimeByHour(): boolean {
-    if (!window.gameState || !window.gameState.currentDate) {
-        console.error('Game state or current date not found');
-        return false;
-    }
-
-    const oldDate = new Date(window.gameState.currentDate);
-    window.gameState.currentDate.setHours(window.gameState.currentDate.getHours() + 1);
-
-    // Update UI if available
-    if (window.ui && window.ui.updateTime) {
-        window.ui.updateTime();
-    }
-
-    console.log(`Advanced time from ${oldDate.toLocaleString()} to ${window.gameState.currentDate.toLocaleString()}`);
-    return true;
-}
-
-// Skip to next day
-function skipToNextDay(): boolean {
-    if (!window.gameState || !window.gameState.currentDate) {
-        console.error('Game state or current date not found');
-        return false;
-    }
-
-    // Call the game's next day function if available
-    if (window.timeEvents && window.timeEvents.skipToNextDay) {
-        window.timeEvents.skipToNextDay(window.gameState);
-        return true;
-    }
-
-    // Fallback: Manually set to next day at opening hour
-    window.gameState.currentDate.setDate(window.gameState.currentDate.getDate() + 1);
-    window.gameState.currentDate.setHours(7, 0, 0, 0); // Set to 7 AM
-
-    // Ensure day is active
-    window.gameState.isDayActive = true;
-
-    // Update UI if available
-    if (window.ui && window.ui.updateTime) {
-        window.ui.updateTime();
-    }
-
-    console.log(`Skipped to next day: ${window.gameState.currentDate.toLocaleString()}`);
-    return true;
-}
-
 // Set customer frequency multiplier (brandReputation.calcCustomers reads it)
 function setCustomerFrequency(multiplier: number): boolean {
     window.customerFrequencyMultiplier = multiplier;
     console.log(`Customer frequency multiplier set to ${multiplier}x`);
-    return true;
-}
-
-// Set game cash
-function setGameCash(amount: number): boolean {
-    if (!window.financesData) {
-        console.error('Finances data not found');
-        return false;
-    }
-
-    window.finances.setCash(amount);
-
-    console.log(`Cash set to $${amount.toFixed(2)}`);
     return true;
 }
 
@@ -601,198 +386,5 @@ function setOperatingCosts(multiplier: number): boolean {
     console.log(
         `Operating costs multiplier set to ${multiplier}x (overhead: $${window.financesData.overhead.toFixed(2)})`,
     );
-    return true;
-}
-
-// Add a random employee of the specified role
-function addRandomEmployee(role: string): boolean {
-    if (!window.employees || !window.helpers) {
-        console.error('Employees module or helpers not found');
-        return false;
-    }
-
-    const skillLevel = 'Intermediate'; // Default to intermediate skill level
-
-    const newEmployee: Employee = {
-        id: window.helpers.generateNewEmployeeId(),
-        firstName: window.helpers.generateFirstName(),
-        lastName: window.helpers.generateLastName(),
-        role: role,
-        salary: window.helpers.calculateStartingWage(role, skillLevel),
-        // Same pre-existing edge case as employees.ts's hireEmployee: an
-        // unrecognized `role` leaves `skills` empty (`{}`), not a full
-        // EmployeeSkills — preserved as-is rather than guarded against.
-        skills: generateRandomSkills(role, skillLevel) as EmployeeSkills,
-        morale: 80,
-        mood: '😀',
-        hireDate: new Date(window.gameState.currentDate),
-        currentTaskId: null,
-    };
-
-    // Add the employee to the data
-    window.employeesData.push(newEmployee);
-    window.taskAssignment.requestAutoAssign();
-
-    // Update UI if available
-    if (window.updateUI) {
-        window.updateUI('employees');
-    }
-
-    console.log(`Added new ${role}: ${newEmployee.firstName} ${newEmployee.lastName}`);
-    return true;
-
-    // Helper function to generate skills based on role and level
-    function generateRandomSkills(role: string, level: string): Partial<EmployeeSkills> {
-        const skills: Partial<EmployeeSkills> = {};
-        let baseValue = 0;
-
-        switch (level) {
-            case 'Novice':
-                baseValue = 40;
-                break;
-            case 'Intermediate':
-                baseValue = 60;
-                break;
-            case 'Skilled':
-                baseValue = 80;
-                break;
-            default:
-                baseValue = 50;
-        }
-
-        // Generate random variation around base value
-        function randomSkill(primary: boolean = false): number {
-            // Primary skills get a boost, others are lower
-            const base = primary ? baseValue + 10 : baseValue - 10;
-            // Add random variation of +/- 10%
-            return Math.min(100, Math.max(10, base + (Math.random() * 20 - 10)));
-        }
-
-        // Assign skills based on role
-        if (role === 'Pharmacist') {
-            skills.compounding = randomSkill(true);
-            skills.dispensing = randomSkill(true);
-            skills.customerService = randomSkill();
-            skills.inventoryManagement = randomSkill();
-            skills.sales = randomSkill();
-        } else if (role === 'Lab Technician') {
-            skills.compounding = randomSkill(true);
-            skills.dispensing = randomSkill();
-            skills.customerService = randomSkill(false);
-            skills.inventoryManagement = randomSkill(true);
-            skills.sales = randomSkill(false);
-        } else if (role === 'Cashier') {
-            skills.compounding = randomSkill(false);
-            skills.dispensing = randomSkill();
-            skills.customerService = randomSkill(true);
-            skills.inventoryManagement = randomSkill();
-            skills.sales = randomSkill(true);
-        }
-
-        return skills;
-    }
-}
-
-// Reset all tasks
-function resetAllTasks(): boolean {
-    if (!window.taskManager) {
-        console.error('Task manager not found');
-        return false;
-    }
-
-    // Cancel every task (frees employees, puts held stock back)
-    [...window.taskManager.tasks].forEach((task) => window.taskManager.cancelTask(task.id));
-
-    // Fresh restock tasks, and fresh tasks for the customers still waiting
-    // (they used to be left with nothing to wait on).
-    window.production.checkAndCreateCompoundTasks();
-    window.customers.reconcileTasks();
-
-    // Update UI if available
-    if (window.updateUI) {
-        window.updateUI('operations');
-    }
-
-    console.log('All tasks have been reset');
-    return true;
-}
-
-// Reset all customers
-function resetAllCustomers(): boolean {
-    if (!window.customers) {
-        console.error('Customers module not found');
-        return false;
-    }
-
-    // Each leaves properly: their tasks and prescriptions go with them, and
-    // a debug reset costs no reputation.
-    [...window.customers.activeCustomers].forEach((customer) => window.customers.customerLeaves(customer.id, 'reset'));
-
-    // Update UI if available
-    if (window.updateUI) {
-        window.updateUI('customers');
-        window.updateUI('prescriptions');
-    }
-
-    console.log('All customers have been reset');
-    return true;
-}
-
-// Complete game state reset
-function resetGameState(): boolean {
-    // Reset day start time to morning
-    if (window.gameState) {
-        window.gameState.currentDate = new Date(window.gameState.currentDate);
-        window.gameState.currentDate.setHours(7, 0, 0, 0); // 7 AM
-        window.gameState.isDayActive = true;
-        window.gameState.isPaused = false;
-
-        // Reset timing variables
-        const now = performance.now();
-        window.gameState.lastFrameTime = now;
-        window.gameState.lastSimulationTime = now;
-        window.gameState.simulationAccumulator = 0;
-    }
-
-    // Customers first, so resetAllTasks doesn't rebuild tasks for them
-    resetAllCustomers();
-    resetAllTasks();
-
-    // Reset finances
-    if (window.financesData) {
-        // Keep cash but reset other metrics
-        window.financesData.dailyIncome = 0;
-        window.financesData.pendingInsuranceIncome = 0;
-        window.financesData.pendingOrders = 0;
-        window.financesData.completedOrders = 0;
-
-        // Reset revenue/expenses for the day
-        if (window.financesData.revenue) {
-            window.financesData.revenue.today = 0;
-        }
-
-        if (window.financesData.expenses) {
-            window.financesData.expenses.today = 0;
-        }
-
-        if (window.financesData.profit) {
-            window.financesData.profit.today = 0;
-        }
-    }
-
-    // Update all UI components
-    if (window.updateUI) {
-        window.updateUI('finances');
-        window.updateUI('operations');
-        window.updateUI('time');
-    }
-
-    console.log('Game state has been reset');
-
-    // Reload the current page to ensure UI is fresh
-    if (window.currentPage && window.showPage) {
-        window.showPage(window.currentPage);
-    }
-
     return true;
 }

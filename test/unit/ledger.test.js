@@ -100,16 +100,6 @@ describe('finances.transact', () => {
     expect(data.expenses.today).toBe(1500);
     expect(data.transactions).toHaveLength(2);
   });
-
-  test('setCash books the difference, so the ledger still balances', () => {
-    window.finances.setCash(250);
-    expect(window.financesData.cash).toBe(250);
-    expect(window.financesData.expenses.total).toBe(750);
-
-    window.finances.setCash(1000);
-    expect(window.financesData.cash).toBe(1000);
-    expect(window.financesData.revenue.total).toBe(750);
-  });
 });
 
 describe('insurance claims', () => {
@@ -181,6 +171,20 @@ describe('insurance claims', () => {
     expect(data.cash).toBe(1004);
     expect(data.insuranceReimbursements).toMatchObject({ pending: 0, rejected: 16, received: 0 });
     expect(data.expenses.total).toBe(0);
+  });
+
+  test('only the 500 most recent settled claims are kept', () => {
+    window.insuranceClaims.processedClaims = Array.from({ length: 500 }, (_, i) => ({ id: `old-${i}` }));
+    sell('MediQuick', ['pd001'], 20);
+    window.gameState.currentDate = new Date(2023, 0, 2, 11, 0);
+    window.insuranceClaims.processAllClaims();
+
+    const kept = window.insuranceClaims.processedClaims;
+    expect(kept).toHaveLength(500);
+    expect(kept[0].id).toBe('old-1');
+    expect(kept[499].prescriptionId).toBe('pres-1');
+    // Lifetime totals don't depend on the history
+    expect(window.financesData.insuranceReimbursements.received).toBe(16);
   });
 
   test('self-pay customers pay in full and file no claim', () => {

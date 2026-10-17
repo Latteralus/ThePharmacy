@@ -42,54 +42,6 @@ window.helpers = {
         return materialsNeeded;
     },
 
-    // Handles ordering materials for a product
-    orderMaterialsForProduct(productId: string, quantity: number): void {
-        if (isNaN(quantity) || quantity <= 0) {
-            alert('Please enter a valid quantity.');
-            return;
-        }
-
-        const materialsNeeded = this.calculateMaterialsNeeded(productId, quantity);
-        const totalCost = this.calculateOrderCost(materialsNeeded);
-
-        const paid = window.finances.transact({
-            type: 'expense',
-            category: 'materials',
-            amount: totalCost,
-            description: `Ordered materials for ${quantity} x ${productId}`,
-            requireFunds: true,
-        });
-        if (!paid) {
-            alert('Not enough cash to complete the order.');
-            return;
-        }
-
-        // Update material inventory
-        for (const materialId in materialsNeeded) {
-            const material = window.materialsData.find((m) => m.id === materialId);
-            if (material) {
-                material.inventory += materialsNeeded[materialId];
-            }
-        }
-
-        // A compound waiting on these materials can start now
-        window.taskAssignment.requestAutoAssign();
-
-        // Update UI
-        window.updateUI('inventory');
-
-        // Display success message
-        const successMessage = document.createElement('div');
-        successMessage.className = 'success-message';
-        successMessage.textContent = `Successfully ordered materials for ${quantity} units of product ${productId}. Cost: $${totalCost.toFixed(2)}`;
-        document.querySelector('.inventory-page-container')!.appendChild(successMessage);
-
-        // Optional: Remove the message after a few seconds
-        setTimeout(() => {
-            successMessage.remove();
-        }, 5000);
-    },
-
     // Helper function to calculate the total cost of an order
     calculateOrderCost(materialsNeeded: Record<string, number>): number {
         let totalCost = 0;

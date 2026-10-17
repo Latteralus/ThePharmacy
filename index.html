@@ -336,7 +336,7 @@
                   return;
                 }
 
-                loadGame(save);
+                loadGame();
               });
 
               saveList.appendChild(saveItem);
@@ -395,11 +395,10 @@
           });
       }
 
-      // Function to load an existing game
-      function loadGame(saveData) {
-        // Load the game with the Electron API
+      // Open the save slot. main.html reads it on startup (mode=load).
+      function loadGame() {
         window.gameAPI
-          .loadGame(saveData)
+          .loadGame()
           .then(() => {
             window.location.href = 'main.html?mode=load';
           })
