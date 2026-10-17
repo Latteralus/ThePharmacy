@@ -23,7 +23,7 @@ function setupIpcListeners() {
     const success = saveGameState(gameData);
     return { success };
   });
-  
+
   // Handle load game requests - using handle instead of on for invoke compatibility
   ipcMain.handle('load-game', async () => {
     return loadGameState();
@@ -34,55 +34,57 @@ function setupIpcListeners() {
     const success = saveSettings(settings);
     return { success };
   });
-  
+
   // Handle get settings request
   ipcMain.handle('get-settings', async () => {
     return loadSettings();
   });
-  
+
   // Handle get saved games list
   ipcMain.handle('get-saved-games', async () => {
     try {
       const userDataPath = getUserDataPath();
       const savePath = path.join(userDataPath, 'saves');
-      
+
       if (!fs.existsSync(savePath)) {
         return [];
       }
-      
+
       const files = fs.readdirSync(savePath);
-      const saveFiles = files.filter(file => file.endsWith('.json'));
-      
-      const savedGames = saveFiles.map(file => {
-        try {
-          const filePath = path.join(savePath, file);
-          const data = fs.readFileSync(filePath, 'utf8');
-          const saveData = JSON.parse(data);
-          return {
-            name: file,
-            path: filePath,
-            lastSaved: saveData.timestamp || null,
-            pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
-            difficulty: saveData.gameState?.difficulty || 'normal',
-            cash: saveData.financesData?.cash || 0
-          };
-        } catch (err) {
-          log.error(`Error reading save file ${file}:`, err);
-          return null;
-        }
-      }).filter(Boolean);
-      
+      const saveFiles = files.filter((file) => file.endsWith('.json'));
+
+      const savedGames = saveFiles
+        .map((file) => {
+          try {
+            const filePath = path.join(savePath, file);
+            const data = fs.readFileSync(filePath, 'utf8');
+            const saveData = JSON.parse(data);
+            return {
+              name: file,
+              path: filePath,
+              lastSaved: saveData.timestamp || null,
+              pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
+              difficulty: saveData.gameState?.difficulty || 'normal',
+              cash: saveData.financesData?.cash || 0,
+            };
+          } catch (err) {
+            log.error(`Error reading save file ${file}:`, err);
+            return null;
+          }
+        })
+        .filter(Boolean);
+
       return savedGames;
     } catch (error) {
       log.error('Error getting saved games:', error);
       return [];
     }
   });
-  
+
   // Handle delete saved game
   ipcMain.handle('delete-saved-game', async (event, index) => {
     try {
-      const savedGames = await module.exports.getSavedGames();
+      const savedGames = getSavedGames();
       if (savedGames && savedGames[index]) {
         fs.unlinkSync(savedGames[index].path);
         return true;
@@ -93,7 +95,7 @@ function setupIpcListeners() {
       return false;
     }
   });
-  
+
   // Handle start new game
   ipcMain.handle('start-new-game', async (event, gameData) => {
     try {
@@ -105,7 +107,7 @@ function setupIpcListeners() {
       return false;
     }
   });
-  
+
   // Handle get new game options
   ipcMain.handle('get-new-game-options', async () => {
     return newGameOptions;
@@ -122,12 +124,12 @@ function saveGameState(gameData) {
   try {
     const userDataPath = getUserDataPath();
     const savePath = path.join(userDataPath, 'saves');
-    
+
     // Create saves directory if it doesn't exist
     if (!fs.existsSync(savePath)) {
       fs.mkdirSync(savePath, { recursive: true });
     }
-    
+
     // Write to a temp file and rename it into place, so a crash mid-write
     // can't corrupt the save. The previous save is kept as a .bak (outside
     // the *.json pattern the Load menu lists).
@@ -152,7 +154,7 @@ function loadGameState() {
   try {
     const userDataPath = getUserDataPath();
     const savePath = path.join(userDataPath, 'saves', 'pharmacy_save.json');
-    
+
     // Check if save file exists
     if (fs.existsSync(savePath)) {
       const saveData = fs.readFileSync(savePath, 'utf8');
@@ -174,7 +176,7 @@ function saveSettings(settings) {
   try {
     const userDataPath = getUserDataPath();
     const settingsPath = path.join(userDataPath, 'settings.json');
-    
+
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     log.info('Settings saved successfully');
     return true;
@@ -189,7 +191,7 @@ function loadSettings() {
   try {
     const userDataPath = getUserDataPath();
     const settingsPath = path.join(userDataPath, 'settings.json');
-    
+
     if (fs.existsSync(settingsPath)) {
       const settingsData = fs.readFileSync(settingsPath, 'utf8');
       return JSON.parse(settingsData);
@@ -199,7 +201,7 @@ function loadSettings() {
         volume: 50,
         musicEnabled: true,
         soundEnabled: true,
-        simulationSpeed: 1.0
+        simulationSpeed: 1.0,
       };
     }
   } catch (error) {
@@ -213,33 +215,35 @@ function getSavedGames() {
   try {
     const userDataPath = getUserDataPath();
     const savePath = path.join(userDataPath, 'saves');
-    
+
     if (!fs.existsSync(savePath)) {
       return [];
     }
-    
+
     const files = fs.readdirSync(savePath);
-    const saveFiles = files.filter(file => file.endsWith('.json'));
-    
-    const savedGames = saveFiles.map(file => {
-      try {
-        const filePath = path.join(savePath, file);
-        const data = fs.readFileSync(filePath, 'utf8');
-        const saveData = JSON.parse(data);
-        return {
-          name: file,
-          path: filePath,
-          lastSaved: saveData.timestamp || null,
-          pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
-          difficulty: saveData.gameState?.difficulty || 'normal',
-          cash: saveData.financesData?.cash || 0
-        };
-      } catch (err) {
-        log.error(`Error reading save file ${file}:`, err);
-        return null;
-      }
-    }).filter(Boolean);
-    
+    const saveFiles = files.filter((file) => file.endsWith('.json'));
+
+    const savedGames = saveFiles
+      .map((file) => {
+        try {
+          const filePath = path.join(savePath, file);
+          const data = fs.readFileSync(filePath, 'utf8');
+          const saveData = JSON.parse(data);
+          return {
+            name: file,
+            path: filePath,
+            lastSaved: saveData.timestamp || null,
+            pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
+            difficulty: saveData.gameState?.difficulty || 'normal',
+            cash: saveData.financesData?.cash || 0,
+          };
+        } catch (err) {
+          log.error(`Error reading save file ${file}:`, err);
+          return null;
+        }
+      })
+      .filter(Boolean);
+
     return savedGames;
   } catch (error) {
     log.error('Error getting saved games:', error);
@@ -254,9 +258,4 @@ function getUserDataPath() {
 
 module.exports = {
   initGameIntegration,
-  saveGameState,
-  loadGameState,
-  saveSettings,
-  loadSettings,
-  getSavedGames
 };

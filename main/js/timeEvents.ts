@@ -3,11 +3,11 @@
 
 type TimeEventListener = (data: unknown) => void;
 
-window.timeEvents = (function(): TimeEventsApi {
+window.timeEvents = (function (): TimeEventsApi {
     // Configuration settings
     const CONFIG: TimeEventsConfig = {
-        OPENING_HOUR: 7,               // Day starts at 7 AM
-        CLOSING_HOUR: 22               // Day ends at 10 PM
+        OPENING_HOUR: 7, // Day starts at 7 AM
+        CLOSING_HOUR: 22, // Day ends at 10 PM
     };
 
     // Game minutes between the customers of one hourly batch (was 500 ms of
@@ -29,27 +29,27 @@ window.timeEvents = (function(): TimeEventsApi {
         // Remove event listener
         off(event: string, callback: TimeEventListener): void {
             if (!this.listeners[event]) return;
-            this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+            this.listeners[event] = this.listeners[event].filter((cb) => cb !== callback);
         },
 
         // Trigger event
         emit(event: string, data: unknown): void {
             if (!this.listeners[event]) return;
-            this.listeners[event].forEach(callback => {
+            this.listeners[event].forEach((callback) => {
                 try {
                     callback(data);
                 } catch (error) {
                     console.error(`Error in time event listener for ${event}:`, error);
                 }
             });
-        }
+        },
     };
 
     // ---------------------------------------------------------
     // Called at 22:00 in main.js, or whenever a day ends
     // ---------------------------------------------------------
     function endOfDay(gameState: GameState): void {
-        console.log("[timeEvents] End of day triggered");
+        console.log('[timeEvents] End of day triggered');
 
         // The store is closed: anyone still waiting goes home now rather
         // than sitting in the store overnight.
@@ -81,7 +81,7 @@ window.timeEvents = (function(): TimeEventsApi {
     // Starts the next day at 07:00
     // ---------------------------------------------------------
     function skipToNextDay(gameState: GameState): void {
-        console.log("[timeEvents] Starting new day");
+        console.log('[timeEvents] Starting new day');
 
         // Move to next day
         const day = gameState.currentDate.getDate();
@@ -105,7 +105,7 @@ window.timeEvents = (function(): TimeEventsApi {
 
         // Update the UI to reflect the new day
         window.ui.updateTime();
-        window.updateUI("finances");
+        window.updateUI('finances');
     }
 
     // ---------------------------------------------------------
@@ -144,7 +144,7 @@ window.timeEvents = (function(): TimeEventsApi {
                 hourlyCheck(gameState, hour);
             }
         } catch (error) {
-            console.error("[timeEvents] Error in minuteCheck:", error);
+            console.error('[timeEvents] Error in minuteCheck:', error);
         }
     }
 
@@ -189,8 +189,12 @@ window.timeEvents = (function(): TimeEventsApi {
     // ---------------------------------------------------------
     function spawnCustomersForHour(hour: number): void {
         // Skip if customers module isn't available
-        if (!window.customers || !window.customers.generateCustomer ||
-            !window.brandReputation || !window.brandReputation.calcCustomers) {
+        if (
+            !window.customers ||
+            !window.customers.generateCustomer ||
+            !window.brandReputation ||
+            !window.brandReputation.calcCustomers
+        ) {
             return;
         }
 
@@ -212,7 +216,7 @@ window.timeEvents = (function(): TimeEventsApi {
     // Start the day
     // ---------------------------------------------------------
     function startOfDay(gameState: GameState): void {
-        console.log("[timeEvents] Starting day");
+        console.log('[timeEvents] Starting day');
         gameState.isDayActive = true;
 
         // Start all the day systems
@@ -231,22 +235,23 @@ window.timeEvents = (function(): TimeEventsApi {
             return;
         }
 
-        console.log("[timeEvents] Running auto-order check");
+        console.log('[timeEvents] Running auto-order check');
 
         let totalOrderCost = 0;
         let ordersPlaced = 0;
 
-        window.materialsData.forEach(mat => {
+        window.materialsData.forEach((mat) => {
             // If auto-order is configured
-            if (typeof mat.autoOrderThreshold === 'number' &&
+            if (
+                typeof mat.autoOrderThreshold === 'number' &&
                 typeof mat.autoOrderAmount === 'number' &&
                 mat.autoOrderThreshold > 0 &&
-                mat.autoOrderAmount > 0) {
-
+                mat.autoOrderAmount > 0
+            ) {
                 if (mat.inventory < mat.autoOrderThreshold) {
-                    const cost = window.calculateMaterialCost ?
-                        window.calculateMaterialCost(mat.id, mat.autoOrderAmount) :
-                        (mat.cost * mat.autoOrderAmount);
+                    const cost = window.calculateMaterialCost
+                        ? window.calculateMaterialCost(mat.id, mat.autoOrderAmount)
+                        : mat.cost * mat.autoOrderAmount;
 
                     if (window.financesData.cash >= cost) {
                         // Subtract cost & add to inventory
@@ -262,13 +267,17 @@ window.timeEvents = (function(): TimeEventsApi {
                                 type: 'expense',
                                 category: 'auto-order',
                                 amount: cost,
-                                description: `Auto-ordered ${mat.autoOrderAmount} units of ${mat.name}`
+                                description: `Auto-ordered ${mat.autoOrderAmount} units of ${mat.name}`,
                             });
                         }
 
-                        console.log(`[autoOrderCheck] Auto-ordered ${mat.autoOrderAmount} units of ${mat.name} for $${cost.toFixed(2)}`);
+                        console.log(
+                            `[autoOrderCheck] Auto-ordered ${mat.autoOrderAmount} units of ${mat.name} for $${cost.toFixed(2)}`,
+                        );
                     } else {
-                        console.warn(`[autoOrderCheck] Not enough cash to auto-order ${mat.name}. Needed: $${cost.toFixed(2)}, Available: $${window.financesData.cash.toFixed(2)}`);
+                        console.warn(
+                            `[autoOrderCheck] Not enough cash to auto-order ${mat.name}. Needed: $${cost.toFixed(2)}, Available: $${window.financesData.cash.toFixed(2)}`,
+                        );
                     }
                 }
             }
@@ -279,7 +288,7 @@ window.timeEvents = (function(): TimeEventsApi {
             window.financesData.dailyIncome -= totalOrderCost;
 
             if (window.updateUI) {
-                window.updateUI("finances");
+                window.updateUI('finances');
 
                 if (window.currentPage === 'inventory' || window.currentPage === 'marketplace') {
                     window.showPage(window.currentPage); // Refresh the current inventory-related page
@@ -289,7 +298,7 @@ window.timeEvents = (function(): TimeEventsApi {
             // Emit event for auto-orders
             events.emit('autoOrdersPlaced', {
                 totalCost: totalOrderCost,
-                ordersCount: ordersPlaced
+                ordersCount: ordersPlaced,
             });
         }
     }
@@ -304,15 +313,13 @@ window.timeEvents = (function(): TimeEventsApi {
             return;
         }
 
-        console.log("[timeEvents] Running auto-purchase equipment check");
+        console.log('[timeEvents] Running auto-purchase equipment check');
 
         let totalPurchaseCost = 0;
         let purchasesPlaced = 0;
 
-        window.equipmentData.forEach(eq => {
-            if (eq.autoPurchaseThreshold > 0 && eq.autoPurchaseAmount > 0 &&
-                eq.owned < eq.autoPurchaseThreshold) {
-
+        window.equipmentData.forEach((eq) => {
+            if (eq.autoPurchaseThreshold > 0 && eq.autoPurchaseAmount > 0 && eq.owned < eq.autoPurchaseThreshold) {
                 const cost = eq.cost * eq.autoPurchaseAmount;
 
                 if (window.financesData.cash >= cost) {
@@ -327,13 +334,17 @@ window.timeEvents = (function(): TimeEventsApi {
                             type: 'expense',
                             category: 'auto-purchase-equipment',
                             amount: cost,
-                            description: `Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name}`
+                            description: `Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name}`,
                         });
                     }
 
-                    console.log(`[autoPurchaseEquipmentCheck] Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name} for $${cost.toFixed(2)}`);
+                    console.log(
+                        `[autoPurchaseEquipmentCheck] Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name} for $${cost.toFixed(2)}`,
+                    );
                 } else {
-                    console.warn(`[autoPurchaseEquipmentCheck] Not enough cash to auto-purchase ${eq.name}. Needed: $${cost.toFixed(2)}, Available: $${window.financesData.cash.toFixed(2)}`);
+                    console.warn(
+                        `[autoPurchaseEquipmentCheck] Not enough cash to auto-purchase ${eq.name}. Needed: $${cost.toFixed(2)}, Available: $${window.financesData.cash.toFixed(2)}`,
+                    );
                 }
             }
         });
@@ -342,7 +353,7 @@ window.timeEvents = (function(): TimeEventsApi {
             window.financesData.dailyIncome -= totalPurchaseCost;
 
             if (window.updateUI) {
-                window.updateUI("finances");
+                window.updateUI('finances');
 
                 if (window.currentPage === 'equipment') {
                     window.showPage(window.currentPage); // Refresh the equipment page
@@ -351,7 +362,7 @@ window.timeEvents = (function(): TimeEventsApi {
 
             events.emit('autoEquipmentPurchased', {
                 totalCost: totalPurchaseCost,
-                purchasesCount: purchasesPlaced
+                purchasesCount: purchasesPlaced,
             });
         }
     }
@@ -404,13 +415,13 @@ window.timeEvents = (function(): TimeEventsApi {
             END_OF_DAY: 'endOfDay',
             HOURLY_CHECK: 'hourlyCheck',
             AUTO_ORDERS_PLACED: 'autoOrdersPlaced',
-            AUTO_EQUIPMENT_PURCHASED: 'autoEquipmentPurchased'
-        }
+            AUTO_EQUIPMENT_PURCHASED: 'autoEquipmentPurchased',
+        },
     };
 })();
 
 // Helper function to manually force time forward (for debugging)
-window.forceTimeForward = function(minutes: number = 5): boolean {
+window.forceTimeForward = function (minutes: number = 5): boolean {
     console.log(`[FORCE] Manually advancing time by ${minutes} minutes`);
 
     // Update game time

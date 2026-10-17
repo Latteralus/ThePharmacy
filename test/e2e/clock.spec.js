@@ -49,7 +49,7 @@ test('pause freezes the clock and customers; closing time sends customers home',
     return {
       time: window.gameState.currentDate.getTime(),
       customers: window.customers.activeCustomers.length,
-      patience: window.customers.activeCustomers.map(c => c.patience),
+      patience: window.customers.activeCustomers.map((c) => c.patience),
     };
   });
   expect(before.customers).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ test('pause freezes the clock and customers; closing time sends customers home',
   const whilePaused = await page.evaluate(() => ({
     time: window.gameState.currentDate.getTime(),
     customers: window.customers.activeCustomers.length,
-    patience: window.customers.activeCustomers.map(c => c.patience),
+    patience: window.customers.activeCustomers.map((c) => c.patience),
   }));
   expect(whilePaused).toEqual(before);
 
@@ -80,7 +80,7 @@ test('pause freezes the clock and customers; closing time sends customers home',
   const atClose = await page.evaluate(() => ({
     isDayActive: window.gameState.isDayActive,
     customers: window.customers.activeCustomers.length,
-    customerTasks: window.taskManager.tasks.filter(t => t.customerId).length,
+    customerTasks: window.taskManager.tasks.filter((t) => t.customerId).length,
   }));
   expect(atClose).toEqual({ isDayActive: false, customers: 0, customerTasks: 0 });
 

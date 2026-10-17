@@ -22,7 +22,7 @@ function buildTasksForPrescription(prescription: Prescription, product: Product)
             assignedTo: null,
             quantityToMake: Math.max(1, prescription.dosage),
             fillTaskDependency: true,
-            customerId: prescription.customerId // Link directly to customer
+            customerId: prescription.customerId, // Link directly to customer
         };
         window.taskManager.addTask(compoundTask);
         console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
@@ -42,12 +42,14 @@ function buildTasksForPrescription(prescription: Prescription, product: Product)
             requiredEquipment: product.equipmentNeeded,
             quantityNeeded: Math.max(1, prescription.dosage),
             customerId: prescription.customerId,
-            dependencyTaskId: compoundTask.id
+            dependencyTaskId: compoundTask.id,
         };
         window.taskManager.addTask(fillTask);
         console.log(`[prescriptions.js] Created dependent fillPrescription task: ${fillTask.id}`);
     } else {
-        console.log(`[prescriptions.js] Product ${product.name} is in stock (inventory: ${product.inventory}). Creating fill task directly.`);
+        console.log(
+            `[prescriptions.js] Product ${product.name} is in stock (inventory: ${product.inventory}). Creating fill task directly.`,
+        );
 
         // Create fill task directly if in stock
         window.prescriptions.createFillTaskForPrescription(prescription);
@@ -77,11 +79,13 @@ function registerRefillIfEligible(prescription: Prescription, customer: Customer
         doctorName: prescription.doctorName,
         refillsAvailable: prescription.refillsAllowed,
         eligibleAfterTime,
-        sourcePrescriptionId: prescription.id
+        sourcePrescriptionId: prescription.id,
     };
 
     window.prescriptions.refillRegistry.push(record);
-    console.log(`[prescriptions.js] Registered refill opportunity for ${customer.firstName} ${customer.lastName} (${prescription.productName}, ${prescription.refillsAllowed} refill(s) remaining)`);
+    console.log(
+        `[prescriptions.js] Registered refill opportunity for ${customer.firstName} ${customer.lastName} (${prescription.productName}, ${prescription.refillsAllowed} refill(s) remaining)`,
+    );
 }
 
 window.prescriptions = {
@@ -99,18 +103,19 @@ window.prescriptions = {
 
         // Pick an available product
         const unlockedProducts = window.research.getUnlockedProducts();
-        const availableProducts = unlockedProducts.filter(id => {
-            const product = window.productsData.find(p => p.id === id);
+        const availableProducts = unlockedProducts.filter((id) => {
+            const product = window.productsData.find((p) => p.id === id);
             // Only consider products that are in stock or can be compounded
             return product && (product.inventory > 0 || window.production.canCompound(product));
         });
 
         // If no products available or can be compounded, use any unlocked product
-        const productId = availableProducts.length > 0 ?
-            availableProducts[Math.floor(Math.random() * availableProducts.length)] :
-            unlockedProducts[Math.floor(Math.random() * unlockedProducts.length)];
+        const productId =
+            availableProducts.length > 0
+                ? availableProducts[Math.floor(Math.random() * availableProducts.length)]
+                : unlockedProducts[Math.floor(Math.random() * unlockedProducts.length)];
 
-        const product = window.productsData.find(p => p.id === productId);
+        const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
             console.error(`[prescriptions.js] No product found for generatePrescription: ${productId}`);
             return null;
@@ -130,7 +135,7 @@ window.prescriptions = {
             doctorName: window.generateDoctorName(),
             refillsAllowed: Math.floor(Math.random() * 3), // 0-2 refills
             assignedEmployeeId: null,
-            createdAt: window.clock.now()
+            createdAt: window.clock.now(),
         };
         this.activePrescriptions.push(newPrescription);
 
@@ -149,9 +154,11 @@ window.prescriptions = {
     // the stored product/dosage/etc. from the RefillRecord instead of
     // picking a random product.
     generateRefillPrescription(customerId, record) {
-        console.log(`[prescriptions.js] Generating refill prescription for customer: ${customerId} (product ${record.productId})`);
+        console.log(
+            `[prescriptions.js] Generating refill prescription for customer: ${customerId} (product ${record.productId})`,
+        );
 
-        const product = window.productsData.find(p => p.id === record.productId);
+        const product = window.productsData.find((p) => p.id === record.productId);
         if (!product) {
             console.error(`[prescriptions.js] No product found for generateRefillPrescription: ${record.productId}`);
             return null;
@@ -170,11 +177,13 @@ window.prescriptions = {
             refillsAllowed: Math.max(0, record.refillsAvailable - 1),
             assignedEmployeeId: null,
             createdAt: window.clock.now(),
-            isRefill: true
+            isRefill: true,
         };
         this.activePrescriptions.push(newPrescription);
 
-        console.log(`[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`);
+        console.log(
+            `[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`,
+        );
 
         buildTasksForPrescription(newPrescription, product);
 
@@ -185,9 +194,11 @@ window.prescriptions = {
     },
 
     createFillTaskForPrescription(prescription) {
-        const product = window.productsData.find(p => p.id === prescription.productId);
+        const product = window.productsData.find((p) => p.id === prescription.productId);
         if (!product) {
-            console.error(`[prescriptions.js] No product found for createFillTaskForPrescription: ${prescription.productId}`);
+            console.error(
+                `[prescriptions.js] No product found for createFillTaskForPrescription: ${prescription.productId}`,
+            );
             return null;
         }
 
@@ -204,7 +215,7 @@ window.prescriptions = {
             assignedTo: null,
             requiredEquipment: product.equipmentNeeded,
             quantityNeeded: Math.max(1, prescription.dosage),
-            customerId: prescription.customerId
+            customerId: prescription.customerId,
         };
         window.taskManager.addTask(fillTask);
         console.log(`[prescriptions.js] Created fillPrescription task: ${fillTask.id}`);
@@ -215,7 +226,7 @@ window.prescriptions = {
     updatePrescriptionStatus(prescriptionId, newStatus) {
         console.log(`[prescriptions.js] Updating prescription status: ${prescriptionId} to ${newStatus}`);
 
-        const prescription = this.activePrescriptions.find(p => p.id === prescriptionId);
+        const prescription = this.activePrescriptions.find((p) => p.id === prescriptionId);
         if (prescription) {
             prescription.status = newStatus;
             window.ui.updatePrescriptions();
@@ -255,7 +266,7 @@ window.prescriptions = {
             progress: 0,
             roleNeeded: 'Cashier',
             status: 'pending',
-            assignedTo: null
+            assignedTo: null,
         };
         window.taskManager.addTask(checkoutTask);
         console.log(`[prescriptions.js] Created checkout task: ${checkoutTask.id}`);
@@ -276,7 +287,7 @@ window.prescriptions = {
             progress: 0,
             roleNeeded: 'Pharmacist',
             status: 'pending',
-            assignedTo: null
+            assignedTo: null,
         };
         window.taskManager.addTask(consultationTask);
         console.log(`[prescriptions.js] Created consultation task: ${consultationTask.id}`);
@@ -286,7 +297,7 @@ window.prescriptions = {
     },
 
     getPrescription(prescriptionId) {
-        return this.activePrescriptions.find(p => p.id === prescriptionId);
+        return this.activePrescriptions.find((p) => p.id === prescriptionId);
     },
 
     // Helper functions for prescription generation
@@ -298,7 +309,7 @@ window.prescriptions = {
             'four times daily',
             'every 8 hours',
             'every 12 hours',
-            'as needed'
+            'as needed',
         ];
         return frequencies[Math.floor(Math.random() * frequencies.length)];
     },
@@ -306,12 +317,14 @@ window.prescriptions = {
     // Remove prescriptions when customers leave
     removePrescriptionsByCustomer(customerId) {
         // Find prescriptions for this customer
-        const customerPrescriptions = this.activePrescriptions.filter(p => p.customerId === customerId);
+        const customerPrescriptions = this.activePrescriptions.filter((p) => p.customerId === customerId);
 
         // Remove them from active prescriptions
-        this.activePrescriptions = this.activePrescriptions.filter(p => p.customerId !== customerId);
+        this.activePrescriptions = this.activePrescriptions.filter((p) => p.customerId !== customerId);
 
-        console.log(`[prescriptions.js] Removed ${customerPrescriptions.length} prescriptions for departed customer ${customerId}`);
+        console.log(
+            `[prescriptions.js] Removed ${customerPrescriptions.length} prescriptions for departed customer ${customerId}`,
+        );
 
         // Update UI if needed
         window.ui.updatePrescriptions();
@@ -320,7 +333,7 @@ window.prescriptions = {
     // Returns the first refill opportunity that's both owed and past its
     // cooldown, or undefined if none is ready yet.
     getEligibleRefillRecord(currentTime) {
-        return this.refillRegistry.find(r => r.refillsAvailable > 0 && r.eligibleAfterTime <= currentTime);
+        return this.refillRegistry.find((r) => r.refillsAvailable > 0 && r.eligibleAfterTime <= currentTime);
     },
 
     // Removes and returns a refill record - it's being turned into an
@@ -329,10 +342,12 @@ window.prescriptions = {
     // left, prescriptionFilled will register a fresh record for it when it
     // gets filled, continuing the chain.
     consumeRefillRecord(recordId) {
-        const index = this.refillRegistry.findIndex(r => r.id === recordId);
+        const index = this.refillRegistry.findIndex((r) => r.id === recordId);
         if (index === -1) return undefined;
         const [record] = this.refillRegistry.splice(index, 1);
-        console.log(`[prescriptions.js] Consumed refill record ${recordId} for ${record.customerFirstName} ${record.customerLastName}`);
+        console.log(
+            `[prescriptions.js] Consumed refill record ${recordId} for ${record.customerFirstName} ${record.customerLastName}`,
+        );
         return record;
-    }
+    },
 };

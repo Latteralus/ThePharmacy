@@ -25,7 +25,7 @@ interface DomCache {
 
 type UpdateType = 'time' | 'finances' | 'customers' | 'prescriptions' | 'operations' | 'employees';
 
-window.ui = (function(): UiApi {
+window.ui = (function (): UiApi {
     // Cache DOM references to minimize DOM lookups
     const domCache: DomCache = {
         // Time display
@@ -52,12 +52,12 @@ window.ui = (function(): UiApi {
             pendingOrders: -1,
             customerCount: -1,
             prescriptionCount: -1,
-            lastCustomerStatus: null
-        }
+            lastCustomerStatus: null,
+        },
     };
 
     // Update batching to minimize DOM operations
-    let updateQueue = new Set<UpdateType>();
+    const updateQueue = new Set<UpdateType>();
     let updateScheduled = false;
 
     let initialized = false;
@@ -72,7 +72,7 @@ window.ui = (function(): UiApi {
         // body-wide MutationObserver.
         if (initialized) return;
         initialized = true;
-        console.log("[ui.js] Initializing UI system");
+        console.log('[ui.js] Initializing UI system');
 
         // Add a mutation observer to update the DOM cache when the page changes
         const observer = new MutationObserver((mutations) => {
@@ -83,10 +83,12 @@ window.ui = (function(): UiApi {
                     // Important elements that might have been added
                     for (const node of Array.from(mutation.addedNodes)) {
                         const el = node as Element;
-                        if (el.id === 'gameTime' ||
+                        if (
+                            el.id === 'gameTime' ||
                             el.id === 'currentCash' ||
                             el.id === 'customersList' ||
-                            el.id === 'prescriptionsList') {
+                            el.id === 'prescriptionsList'
+                        ) {
                             needsRefresh = true;
                             break;
                         }
@@ -105,10 +107,12 @@ window.ui = (function(): UiApi {
                 if (mutation.removedNodes.length > 0) {
                     for (const node of Array.from(mutation.removedNodes)) {
                         const el = node as Element;
-                        if (el.id === 'gameTime' ||
+                        if (
+                            el.id === 'gameTime' ||
                             el.id === 'currentCash' ||
                             el.id === 'customersList' ||
-                            el.id === 'prescriptionsList') {
+                            el.id === 'prescriptionsList'
+                        ) {
                             needsRefresh = true;
                             break;
                         }
@@ -152,7 +156,7 @@ window.ui = (function(): UiApi {
     // Process all queued updates in a single animation frame
     function processUpdates(): void {
         // Process each update type in the queue
-        updateQueue.forEach(updateType => {
+        updateQueue.forEach((updateType) => {
             switch (updateType) {
                 case 'time':
                     updateTimeDisplay();
@@ -281,7 +285,7 @@ window.ui = (function(): UiApi {
         // Use a document fragment for efficient DOM operations
         const fragment = document.createDocumentFragment();
 
-        customers.forEach(customer => {
+        customers.forEach((customer) => {
             const customerItem = document.createElement('div');
             customerItem.className = 'customer-item';
             customerItem.style.border = '1px solid #ddd';
@@ -354,7 +358,7 @@ window.ui = (function(): UiApi {
         // Use a document fragment for efficient DOM operations
         const fragment = document.createDocumentFragment();
 
-        prescriptions.forEach(prescription => {
+        prescriptions.forEach((prescription) => {
             const prescriptionItem = document.createElement('div');
             prescriptionItem.className = 'prescription-item';
             prescriptionItem.style.border = '1px solid #ddd';
@@ -405,7 +409,7 @@ window.ui = (function(): UiApi {
 
             const assignedEmployee = document.createElement('p');
             const assignedEmp = prescription.assignedEmployeeId
-                ? window.employeesData.find(e => e.id === prescription.assignedEmployeeId)
+                ? window.employeesData.find((e) => e.id === prescription.assignedEmployeeId)
                 : undefined;
             assignedEmployee.textContent = `Assigned To: ${assignedEmp ? `${assignedEmp.firstName} ${assignedEmp.lastName}` : 'Unassigned'}`;
             detailsDiv.appendChild(assignedEmployee);
@@ -462,51 +466,51 @@ window.ui = (function(): UiApi {
         formatDateTime,
 
         // Public update methods that use the batching system
-        updateTime: function() {
+        updateTime: function () {
             scheduleUpdate('time');
         },
 
-        updateFinances: function() {
+        updateFinances: function () {
             scheduleUpdate('finances');
         },
 
-        updateCustomers: function() {
+        updateCustomers: function () {
             scheduleUpdate('customers');
         },
 
-        updatePrescriptions: function() {
+        updatePrescriptions: function () {
             scheduleUpdate('prescriptions');
         },
 
         // Updated window.updateUI function with batching
-        updateUI: function(page = "") {
-            if (page === "finances") {
+        updateUI: function (page = '') {
+            if (page === 'finances') {
                 scheduleUpdate('finances');
             }
 
-            if (page === "customers") {
+            if (page === 'customers') {
                 scheduleUpdate('customers');
             }
 
-            if (page === "prescriptions") {
+            if (page === 'prescriptions') {
                 scheduleUpdate('prescriptions');
             }
 
-            if (page === "time") {
+            if (page === 'time') {
                 scheduleUpdate('time');
             }
 
-            if (page === "operations") {
+            if (page === 'operations') {
                 scheduleUpdate('operations');
             }
 
-            if (page === "employees") {
+            if (page === 'employees') {
                 scheduleUpdate('employees');
             }
         },
 
         // Force an immediate update (for critical changes)
-        forceUpdate: function(page) {
+        forceUpdate: function (page) {
             switch (page) {
                 case 'time':
                     updateTimeDisplay();
@@ -524,23 +528,23 @@ window.ui = (function(): UiApi {
         },
 
         // Re-cache DOM elements (call when page structure changes)
-        refreshCache: refreshDomCache
+        refreshCache: refreshDomCache,
     };
 })();
 
 // Bare global alias: most game modules call window.updateUI(page) directly
 // rather than window.ui.updateUI(page).
-window.updateUI = function(page: string): void {
+window.updateUI = function (page: string): void {
     window.ui.updateUI(page);
 };
 
 // Initialize the UI system when the DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     window.ui.init();
 });
 
 // Listen for page changes to refresh the DOM cache
-document.addEventListener('pageChanged', function() {
+document.addEventListener('pageChanged', function () {
     // Wait a moment for the DOM to update
     setTimeout(() => window.ui.refreshCache(), 100);
 });

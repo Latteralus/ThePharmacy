@@ -6,16 +6,17 @@ window.equipmentData = [
         name: 'Mortar and Pestle',
         cost: 500,
         owned: 1,
-        durability: 100,             // starts at 100, degrade over time
-        capacity: 1,                // can only handle 1 task at a time
-        autoPurchaseThreshold: 0,    // if owned < this, auto-buy
-        autoPurchaseAmount: 0,       // how many to buy when auto-purchase triggers
+        durability: 100, // starts at 100, degrade over time
+        capacity: 1, // can only handle 1 task at a time
+        autoPurchaseThreshold: 0, // if owned < this, auto-buy
+        autoPurchaseAmount: 0, // how many to buy when auto-purchase triggers
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["liquid", "cream", "ointment"],
-        isUnlocked() { // Check if research level is high enough
+        workerType: 'technician',
+        dosageForms: ['liquid', 'cream', 'ointment'],
+        isUnlocked() {
+            // Check if research level is high enough
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq002',
@@ -23,15 +24,15 @@ window.equipmentData = [
         cost: 7500,
         owned: 1,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["tablet"],
+        workerType: 'technician',
+        dosageForms: ['tablet'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq003',
@@ -39,15 +40,15 @@ window.equipmentData = [
         cost: 4000,
         owned: 1,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["tablet", "capsule"],
+        workerType: 'technician',
+        dosageForms: ['tablet', 'capsule'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq004',
@@ -55,15 +56,15 @@ window.equipmentData = [
         cost: 6000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["capsule"],
+        workerType: 'technician',
+        dosageForms: ['capsule'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq005',
@@ -71,15 +72,15 @@ window.equipmentData = [
         cost: 1500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["liquid", "suspension", "syrup"],
+        workerType: 'technician',
+        dosageForms: ['liquid', 'suspension', 'syrup'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq006',
@@ -87,15 +88,15 @@ window.equipmentData = [
         cost: 200,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["liquid", "suspension", "syrup", "injectable"],
+        workerType: 'technician',
+        dosageForms: ['liquid', 'suspension', 'syrup', 'injectable'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq007',
@@ -103,15 +104,15 @@ window.equipmentData = [
         cost: 3500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 1,
-        workerType: "technician",
-        dosageForms: ["suspension"],
+        workerType: 'technician',
+        dosageForms: ['suspension'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq008',
@@ -119,15 +120,15 @@ window.equipmentData = [
         cost: 3000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["syrup"],
+        workerType: 'technician',
+        dosageForms: ['syrup'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq009',
@@ -135,15 +136,15 @@ window.equipmentData = [
         cost: 8000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 1,
-        workerType: "technician",
-        dosageForms: ["tablet"],
+        workerType: 'technician',
+        dosageForms: ['tablet'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq010',
@@ -151,15 +152,15 @@ window.equipmentData = [
         cost: 2500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 2,
-        workerType: "technician",
-        dosageForms: ["oil", "lotion"],
+        workerType: 'technician',
+        dosageForms: ['oil', 'lotion'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq011',
@@ -167,15 +168,15 @@ window.equipmentData = [
         cost: 10000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 1,
-        workerType: "technician",
-        dosageForms: ["capsule"],
+        workerType: 'technician',
+        dosageForms: ['capsule'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq012',
@@ -183,15 +184,15 @@ window.equipmentData = [
         cost: 4500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 2,
-        workerType: "technician",
-        dosageForms: ["cream"],
+        workerType: 'technician',
+        dosageForms: ['cream'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq013',
@@ -203,11 +204,11 @@ window.equipmentData = [
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 0,
-        workerType: "technician",
-        dosageForms: ["cream", "ointment", "gel"],
+        workerType: 'technician',
+        dosageForms: ['cream', 'ointment', 'gel'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq014',
@@ -215,15 +216,15 @@ window.equipmentData = [
         cost: 5500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 2,
-        workerType: "technician",
-        dosageForms: ["ointment"],
+        workerType: 'technician',
+        dosageForms: ['ointment'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq015',
@@ -231,15 +232,15 @@ window.equipmentData = [
         cost: 12000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 3,
-        workerType: "technician",
-        dosageForms: ["injectable", "eye drops"],
+        workerType: 'technician',
+        dosageForms: ['injectable', 'eye drops'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq016',
@@ -247,15 +248,15 @@ window.equipmentData = [
         cost: 9000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 3,
-        workerType: "technician",
-        dosageForms: ["injectable", "eye drops"],
+        workerType: 'technician',
+        dosageForms: ['injectable', 'eye drops'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq017',
@@ -263,15 +264,15 @@ window.equipmentData = [
         cost: 4000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 2,
-        workerType: "technician",
-        dosageForms: ["gel"],
+        workerType: 'technician',
+        dosageForms: ['gel'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq018',
@@ -279,15 +280,15 @@ window.equipmentData = [
         cost: 3500,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 4,
-        workerType: "technician",
-        dosageForms: ["lotion"],
+        workerType: 'technician',
+        dosageForms: ['lotion'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq019',
@@ -295,15 +296,15 @@ window.equipmentData = [
         cost: 15000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 5,
-        workerType: "technician",
-        dosageForms: ["inhaler"],
+        workerType: 'technician',
+        dosageForms: ['inhaler'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq020',
@@ -311,15 +312,15 @@ window.equipmentData = [
         cost: 11000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 5,
-        workerType: "technician",
-        dosageForms: ["nasal spray"],
+        workerType: 'technician',
+        dosageForms: ['nasal spray'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq021',
@@ -327,15 +328,15 @@ window.equipmentData = [
         cost: 2000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 6,
-        workerType: "technician",
-        dosageForms: ["powder"],
+        workerType: 'technician',
+        dosageForms: ['powder'],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
+        },
     },
     {
         id: 'eq022',
@@ -343,14 +344,27 @@ window.equipmentData = [
         cost: 6000,
         owned: 0,
         durability: 100,
-        capacity: 1,                // Number of workers that can use it at once
+        capacity: 1, // Number of workers that can use it at once
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
         researchLevelRequired: 6,
-        workerType: "technician",
-        dosageForms: ["tablet", "capsule", "liquid", "cream", "ointment", "gel", "powder", "inhaler", "nasal spray", "lotion", "syrup", "suspension"],
+        workerType: 'technician',
+        dosageForms: [
+            'tablet',
+            'capsule',
+            'liquid',
+            'cream',
+            'ointment',
+            'gel',
+            'powder',
+            'inhaler',
+            'nasal spray',
+            'lotion',
+            'syrup',
+            'suspension',
+        ],
         isUnlocked() {
             return window.researchData.currentLevel >= this.researchLevelRequired;
-        }
-    }
+        },
+    },
 ];

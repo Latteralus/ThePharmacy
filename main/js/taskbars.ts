@@ -5,15 +5,15 @@
 // from main.js's render loop) then interpolates and updates it in place
 // between real taskManager ticks.
 
-(function() {
+(function () {
     // Task type colors - customize as needed
     const taskTypeColors: Record<string, string> = {
-        'fillPrescription': '#4caf50', // Green
-        'customerInteraction': '#2196f3', // Blue
-        'consultation': '#9c27b0', // Purple
-        'compound': '#ff9800', // Orange
-        'production': '#795548', // Brown
-        'default': '#607d8b' // Gray (fallback)
+        fillPrescription: '#4caf50', // Green
+        customerInteraction: '#2196f3', // Blue
+        consultation: '#9c27b0', // Purple
+        compound: '#ff9800', // Orange
+        production: '#795548', // Brown
+        default: '#607d8b', // Gray (fallback)
     };
 
     // Per-task interpolation state, keyed by task id
@@ -31,16 +31,16 @@
 
         const progressBars = document.querySelectorAll<HTMLElement>('.task-progress-bar');
 
-        progressBars.forEach(progressBar => {
+        progressBars.forEach((progressBar) => {
             const taskId = progressBar.dataset.taskId;
             if (!taskId) return;
 
-            const task = window.taskManager?.tasks?.find(t => t && t.id === taskId);
+            const task = window.taskManager?.tasks?.find((t) => t && t.id === taskId);
 
             if (task && task.status === 'inProgress') {
                 if (!progressTracker.has(taskId)) {
                     progressTracker.set(taskId, {
-                        velocity: task.totalTime > 0 ? 1 / task.totalTime : 0 // Units per minute
+                        velocity: task.totalTime > 0 ? 1 / task.totalTime : 0, // Units per minute
                     });
                 }
 
@@ -48,7 +48,7 @@
                 const elapsedMinutes = timeSinceLastUpdate / 60000; // ms to minutes
                 const predictedProgress = Math.min(
                     task.totalTime,
-                    task.progress + (elapsedMinutes * trackedState.velocity)
+                    task.progress + elapsedMinutes * trackedState.velocity,
                 );
 
                 updateProgressBarUI(progressBar, predictedProgress, task);
@@ -180,12 +180,18 @@
         if (!type) return 'Unknown';
 
         switch (type) {
-            case 'fillPrescription': return 'Filling Prescription';
-            case 'customerInteraction': return 'Customer Interaction';
-            case 'consultation': return 'Consultation';
-            case 'compound': return 'Compounding';
-            case 'production': return 'Production';
-            default: return type.charAt(0).toUpperCase() + type.slice(1);
+            case 'fillPrescription':
+                return 'Filling Prescription';
+            case 'customerInteraction':
+                return 'Customer Interaction';
+            case 'consultation':
+                return 'Consultation';
+            case 'compound':
+                return 'Compounding';
+            case 'production':
+                return 'Production';
+            default:
+                return type.charAt(0).toUpperCase() + type.slice(1);
         }
     }
 
@@ -243,12 +249,12 @@
     }
 
     function init(): void {
-        console.log("[taskbars] Initializing task progress bars");
+        console.log('[taskbars] Initializing task progress bars');
         addTaskBarStyles();
         lastSystemUpdate = performance.now();
     }
 
-    window.addEventListener('DOMContentLoaded', function() {
+    window.addEventListener('DOMContentLoaded', function () {
         try {
             init();
         } catch (error) {

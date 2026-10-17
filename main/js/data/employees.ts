@@ -15,9 +15,9 @@ window.employeesData = [
             sales: 50,
         },
         morale: 80, // 0=worst morale, 100=best morale
-        mood: "😀", // Mood icon, updated dynamically
-        hireDate: "2023-01-15", // Date the employee was hired
-        currentTaskId: null     // ID of the task currently assigned to the employee
+        mood: '😀', // Mood icon, updated dynamically
+        hireDate: '2023-01-15', // Date the employee was hired
+        currentTaskId: null, // ID of the task currently assigned to the employee
     },
     {
         id: 'emp002',
@@ -33,15 +33,15 @@ window.employeesData = [
             sales: 30,
         },
         morale: 90,
-        mood: "😀",
-        hireDate: "2023-05-20",
-        currentTaskId: null
+        mood: '😀',
+        hireDate: '2023-05-20',
+        currentTaskId: null,
     },
     {
         id: 'emp003',
         firstName: 'Carlos',
         lastName: 'Garcia',
-        role: 'Cashier',  // Changed from 'Sales Rep' to 'Cashier'
+        role: 'Cashier', // Changed from 'Sales Rep' to 'Cashier'
         salary: 70000,
         skills: {
             compounding: 20,
@@ -51,17 +51,17 @@ window.employeesData = [
             sales: 90,
         },
         morale: 60,
-        mood: "💤",
-        hireDate: "2023-08-10",
-        currentTaskId: null
-    }
+        mood: '💤',
+        hireDate: '2023-08-10',
+        currentTaskId: null,
+    },
     // ... more employees (optional)
 ];
 
 window.employees = {
     // Get an employee by ID
     getEmployeeById(employeeId) {
-        return window.employeesData.find(employee => employee.id === employeeId);
+        return window.employeesData.find((employee) => employee.id === employeeId);
     },
 
     // Get an employee's full name
@@ -106,19 +106,18 @@ window.employees = {
 
         // 2) Apply task-specific skill
         //    (You might choose to further reduce or increase adjustedTime based on specific relevant skill)
-        if (taskType === "compounding") {
+        if (taskType === 'compounding') {
             // Slight additional reduction if compounding is high
             const compSkill = employee.skills.compounding; // ~0..100
             const compPercent = Math.min(compSkill, 100) / 100;
             // e.g. up to 25% reduction if compSkill=100
-            adjustedTime *= (1 - (0.25 * compPercent));
-        }
-        else if (taskType === "dispensing") {
+            adjustedTime *= 1 - 0.25 * compPercent;
+        } else if (taskType === 'dispensing') {
             const disp = employee.skills.dispensing;
             const cust = employee.skills.customerService;
             const dispPercent = Math.min(disp + cust, 200) / 200;
             // e.g. if disp+cust=200 => 1 => up to 25% reduction
-            adjustedTime *= (1 - (0.25 * dispPercent));
+            adjustedTime *= 1 - 0.25 * dispPercent;
         }
         // ... similarly handle other task types if desired
 
@@ -145,15 +144,15 @@ window.employees = {
 
             // Update mood icon
             if (employee.morale >= 90) {
-                employee.mood = "😀";
+                employee.mood = '😀';
             } else if (employee.morale >= 70) {
-                employee.mood = "😐";
+                employee.mood = '😐';
             } else if (employee.morale >= 50) {
-                employee.mood = "💤";
+                employee.mood = '💤';
             } else if (employee.morale >= 20) {
-                employee.mood = "☹️";
+                employee.mood = '☹️';
             } else {
-                employee.mood = "😡";
+                employee.mood = '😡';
             }
         }
     },
@@ -184,34 +183,32 @@ window.employees = {
                 type: 'expense',
                 category: 'hiring',
                 amount: hiringFee,
-                description: `Hiring fee for new ${skillLevel} ${role}`
+                description: `Hiring fee for new ${skillLevel} ${role}`,
             });
 
             // Generate candidates
-            let candidates: Employee[] = [];
+            const candidates: Employee[] = [];
             for (let i = 0; i < 5; i++) {
                 const skills: Partial<EmployeeSkills> = {};
                 if (role === 'Pharmacist') {
-                    skills.compounding = (skillLevel === 'Novice' ? 40 : (skillLevel === 'Intermediate' ? 60 : 80));
-                    skills.dispensing = (skillLevel === 'Novice' ? 50 : (skillLevel === 'Intermediate' ? 70 : 90));
-                    skills.customerService = (skillLevel === 'Novice' ? 40 : (skillLevel === 'Intermediate' ? 60 : 80));
-                    skills.inventoryManagement = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
-                    skills.sales = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
-                }
-                else if (role === 'Lab Technician') {
-                    skills.compounding = (skillLevel === 'Novice' ? 50 : (skillLevel === 'Intermediate' ? 70 : 90));
-                    skills.dispensing = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
-                    skills.customerService = (skillLevel === 'Novice' ? 20 : (skillLevel === 'Intermediate' ? 40 : 60));
-                    skills.inventoryManagement = (skillLevel === 'Novice' ? 40 : (skillLevel === 'Intermediate' ? 60 : 80));
-                    skills.sales = (skillLevel === 'Novice' ? 10 : (skillLevel === 'Intermediate' ? 20 : 30));
-                }
-                else if (role === 'Cashier') {
+                    skills.compounding = skillLevel === 'Novice' ? 40 : skillLevel === 'Intermediate' ? 60 : 80;
+                    skills.dispensing = skillLevel === 'Novice' ? 50 : skillLevel === 'Intermediate' ? 70 : 90;
+                    skills.customerService = skillLevel === 'Novice' ? 40 : skillLevel === 'Intermediate' ? 60 : 80;
+                    skills.inventoryManagement = skillLevel === 'Novice' ? 30 : skillLevel === 'Intermediate' ? 50 : 70;
+                    skills.sales = skillLevel === 'Novice' ? 30 : skillLevel === 'Intermediate' ? 50 : 70;
+                } else if (role === 'Lab Technician') {
+                    skills.compounding = skillLevel === 'Novice' ? 50 : skillLevel === 'Intermediate' ? 70 : 90;
+                    skills.dispensing = skillLevel === 'Novice' ? 30 : skillLevel === 'Intermediate' ? 50 : 70;
+                    skills.customerService = skillLevel === 'Novice' ? 20 : skillLevel === 'Intermediate' ? 40 : 60;
+                    skills.inventoryManagement = skillLevel === 'Novice' ? 40 : skillLevel === 'Intermediate' ? 60 : 80;
+                    skills.sales = skillLevel === 'Novice' ? 10 : skillLevel === 'Intermediate' ? 20 : 30;
+                } else if (role === 'Cashier') {
                     // Replaces 'Sales Rep'
-                    skills.compounding = (skillLevel === 'Novice' ? 10 : (skillLevel === 'Intermediate' ? 20 : 30));
-                    skills.dispensing = (skillLevel === 'Novice' ? 20 : (skillLevel === 'Intermediate' ? 40 : 60));
-                    skills.customerService = (skillLevel === 'Novice' ? 50 : (skillLevel === 'Intermediate' ? 70 : 90));
-                    skills.inventoryManagement = (skillLevel === 'Novice' ? 30 : (skillLevel === 'Intermediate' ? 50 : 70));
-                    skills.sales = (skillLevel === 'Novice' ? 20 : (skillLevel === 'Intermediate' ? 40 : 60));
+                    skills.compounding = skillLevel === 'Novice' ? 10 : skillLevel === 'Intermediate' ? 20 : 30;
+                    skills.dispensing = skillLevel === 'Novice' ? 20 : skillLevel === 'Intermediate' ? 40 : 60;
+                    skills.customerService = skillLevel === 'Novice' ? 50 : skillLevel === 'Intermediate' ? 70 : 90;
+                    skills.inventoryManagement = skillLevel === 'Novice' ? 30 : skillLevel === 'Intermediate' ? 50 : 70;
+                    skills.sales = skillLevel === 'Novice' ? 20 : skillLevel === 'Intermediate' ? 40 : 60;
                 }
 
                 candidates.push({
@@ -227,14 +224,13 @@ window.employees = {
                     morale: 100,
                     mood: '😀',
                     hireDate: new Date(window.gameState.currentDate),
-                    currentTaskId: null
+                    currentTaskId: null,
                 });
             }
 
-            console.log("Candidates generated:", candidates);
+            console.log('Candidates generated:', candidates);
             window.displayEmployeeCandidates(candidates);
-        }
-        else {
+        } else {
             alert('Insufficient funds to hire a new employee.');
         }
     },
@@ -242,19 +238,21 @@ window.employees = {
     // Add an employee to the employeesData array
     hireSelectedEmployee(employeeData) {
         window.employeesData.push(employeeData);
-        window.updateUI("employees");
-        alert(`Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`);
+        window.updateUI('employees');
+        alert(
+            `Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`,
+        );
     },
 
     // Fire an employee
     fireEmployee(employeeId) {
-        const employeeIndex = window.employeesData.findIndex(emp => emp.id === employeeId);
+        const employeeIndex = window.employeesData.findIndex((emp) => emp.id === employeeId);
         if (employeeIndex > -1) {
             window.employeesData.splice(employeeIndex, 1);
-            window.updateUI("employees");
+            window.updateUI('employees');
             console.log(`Employee with ID ${employeeId} has been fired.`);
         } else {
             console.error(`Employee not found with ID: ${employeeId}`);
         }
-    }
+    },
 };

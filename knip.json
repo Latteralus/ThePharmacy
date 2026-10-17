@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["preload.js", "main/**/*.ts"],
+  "project": ["*.js", "main/**/*.ts", "test/**/*.js"],
+  "ignoreDependencies": ["chart.js"]
+}

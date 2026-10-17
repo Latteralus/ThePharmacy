@@ -3,18 +3,18 @@
 window.helpers = {
     // Calculates how many units of a product can be made based on available materials
     calculatePotentialProduction(productId: string): number {
-        const product = window.productsData.find(p => p.id === productId);
+        const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
-            console.error("Product not found:", productId);
+            console.error('Product not found:', productId);
             return 0;
         }
 
         let maxPossible = Infinity; // Start with a very large number
 
-        product.ingredients.forEach(ingredient => {
-            const material = window.materialsData.find(m => m.id === ingredient.id);
+        product.ingredients.forEach((ingredient) => {
+            const material = window.materialsData.find((m) => m.id === ingredient.id);
             if (!material) {
-                console.error("Material not found:", ingredient.id);
+                console.error('Material not found:', ingredient.id);
                 maxPossible = 0; // Set to 0 if a required material is not found
                 return; // Exit early
             }
@@ -28,14 +28,14 @@ window.helpers = {
 
     // Calculates the materials needed to make a specified quantity of a product
     calculateMaterialsNeeded(productId: string, quantity: number): Record<string, number> {
-        const product = window.productsData.find(p => p.id === productId);
+        const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
-            console.error("Product not found:", productId);
+            console.error('Product not found:', productId);
             return {};
         }
 
         const materialsNeeded: Record<string, number> = {};
-        product.ingredients.forEach(ingredient => {
+        product.ingredients.forEach((ingredient) => {
             materialsNeeded[ingredient.id] = ingredient.quantity * quantity;
         });
 
@@ -45,7 +45,7 @@ window.helpers = {
     // Handles ordering materials for a product
     orderMaterialsForProduct(productId: string, quantity: number): void {
         if (isNaN(quantity) || quantity <= 0) {
-            alert("Please enter a valid quantity.");
+            alert('Please enter a valid quantity.');
             return;
         }
 
@@ -53,7 +53,7 @@ window.helpers = {
         const totalCost = this.calculateOrderCost(materialsNeeded);
 
         if (totalCost > window.financesData.cash) {
-            alert("Not enough cash to complete the order.");
+            alert('Not enough cash to complete the order.');
             return;
         }
 
@@ -62,7 +62,7 @@ window.helpers = {
 
         // Update material inventory
         for (const materialId in materialsNeeded) {
-            const material = window.materialsData.find(m => m.id === materialId);
+            const material = window.materialsData.find((m) => m.id === materialId);
             if (material) {
                 material.inventory += materialsNeeded[materialId];
             }
@@ -74,12 +74,12 @@ window.helpers = {
             type: 'expense',
             category: 'materials',
             amount: totalCost,
-            description: `Ordered materials for ${quantity} x ${productId}`
+            description: `Ordered materials for ${quantity} x ${productId}`,
         });
 
         // Update UI
-        window.updateUI("inventory");
-        window.updateUI("finances");
+        window.updateUI('inventory');
+        window.updateUI('finances');
 
         // Display success message
         const successMessage = document.createElement('div');
@@ -97,7 +97,7 @@ window.helpers = {
     calculateOrderCost(materialsNeeded: Record<string, number>): number {
         let totalCost = 0;
         for (const materialId in materialsNeeded) {
-            const material = window.materialsData.find(m => m.id === materialId);
+            const material = window.materialsData.find((m) => m.id === materialId);
             if (material) {
                 totalCost += material.cost * materialsNeeded[materialId];
             }
@@ -107,7 +107,8 @@ window.helpers = {
 
     // New helper function to calculate starting wages based on role and skill level
     calculateStartingWage(role: string, skillLevel: string): number {
-        let minWage: number = NaN, maxWage: number = NaN;
+        let minWage: number = NaN,
+            maxWage: number = NaN;
 
         if (role === 'Pharmacist') {
             if (skillLevel === 'Novice') {
@@ -160,5 +161,5 @@ window.helpers = {
 
     generateLastName(): string {
         return window.getRandomLastName();
-    }
+    },
 };

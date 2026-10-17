@@ -10,7 +10,7 @@
 // the old real-time timers keep their 1x duration (60 real seconds became
 // 60 game minutes).
 
-window.clock = (function(): ClockApi {
+window.clock = (function (): ClockApi {
     interface Job {
         id: number;
         fn: () => void;
@@ -45,7 +45,7 @@ window.clock = (function(): ClockApi {
             // A repeating job needs a non-zero period or it would run every tick.
             delayMs: repeat ? Math.max(delayMs, 1) : delayMs,
             repeat,
-            dueAt: t === null ? null : t + delayMs
+            dueAt: t === null ? null : t + delayMs,
         };
         jobs.set(job.id, job);
         return job.id;
@@ -74,14 +74,14 @@ window.clock = (function(): ClockApi {
         // waiting out the gap.
         if (lastTickAt !== null && t < lastTickAt) {
             const shift = t - lastTickAt;
-            jobs.forEach(job => {
+            jobs.forEach((job) => {
                 if (job.dueAt !== null) job.dueAt += shift;
             });
         }
         lastTickAt = t;
 
         const due: Job[] = [];
-        jobs.forEach(job => {
+        jobs.forEach((job) => {
             if (job.dueAt === null) {
                 job.dueAt = t + job.delayMs;
             } else if (job.dueAt <= t) {
@@ -106,7 +106,7 @@ window.clock = (function(): ClockApi {
             try {
                 job.fn();
             } catch (error) {
-                console.error("[clock] Error in scheduled job:", error);
+                console.error('[clock] Error in scheduled job:', error);
             }
         }
     }

@@ -19,25 +19,23 @@ window.renderSidebar = function renderSidebar(): HTMLElement {
         operations: [
             { label: 'Operations', pageName: 'operations', icon: '🏥' },
             { label: 'Customers', pageName: 'customers', icon: '👥' },
-            { label: 'Orders', pageName: 'orders', icon: '📋' }
+            { label: 'Orders', pageName: 'orders', icon: '📋' },
         ],
         inventory: [
             { label: 'Inventory', pageName: 'inventory', icon: '📦' },
             { label: 'Marketplace', pageName: 'marketplace', icon: '🛒' },
-            { label: 'Equipment', pageName: 'equipment', icon: '⚗️' }
+            { label: 'Equipment', pageName: 'equipment', icon: '⚗️' },
         ],
         management: [
             { label: 'Employees', pageName: 'employees', icon: '👨‍⚕️' },
-            { label: 'Finances', pageName: 'finances', icon: '💰' }
+            { label: 'Finances', pageName: 'finances', icon: '💰' },
         ],
         development: [
             { label: 'Research', pageName: 'research', icon: '🔬' },
             { label: 'Marketing', pageName: 'marketing', icon: '📢' },
-            { label: 'Statistics', pageName: 'statistics', icon: '📊' }
+            { label: 'Statistics', pageName: 'statistics', icon: '📊' },
         ],
-        system: [
-            { label: 'Settings', pageName: 'settings', icon: '⚙️' }
-        ]
+        system: [{ label: 'Settings', pageName: 'settings', icon: '⚙️' }],
     };
 
     // Function to create nav items with icons
@@ -75,7 +73,7 @@ window.renderSidebar = function renderSidebar(): HTMLElement {
         navLinks.appendChild(categoryHeader);
 
         // Add category items
-        items.forEach(item => {
+        items.forEach((item) => {
             navLinks.appendChild(createNavItem(item));
         });
     });
@@ -222,9 +220,9 @@ window.renderSidebar = function renderSidebar(): HTMLElement {
 };
 
 // Update active nav item function
-window.updateActiveNavItem = function(pageName: string): void {
+window.updateActiveNavItem = function (pageName: string): void {
     const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
+    navItems.forEach((item) => {
         item.classList.remove('active');
     });
 
@@ -235,7 +233,7 @@ window.updateActiveNavItem = function(pageName: string): void {
 };
 
 // Function to update sidebar reputation display
-window.updateSidebarReputation = function(): void {
+window.updateSidebarReputation = function (): void {
     const reputationElement = document.getElementById('sidebar-reputation');
     if (reputationElement && window.brandReputation) {
         reputationElement.textContent = String(Math.round(window.brandReputation.reputationScore));

@@ -11,9 +11,9 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     const title = document.createElement('h2');
     title.textContent = 'Employee Management';
     container.appendChild(title);
-    
+
     const subtitle = document.createElement('p');
-    subtitle.textContent = 'Hire, manage, and assign employees to maximize your pharmacy\'s productivity.';
+    subtitle.textContent = "Hire, manage, and assign employees to maximize your pharmacy's productivity.";
     container.appendChild(subtitle);
 
     // Tabs Container
@@ -45,12 +45,12 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     // --------------------------------------------------------------
     // EMPLOYEES TAB CONTENT
     // --------------------------------------------------------------
-    
+
     // Staff Summary Cards
     const summaryContainer = document.createElement('div');
     summaryContainer.className = 'staff-summary-container';
-    
-    // Total Staff 
+
+    // Total Staff
     const totalStaffCard = document.createElement('div');
     totalStaffCard.className = 'summary-card';
     totalStaffCard.innerHTML = `
@@ -60,9 +60,9 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
         </div>
     `;
     summaryContainer.appendChild(totalStaffCard);
-    
+
     // Daily Wage
-    const dailyWageTotal = window.employeesData.reduce((total, emp) => total + (emp.salary / 30), 0);
+    const dailyWageTotal = window.employeesData.reduce((total, emp) => total + emp.salary / 30, 0);
     const dailyWageCard = document.createElement('div');
     dailyWageCard.className = 'summary-card';
     dailyWageCard.innerHTML = `
@@ -72,7 +72,7 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
         </div>
     `;
     summaryContainer.appendChild(dailyWageCard);
-    
+
     // Average Morale
     const avgMorale = window.employeesData.reduce((total, emp) => total + emp.morale, 0) / window.employeesData.length;
     const moraleCard = document.createElement('div');
@@ -84,19 +84,19 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
         </div>
     `;
     summaryContainer.appendChild(moraleCard);
-    
+
     employeesTabContent.appendChild(summaryContainer);
 
     // Search Bar
     const searchContainer = document.createElement('div');
     searchContainer.className = 'search-container';
-    
+
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.placeholder = 'Search employees...';
     searchInput.className = 'search-input';
     searchContainer.appendChild(searchInput);
-    
+
     employeesTabContent.appendChild(searchContainer);
 
     // Employee Cards Container
@@ -107,80 +107,80 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     // --------------------------------------------------------------
     // HIRE TAB CONTENT
     // --------------------------------------------------------------
-    
+
     // Job Posting Section
     const jobPostingSection = document.createElement('div');
     jobPostingSection.className = 'job-posting-section';
-    
+
     const jobPostingTitle = document.createElement('h3');
     jobPostingTitle.textContent = 'Create Job Posting';
     jobPostingSection.appendChild(jobPostingTitle);
-    
+
     const jobPostingDescription = document.createElement('p');
     jobPostingDescription.textContent = 'Select the role and experience level you want to hire for.';
     jobPostingSection.appendChild(jobPostingDescription);
-    
+
     // Role Selection
     const roleSelectionContainer = document.createElement('div');
     roleSelectionContainer.className = 'form-group';
-    
+
     const roleSelectLabel = document.createElement('label');
     roleSelectLabel.textContent = 'Position:';
     roleSelectLabel.className = 'form-label';
     roleSelectionContainer.appendChild(roleSelectLabel);
-    
+
     const roleSelect = document.createElement('select');
     roleSelect.className = 'form-select';
-    
+
     const availableRoles = ['Pharmacist', 'Lab Technician', 'Cashier'];
-    availableRoles.forEach(role => {
+    availableRoles.forEach((role) => {
         const option = document.createElement('option');
         option.value = role;
         option.text = role;
         roleSelect.appendChild(option);
     });
-    
+
     roleSelectionContainer.appendChild(roleSelect);
     jobPostingSection.appendChild(roleSelectionContainer);
-    
+
     // Experience Level Selection
     const skillLevelContainer = document.createElement('div');
     skillLevelContainer.className = 'form-group';
-    
+
     const skillLevelLabel = document.createElement('label');
     skillLevelLabel.textContent = 'Experience Level:';
     skillLevelLabel.className = 'form-label';
     skillLevelContainer.appendChild(skillLevelLabel);
-    
+
     const skillLevelSelect = document.createElement('select');
     skillLevelSelect.className = 'form-select';
-    
+
     const skillLevels = [
         { value: 'Novice', text: 'Entry Level' },
         { value: 'Intermediate', text: 'Experienced' },
-        { value: 'Skilled', text: 'Senior' }
+        { value: 'Skilled', text: 'Senior' },
     ];
-    
-    skillLevels.forEach(level => {
+
+    skillLevels.forEach((level) => {
         const option = document.createElement('option');
         option.value = level.value;
         option.text = level.text;
         skillLevelSelect.appendChild(option);
     });
-    
+
     skillLevelContainer.appendChild(skillLevelSelect);
     jobPostingSection.appendChild(skillLevelContainer);
-    
+
     // Hiring Fee Display
     const hiringFeeContainer = document.createElement('div');
     hiringFeeContainer.className = 'hiring-fee-container';
-    
+
     const hiringFeeLabel = document.createElement('span');
     hiringFeeLabel.textContent = 'Hiring Fee: $500';
     hiringFeeContainer.appendChild(hiringFeeLabel);
-    
+
     jobPostingSection.appendChild(hiringFeeContainer);
-    
+
     // Generate Candidates Button
     const generateCandidatesButton = document.createElement('button');
     generateCandidatesButton.className = 'primary-button';
@@ -190,23 +190,23 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
         const skillLevel = skillLevelSelect.value;
         window.employees.hireEmployee(role, skillLevel);
     };
-    
+
     jobPostingSection.appendChild(generateCandidatesButton);
-    
+
     hireTabContent.appendChild(jobPostingSection);
-    
+
     // Candidates Container
     const candidatesSection = document.createElement('div');
     candidatesSection.className = 'candidates-section';
-    
+
     const candidatesTitle = document.createElement('h3');
     candidatesTitle.textContent = 'Available Candidates';
     candidatesSection.appendChild(candidatesTitle);
-    
+
     const candidatesContainer = document.createElement('div');
     candidatesContainer.className = 'candidates-container';
     candidatesSection.appendChild(candidatesContainer);
-    
+
     hireTabContent.appendChild(candidatesSection);
 
     // --------------------------------------------------------------
@@ -216,15 +216,17 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     // Render Employee Cards
     function renderEmployees(searchText: string = ''): void {
         employeesGrid.innerHTML = ''; // Clear existing cards
-        
-        let filteredEmployees = window.employeesData.filter(employee => {
+
+        const filteredEmployees = window.employeesData.filter((employee) => {
             if (!searchText) return true;
-            
+
             const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-            return fullName.includes(searchText.toLowerCase()) || 
-                   employee.role.toLowerCase().includes(searchText.toLowerCase());
+            return (
+                fullName.includes(searchText.toLowerCase()) ||
+                employee.role.toLowerCase().includes(searchText.toLowerCase())
+            );
         });
-        
+
         if (filteredEmployees.length === 0) {
             const noResults = document.createElement('div');
             noResults.className = 'no-results';
@@ -232,90 +234,90 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
             employeesGrid.appendChild(noResults);
             return;
         }
-        
-        filteredEmployees.forEach(employee => {
+
+        filteredEmployees.forEach((employee) => {
             const card = createEmployeeCard(employee);
             employeesGrid.appendChild(card);
         });
     }
-    
+
     // Create an employee card
     function createEmployeeCard(employee: Employee): HTMLDivElement {
         const card = document.createElement('div');
         card.className = 'employee-card';
-        
+
         // Header with name and role
         const header = document.createElement('div');
         header.className = 'card-header';
-        
+
         const name = document.createElement('h3');
         name.textContent = `${employee.firstName} ${employee.lastName}`;
         header.appendChild(name);
-        
+
         const role = document.createElement('div');
         role.className = 'employee-role';
         role.textContent = employee.role;
         header.appendChild(role);
-        
+
         // Status badge (busy or available)
         const status = document.createElement('div');
         status.className = `status-badge ${employee.currentTaskId ? 'busy' : 'available'}`;
         status.textContent = employee.currentTaskId ? 'Busy' : 'Available';
         header.appendChild(status);
-        
+
         card.appendChild(header);
-        
+
         // Details section
         const details = document.createElement('div');
         details.className = 'employee-details';
-        
+
         // Salary
         const salary = document.createElement('div');
         salary.className = 'detail-item';
         salary.innerHTML = `<span class="label">Salary:</span> $${employee.salary.toLocaleString()}/year`;
         details.appendChild(salary);
-        
+
         // Morale with colored indicator and mood emoji
         const morale = document.createElement('div');
         morale.className = 'detail-item';
-        
+
         let moraleColor = '#f44336'; // Red
-        if (employee.morale >= 70) moraleColor = '#4caf50'; // Green
+        if (employee.morale >= 70)
+            moraleColor = '#4caf50'; // Green
         else if (employee.morale >= 40) moraleColor = '#ff9800'; // Orange
-        
+
         morale.innerHTML = `
             <span class="label">Morale:</span> 
             <span style="color: ${moraleColor};">${employee.morale}%</span> 
             <span class="mood-emoji">${employee.mood}</span>`;
         details.appendChild(morale);
-        
+
         // Hired date
         const hired = document.createElement('div');
         hired.className = 'detail-item';
         hired.innerHTML = `<span class="label">Hired:</span> ${new Date(employee.hireDate).toLocaleDateString()}`;
         details.appendChild(hired);
-        
+
         card.appendChild(details);
-        
+
         // Skills section
         const skillsSection = document.createElement('div');
         skillsSection.className = 'skills-section';
-        
+
         const skillsHeader = document.createElement('h4');
         skillsHeader.textContent = 'Skills';
         skillsSection.appendChild(skillsHeader);
-        
+
         const skillsGrid = document.createElement('div');
         skillsGrid.className = 'skills-grid';
-        
+
         for (const [skill, value] of Object.entries(employee.skills)) {
             const skillBar = document.createElement('div');
             skillBar.className = 'skill-bar';
-            
+
             // Format skill name (camelCase to Title Case)
-            const formattedSkill = skill.replace(/([A-Z])/g, ' $1')
-                                       .replace(/^./, str => str.toUpperCase());
-            
+            const formattedSkill = skill.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+
             skillBar.innerHTML = `
                 <div class="skill-name">${formattedSkill}</div>
                 <div class="skill-progress">
@@ -323,36 +325,36 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
                 </div>
                 <div class="skill-value">${value}</div>
             `;
-            
+
             skillsGrid.appendChild(skillBar);
         }
-        
+
         skillsSection.appendChild(skillsGrid);
         card.appendChild(skillsSection);
-        
+
         // Current task section (if any)
         if (employee.currentTaskId) {
-            const task = window.taskManager.tasks.find(t => t.id === employee.currentTaskId);
-            
+            const task = window.taskManager.tasks.find((t) => t.id === employee.currentTaskId);
+
             if (task) {
                 const taskSection = document.createElement('div');
                 taskSection.className = 'task-section';
-                
+
                 const taskHeader = document.createElement('h4');
                 taskHeader.textContent = 'Current Task';
                 taskSection.appendChild(taskHeader);
-                
+
                 let taskTypeDisplay = task.type;
                 if (task.type === 'fillPrescription') taskTypeDisplay = 'Filling Prescription';
                 else if (task.type === 'customerInteraction') taskTypeDisplay = 'Customer Interaction';
                 else if (task.type === 'consultation') taskTypeDisplay = 'Consultation';
                 else if (task.type === 'compound') taskTypeDisplay = 'Compounding';
-                
+
                 const taskInfo = document.createElement('div');
                 taskInfo.className = 'task-info';
                 taskInfo.textContent = taskTypeDisplay;
                 taskSection.appendChild(taskInfo);
-                
+
                 // Progress bar
                 if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
                     taskSection.appendChild(window.taskbars.createProgressBar(task));
@@ -361,33 +363,33 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
                 card.appendChild(taskSection);
             }
         }
-        
+
         // Action buttons
         const actionsSection = document.createElement('div');
         actionsSection.className = 'actions-section';
-        
+
         // Fire button
         const fireButton = document.createElement('button');
         fireButton.className = 'action-button fire-button';
         fireButton.textContent = 'Terminate';
         fireButton.onclick = () => confirmFireEmployee(employee);
         actionsSection.appendChild(fireButton);
-        
+
         card.appendChild(actionsSection);
-        
+
         return card;
     }
 
     // Function to display employee candidates
-    window.displayEmployeeCandidates = function(candidates) {
+    window.displayEmployeeCandidates = function (candidates) {
         const candidatesContainer = document.querySelector('.candidates-container');
         if (!candidatesContainer) {
             console.error('Candidates container not found!');
             return;
         }
-        
+
         candidatesContainer.innerHTML = ''; // Clear previous candidates
-        
+
         if (candidates.length === 0) {
             const noCandidates = document.createElement('p');
             noCandidates.className = 'no-candidates';
@@ -396,67 +398,66 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
             return;
         }
 
-        candidates.forEach(candidate => {
+        candidates.forEach((candidate) => {
             const candidateCard = document.createElement('div');
             candidateCard.className = 'candidate-card';
-            
+
             // Candidate header
             const header = document.createElement('div');
             header.className = 'candidate-header';
-            
+
             const name = document.createElement('h3');
             name.textContent = `${candidate.firstName} ${candidate.lastName}`;
             header.appendChild(name);
-            
+
             const role = document.createElement('div');
             role.className = 'candidate-role';
             role.textContent = candidate.role;
             header.appendChild(role);
-            
+
             candidateCard.appendChild(header);
-            
+
             // Candidate details
             const details = document.createElement('div');
             details.className = 'candidate-details';
-            
+
             // Salary expectation
             const salary = document.createElement('div');
             salary.className = 'detail-item';
             salary.innerHTML = `<span class="label">Salary:</span> $${candidate.salary.toLocaleString()}/year`;
             details.appendChild(salary);
-            
+
             // Skills summary
             const skills = document.createElement('div');
             skills.className = 'candidate-skills';
-            
+
             const skillsHeader = document.createElement('h4');
             skillsHeader.textContent = 'Key Skills';
             skills.appendChild(skillsHeader);
-            
+
             // Find top 3 skills
             const topSkills = Object.entries(candidate.skills)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 3);
-            
+
             topSkills.forEach(([skill, value]) => {
                 const skillItem = document.createElement('div');
                 skillItem.className = 'skill-item';
-                
+
                 // Format skill name
-                const formattedSkill = skill.replace(/([A-Z])/g, ' $1')
-                                          .replace(/^./, str => str.toUpperCase());
-                
+                const formattedSkill = skill.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+
                 skillItem.innerHTML = `
                     <span class="skill-name">${formattedSkill}:</span>
                     <span class="skill-value">${value}</span>
                 `;
-                
+
                 skills.appendChild(skillItem);
             });
-            
+
             details.appendChild(skills);
             candidateCard.appendChild(details);
-            
+
             // Hire button
             const hireButton = document.createElement('button');
             hireButton.className = 'hire-button';
@@ -464,20 +465,20 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
             hireButton.onclick = () => {
                 window.employees.hireSelectedEmployee(candidate);
                 candidatesContainer.removeChild(candidateCard); // Remove the card after hiring
-                
+
                 // Show success message
                 alert(`Successfully hired ${candidate.firstName} ${candidate.lastName} as a ${candidate.role}!`);
-                
+
                 // Refresh the employees tab to show the new hire
                 renderEmployees(searchInput.value);
             };
-            
+
             candidateCard.appendChild(hireButton);
-            
+
             candidatesContainer.appendChild(candidateCard);
         });
     };
-    
+
     // Function to confirm firing an employee
     function confirmFireEmployee(employee: Employee): void {
         if (confirm(`Are you sure you want to terminate ${employee.firstName} ${employee.lastName}?`)) {
@@ -491,23 +492,23 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     // --------------------------------------------------------------
 
     // Tab event listeners
-    employeesTabButton.addEventListener('click', function() {
+    employeesTabButton.addEventListener('click', function () {
         this.classList.add('active');
         hireTabButton.classList.remove('active');
         employeesTabContent.style.display = 'block';
         hireTabContent.style.display = 'none';
         renderEmployees(searchInput.value);
     });
-    
-    hireTabButton.addEventListener('click', function() {
+
+    hireTabButton.addEventListener('click', function () {
         this.classList.add('active');
         employeesTabButton.classList.remove('active');
         hireTabContent.style.display = 'block';
         employeesTabContent.style.display = 'none';
     });
-    
+
     // Search input event listener
-    searchInput.addEventListener('input', function() {
+    searchInput.addEventListener('input', function () {
         renderEmployees(this.value);
     });
 
@@ -875,7 +876,7 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
             cursor: pointer;
         }
     `;
-    
+
     mainContent.appendChild(style);
     mainContent.appendChild(container);
 

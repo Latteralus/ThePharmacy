@@ -5,18 +5,18 @@ window.customers = {
 
     // Patience is in game minutes (at 1x, 1 real second = 1 game minute).
     customerTypes: {
-        "Normal": {
-            patience: 180,  // Increased patience
-            baseBoost: 0
+        Normal: {
+            patience: 180, // Increased patience
+            baseBoost: 0,
         },
-        "Impatient": {
-            patience: 90,   // Increased but still lower
-            baseBoost: -20  // Starts with lower mood
+        Impatient: {
+            patience: 90, // Increased but still lower
+            baseBoost: -20, // Starts with lower mood
         },
-        "Patient": {
-            patience: 300,  // Increased patience
-            baseBoost: 10   // Starts with higher mood
-        }
+        Patient: {
+            patience: 300, // Increased patience
+            baseBoost: 10, // Starts with higher mood
+        },
     },
 
     generateCustomer(hour) {
@@ -26,18 +26,20 @@ window.customers = {
         // If a previous customer is eligible to come back for a refill,
         // there's a chance this spawn is them returning instead of a
         // brand-new walk-in.
-        const refillRecord = window.prescriptions && window.prescriptions.getEligibleRefillRecord
-            ? window.prescriptions.getEligibleRefillRecord(window.gameState.currentDate.getTime())
-            : undefined;
+        const refillRecord =
+            window.prescriptions && window.prescriptions.getEligibleRefillRecord
+                ? window.prescriptions.getEligibleRefillRecord(window.gameState.currentDate.getTime())
+                : undefined;
         const isReturning = !!refillRecord && Math.random() < 0.5;
 
         // Assign insurance - a returning customer keeps their original plan
-        const insurance = isReturning && refillRecord
-            ? this.getInsuranceByPlanName(refillRecord.insurancePlanName)
-            : this.getRandomInsurance();
+        const insurance =
+            isReturning && refillRecord
+                ? this.getInsuranceByPlanName(refillRecord.insurancePlanName)
+                : this.getRandomInsurance();
 
         // Base mood 0-10, with type-based adjustment
-        const baseMood = Math.min(10, Math.max(1, 7 + (this.customerTypes[customerType].baseBoost / 10)));
+        const baseMood = Math.min(10, Math.max(1, 7 + this.customerTypes[customerType].baseBoost / 10));
 
         const newCustomer: Customer = {
             id: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -51,17 +53,23 @@ window.customers = {
             lastName: isReturning && refillRecord ? refillRecord.customerLastName : window.getRandomLastName(),
             mood: baseMood,
             lastStateChange: window.clock.now(), // Track when state last changed
-            isReturning: isReturning
+            isReturning: isReturning,
         };
 
         this.activeCustomers.push(newCustomer);
-        console.log(`[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`);
+        console.log(
+            `[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`,
+        );
 
         // Generate and assign a prescription - a returning customer gets a
         // refill of their previous product instead of a random pick.
-        const prescriptionId = isReturning && refillRecord
-            ? window.prescriptions.generateRefillPrescription(newCustomer.id, window.prescriptions.consumeRefillRecord(refillRecord.id)!)
-            : window.prescriptions.generatePrescription(newCustomer.id);
+        const prescriptionId =
+            isReturning && refillRecord
+                ? window.prescriptions.generateRefillPrescription(
+                      newCustomer.id,
+                      window.prescriptions.consumeRefillRecord(refillRecord.id)!,
+                  )
+                : window.prescriptions.generatePrescription(newCustomer.id);
         this.assignPrescription(newCustomer.id, prescriptionId);
 
         // Create a "customerInteraction" task (Cashier) to check in
@@ -73,7 +81,7 @@ window.customers = {
             progress: 0,
             roleNeeded: 'Cashier',
             status: 'pending',
-            assignedTo: null
+            assignedTo: null,
         };
         window.taskManager.addTask(checkInTask);
         console.log(`[customers.js] Created check-in task: ${checkInTask.id}`);
@@ -88,7 +96,7 @@ window.customers = {
 
     // Assign a prescription to the customer
     assignPrescription(customerId, prescriptionId) {
-        const customer = this.activeCustomers.find(c => c.id === customerId);
+        const customer = this.activeCustomers.find((c) => c.id === customerId);
         if (customer) {
             customer.prescriptionId = prescriptionId;
             console.log(`[customers.js] Assigned prescription ${prescriptionId} to customer ${customerId}`);
@@ -98,13 +106,15 @@ window.customers = {
     },
 
     updateCustomerStatus(customerId, newStatus) {
-        const customer = this.activeCustomers.find(c => c.id === customerId);
+        const customer = this.activeCustomers.find((c) => c.id === customerId);
         if (customer) {
             const oldStatus = customer.status;
             customer.status = newStatus;
             customer.lastStateChange = window.clock.now();
 
-            console.log(`[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) status changed: ${oldStatus} -> ${newStatus}`);
+            console.log(
+                `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) status changed: ${oldStatus} -> ${newStatus}`,
+            );
 
             // If they've moved to waitingForConsultation, create that task
             if (newStatus === 'waitingForConsultation') {
@@ -125,7 +135,7 @@ window.customers = {
     },
 
     updateCustomerMood(customerId, moodChange) {
-        const customer = this.activeCustomers.find(c => c.id === customerId);
+        const customer = this.activeCustomers.find((c) => c.id === customerId);
         if (customer) {
             customer.mood = Math.max(1, Math.min(10, customer.mood + moodChange));
             console.log(`[customers.js] Customer ${customerId} mood updated to ${customer.mood}`);
@@ -134,10 +144,12 @@ window.customers = {
 
     // Add time to the customer's patience
     extendPatience(customerId, minutesToAdd) {
-        const customer = this.activeCustomers.find(c => c.id === customerId);
+        const customer = this.activeCustomers.find((c) => c.id === customerId);
         if (customer) {
             customer.patience += minutesToAdd;
-            console.log(`[customers.js] Extended customer ${customerId}'s patience by ${minutesToAdd} minutes to ${customer.patience}`);
+            console.log(
+                `[customers.js] Extended customer ${customerId}'s patience by ${minutesToAdd} minutes to ${customer.patience}`,
+            );
         }
     },
 
@@ -170,22 +182,24 @@ window.customers = {
     },
 
     customerLeaves(customerId) {
-        const customerIndex = this.activeCustomers.findIndex(c => c.id === customerId);
+        const customerIndex = this.activeCustomers.findIndex((c) => c.id === customerId);
         if (customerIndex > -1) {
             const customer = this.activeCustomers[customerIndex];
-            console.log(`[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) is leaving, status: ${customer.status}`);
+            console.log(
+                `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) is leaving, status: ${customer.status}`,
+            );
 
             // Remove customer from active list
             this.activeCustomers.splice(customerIndex, 1);
 
             // Check for and cancel any pending tasks for this customer
-            const customerTasks = window.taskManager.tasks.filter(t =>
-                t.customerId === customerId &&
-                t.status !== 'completed');
+            const customerTasks = window.taskManager.tasks.filter(
+                (t) => t.customerId === customerId && t.status !== 'completed',
+            );
 
             if (customerTasks.length > 0) {
                 console.log(`[customers.js] Cancelling ${customerTasks.length} pending tasks for departed customer`);
-                customerTasks.forEach(task => {
+                customerTasks.forEach((task) => {
                     if (task.assignedTo) {
                         // Unassign any employee working on this customer's tasks
                         window.taskAssignment.unassignTask(task.id);
@@ -219,7 +233,7 @@ window.customers = {
         const now = window.clock.now();
 
         // Iterate a copy: customerLeaves splices activeCustomers.
-        [...this.activeCustomers].forEach(customer => {
+        [...this.activeCustomers].forEach((customer) => {
             customer.patience -= this.adjustPatienceDecayRate(customer);
 
             // Mood slowly drops once they've been in one state for an hour
@@ -230,7 +244,9 @@ window.customers = {
             }
 
             if (customer.patience <= 0) {
-                console.log(`[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has run out of patience and is leaving`);
+                console.log(
+                    `[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has run out of patience and is leaving`,
+                );
 
                 // Negatively impact reputation when a customer leaves unhappy
                 window.brandReputation.loseReputation(1.5);
@@ -246,7 +262,7 @@ window.customers = {
     sendRemainingCustomersHome() {
         if (this.activeCustomers.length === 0) return;
         console.log(`[customers.js] Closing time - sending ${this.activeCustomers.length} remaining customers home`);
-        [...this.activeCustomers].forEach(customer => this.customerLeaves(customer.id));
+        [...this.activeCustomers].forEach((customer) => this.customerLeaves(customer.id));
     },
 
     // Determines effect on reputation when a customer leaves
@@ -290,9 +306,9 @@ window.customers = {
     getRandomCustomerType() {
         // Adjusted weights for customer types
         const weights: Record<string, number> = {
-            "Normal": 0.6,    // 60% chance
-            "Impatient": 0.25, // 25% chance
-            "Patient": 0.15    // 15% chance
+            Normal: 0.6, // 60% chance
+            Impatient: 0.25, // 25% chance
+            Patient: 0.15, // 15% chance
         };
 
         const rand = Math.random();
@@ -306,7 +322,7 @@ window.customers = {
         }
 
         // Fallback
-        return "Normal";
+        return 'Normal';
     },
 
     getRandomInsurance() {
@@ -319,11 +335,11 @@ window.customers = {
     // back to a random plan if the name isn't found (the plan list could
     // theoretically change between saves).
     getInsuranceByPlanName(planName) {
-        return window.insuranceData.find(p => p.planName === planName) || this.getRandomInsurance();
+        return window.insuranceData.find((p) => p.planName === planName) || this.getRandomInsurance();
     },
 
     getCustomerById(customerId) {
-        return this.activeCustomers.find(c => c.id === customerId);
+        return this.activeCustomers.find((c) => c.id === customerId);
     },
 
     // Check for stuck customers and fix their state
@@ -334,21 +350,25 @@ window.customers = {
         // 5 game hours (the old threshold was 5 real minutes, the same at 1x)
         const stuckThresholdMs = 5 * 60 * 60 * 1000;
 
-        this.activeCustomers.forEach(customer => {
+        this.activeCustomers.forEach((customer) => {
             // How long has the customer been in their current state?
             const timeInCurrentState = now - customer.lastStateChange;
 
             // If stuck in a state for over 5 minutes, take action
             if (timeInCurrentState > stuckThresholdMs) {
-                console.warn(`[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) appears stuck in state "${customer.status}" for ${Math.floor(timeInCurrentState/60000)} minutes`);
+                console.warn(
+                    `[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) appears stuck in state "${customer.status}" for ${Math.floor(timeInCurrentState / 60000)} minutes`,
+                );
 
                 // Check if the customer has tasks
-                const customerTasks = window.taskManager.tasks.filter(t =>
-                    t.customerId === customer.id &&
-                    t.status !== 'completed');
+                const customerTasks = window.taskManager.tasks.filter(
+                    (t) => t.customerId === customer.id && t.status !== 'completed',
+                );
 
                 if (customerTasks.length === 0) {
-                    console.warn(`[customers.js] Customer ${customer.id} has no active tasks! Creating recovery task...`);
+                    console.warn(
+                        `[customers.js] Customer ${customer.id} has no active tasks! Creating recovery task...`,
+                    );
 
                     // Create appropriate recovery task based on state
                     if (customer.status === 'waitingForCheckIn') {
@@ -361,23 +381,20 @@ window.customers = {
                             progress: 0,
                             roleNeeded: 'Cashier',
                             status: 'pending',
-                            assignedTo: null
+                            assignedTo: null,
                         };
                         window.taskManager.addTask(checkInTask);
                         console.log(`[customers.js] Created recovery check-in task: ${checkInTask.id}`);
-                    }
-                    else if (customer.status === 'waitingForConsultation') {
+                    } else if (customer.status === 'waitingForConsultation') {
                         // Create a consultation task with highest priority
                         window.prescriptions.createConsultationTask(customer.id);
-                    }
-                    else if (customer.status === 'waitingForFill' && customer.prescriptionId) {
+                    } else if (customer.status === 'waitingForFill' && customer.prescriptionId) {
                         // Reactivate prescription fill
                         const prescription = window.prescriptions.getPrescription(customer.prescriptionId);
                         if (prescription) {
                             window.prescriptions.createFillTaskForPrescription(prescription);
                         }
-                    }
-                    else if (customer.status === 'readyForCheckout') {
+                    } else if (customer.status === 'readyForCheckout') {
                         // Create a checkout task with highest priority
                         const checkoutTask: Task = {
                             id: `checkout-recovery-${customer.id}-${Date.now()}`,
@@ -387,17 +404,19 @@ window.customers = {
                             progress: 0,
                             roleNeeded: 'Cashier',
                             status: 'pending',
-                            assignedTo: null
+                            assignedTo: null,
                         };
                         window.taskManager.addTask(checkoutTask);
                         console.log(`[customers.js] Created recovery checkout task: ${checkoutTask.id}`);
                     }
                 } else {
                     // Has tasks but they're not being completed
-                    console.log(`[customers.js] Customer ${customer.id} has ${customerTasks.length} pending tasks but seems stuck. Reassigning...`);
+                    console.log(
+                        `[customers.js] Customer ${customer.id} has ${customerTasks.length} pending tasks but seems stuck. Reassigning...`,
+                    );
 
                     // Force reassignment of tasks
-                    customerTasks.forEach(task => {
+                    customerTasks.forEach((task) => {
                         if (task.assignedTo) {
                             window.taskAssignment.unassignTask(task.id);
                         }
@@ -411,7 +430,7 @@ window.customers = {
                 customer.lastStateChange = now;
             }
         });
-    }
+    },
 };
 
 // Stuck-customer detection runs as part of taskManager.js's single

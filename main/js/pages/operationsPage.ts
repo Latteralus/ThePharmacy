@@ -159,11 +159,11 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
     function renderEmployees(): void {
         const employeesList = document.getElementById('employeesList');
         if (!employeesList) return;
-        
+
         employeesList.innerHTML = '';
         let idleCount = 0;
 
-        window.employeesData.forEach(emp => {
+        window.employeesData.forEach((emp) => {
             const empCard = document.createElement('div');
             empCard.style.border = '1px solid #ddd';
             empCard.style.borderRadius = '4px';
@@ -177,7 +177,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
 
             const taskInfo = document.createElement('p');
             if (emp.currentTaskId) {
-                const task = window.taskManager.tasks.find(t => t.id === emp.currentTaskId);
+                const task = window.taskManager.tasks.find((t) => t.id === emp.currentTaskId);
                 if (task) {
                     // Make the task type more descriptive
                     let taskTypeDescription = task.type;
@@ -226,10 +226,10 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
     function renderTasks(): void {
         const tasksList = document.getElementById('tasksList');
         if (!tasksList) return;
-        
+
         tasksList.innerHTML = ''; // Clear existing tasks
 
-        const activeTasks = window.taskManager.tasks.filter(t => t.status !== 'completed');
+        const activeTasks = window.taskManager.tasks.filter((t) => t.status !== 'completed');
         const activeCount = activeTasks.length;
 
         // Update the summary for active tasks
@@ -248,7 +248,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
 
         // Group tasks by type
         const groupedTasks: Record<string, Task[]> = {};
-        activeTasks.forEach(task => {
+        activeTasks.forEach((task) => {
             if (!groupedTasks[task.type]) {
                 groupedTasks[task.type] = [];
             }
@@ -345,7 +345,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
 
                 // Assigned employee
                 if (task.assignedTo) {
-                    const assignedEmp = window.employeesData.find(e => e.id === task.assignedTo);
+                    const assignedEmp = window.employeesData.find((e) => e.id === task.assignedTo);
                     if (assignedEmp) {
                         const assignedLine = document.createElement('p');
                         assignedLine.textContent = `Assigned to: ${assignedEmp.firstName} ${assignedEmp.lastName} (${assignedEmp.role})`;

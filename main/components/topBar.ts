@@ -1,310 +1,313 @@
 // improved-topBar.js
 
 window.renderTopBar = function renderTopBar(): HTMLElement {
-  const topBar = document.createElement('header');
-  topBar.className = 'top-bar';
+    const topBar = document.createElement('header');
+    topBar.className = 'top-bar';
 
-  const topBarContent = document.createElement('div');
-  topBarContent.className = 'top-bar-content';
+    const topBarContent = document.createElement('div');
+    topBarContent.className = 'top-bar-content';
 
-  // -------- Left Section --------
-  const leftSection = document.createElement('div');
-  leftSection.className = 'top-bar-left';
+    // -------- Left Section --------
+    const leftSection = document.createElement('div');
+    leftSection.className = 'top-bar-left';
 
-  // Logo/Title with icon
-  const titleContainer = document.createElement('div');
-  titleContainer.className = 'title-container';
+    // Logo/Title with icon
+    const titleContainer = document.createElement('div');
+    titleContainer.className = 'title-container';
 
-  // Pharmacy icon (pill/capsule icon using Unicode)
-  const iconSpan = document.createElement('span');
-  iconSpan.className = 'pharmacy-icon';
-  iconSpan.innerHTML = '💊';
-  titleContainer.appendChild(iconSpan);
+    // Pharmacy icon (pill/capsule icon using Unicode)
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'pharmacy-icon';
+    iconSpan.innerHTML = '💊';
+    titleContainer.appendChild(iconSpan);
 
-  const titleElem = document.createElement('h1');
-  titleElem.className = 'game-title';
-  titleElem.textContent = 'PharmaSim';
-  titleContainer.appendChild(titleElem);
+    const titleElem = document.createElement('h1');
+    titleElem.className = 'game-title';
+    titleElem.textContent = 'PharmaSim';
+    titleContainer.appendChild(titleElem);
 
-  leftSection.appendChild(titleContainer);
+    leftSection.appendChild(titleContainer);
 
-  // Username display
-  const usernameContainer = document.createElement('div');
-  usernameContainer.className = 'username-container';
+    // Username display
+    const usernameContainer = document.createElement('div');
+    usernameContainer.className = 'username-container';
 
-  const userIcon = document.createElement('span');
-  userIcon.className = 'user-icon';
-  userIcon.innerHTML = '👤';
-  usernameContainer.appendChild(userIcon);
+    const userIcon = document.createElement('span');
+    userIcon.className = 'user-icon';
+    userIcon.innerHTML = '👤';
+    usernameContainer.appendChild(userIcon);
 
-  const usernameDisplay = document.createElement('span');
-  usernameDisplay.id = 'usernameDisplay';
-  usernameDisplay.className = 'username-display';
-  usernameDisplay.textContent = window.username || 'Manager';
-  usernameContainer.appendChild(usernameDisplay);
+    const usernameDisplay = document.createElement('span');
+    usernameDisplay.id = 'usernameDisplay';
+    usernameDisplay.className = 'username-display';
+    usernameDisplay.textContent = window.username || 'Manager';
+    usernameContainer.appendChild(usernameDisplay);
 
-  leftSection.appendChild(usernameContainer);
+    leftSection.appendChild(usernameContainer);
 
-  // -------- Right Section --------
-  const rightSection = document.createElement('div');
-  rightSection.className = 'top-bar-right';
+    // -------- Right Section --------
+    const rightSection = document.createElement('div');
+    rightSection.className = 'top-bar-right';
 
-  // Financial Summary with icons
-  const financialSummary = document.createElement('div');
-  financialSummary.className = 'financial-summary';
+    // Financial Summary with icons
+    const financialSummary = document.createElement('div');
+    financialSummary.className = 'financial-summary';
 
-  // Cash display
-  const cashContainer = document.createElement('div');
-  cashContainer.className = 'summary-item-container';
+    // Cash display
+    const cashContainer = document.createElement('div');
+    cashContainer.className = 'summary-item-container';
 
-  const cashIcon = document.createElement('span');
-  cashIcon.className = 'summary-icon';
-  cashIcon.innerHTML = '💰';
-  cashContainer.appendChild(cashIcon);
+    const cashIcon = document.createElement('span');
+    cashIcon.className = 'summary-icon';
+    cashIcon.innerHTML = '💰';
+    cashContainer.appendChild(cashIcon);
 
-  const currentCash = document.createElement('span');
-  currentCash.id = 'currentCash';
-  currentCash.className = 'summary-item';
-  currentCash.textContent = `$${window.financesData.cash.toFixed(2)}`;
-  cashContainer.appendChild(currentCash);
+    const currentCash = document.createElement('span');
+    currentCash.id = 'currentCash';
+    currentCash.className = 'summary-item';
+    currentCash.textContent = `$${window.financesData.cash.toFixed(2)}`;
+    cashContainer.appendChild(currentCash);
 
-  financialSummary.appendChild(cashContainer);
+    financialSummary.appendChild(cashContainer);
 
-  // Daily income
-  const incomeContainer = document.createElement('div');
-  incomeContainer.className = 'summary-item-container';
+    // Daily income
+    const incomeContainer = document.createElement('div');
+    incomeContainer.className = 'summary-item-container';
 
-  const incomeIcon = document.createElement('span');
-  incomeIcon.className = 'summary-icon';
-  incomeIcon.innerHTML = '📈';
-  incomeContainer.appendChild(incomeIcon);
+    const incomeIcon = document.createElement('span');
+    incomeIcon.className = 'summary-icon';
+    incomeIcon.innerHTML = '📈';
+    incomeContainer.appendChild(incomeIcon);
 
-  const dailyIncome = document.createElement('span');
-  dailyIncome.id = 'dailyIncome';
-  dailyIncome.className = 'summary-item';
-  dailyIncome.textContent = `$${window.financesData.dailyIncome.toFixed(2)}`;
-  incomeContainer.appendChild(dailyIncome);
+    const dailyIncome = document.createElement('span');
+    dailyIncome.id = 'dailyIncome';
+    dailyIncome.className = 'summary-item';
+    dailyIncome.textContent = `$${window.financesData.dailyIncome.toFixed(2)}`;
+    incomeContainer.appendChild(dailyIncome);
 
-  financialSummary.appendChild(incomeContainer);
+    financialSummary.appendChild(incomeContainer);
 
-  // Pending insurance
-  const insuranceContainer = document.createElement('div');
-  insuranceContainer.className = 'summary-item-container';
+    // Pending insurance
+    const insuranceContainer = document.createElement('div');
+    insuranceContainer.className = 'summary-item-container';
 
-  const insuranceIcon = document.createElement('span');
-  insuranceIcon.className = 'summary-icon';
-  insuranceIcon.innerHTML = '🏥';
-  insuranceContainer.appendChild(insuranceIcon);
+    const insuranceIcon = document.createElement('span');
+    insuranceIcon.className = 'summary-icon';
+    insuranceIcon.innerHTML = '🏥';
+    insuranceContainer.appendChild(insuranceIcon);
 
-  const pendingInsurance = document.createElement('span');
-  pendingInsurance.id = 'pendingInsurance';
-  pendingInsurance.className = 'summary-item';
-  pendingInsurance.textContent = `$${window.financesData.pendingInsuranceIncome.toFixed(2)}`;
-  insuranceContainer.appendChild(pendingInsurance);
+    const pendingInsurance = document.createElement('span');
+    pendingInsurance.id = 'pendingInsurance';
+    pendingInsurance.className = 'summary-item';
+    pendingInsurance.textContent = `$${window.financesData.pendingInsuranceIncome.toFixed(2)}`;
+    insuranceContainer.appendChild(pendingInsurance);
 
-  financialSummary.appendChild(insuranceContainer);
+    financialSummary.appendChild(insuranceContainer);
 
-  // Game time with calendar icon
-  const timeContainer = document.createElement('div');
-  timeContainer.className = 'time-container';
+    // Game time with calendar icon
+    const timeContainer = document.createElement('div');
+    timeContainer.className = 'time-container';
 
-  const timeIcon = document.createElement('span');
-  timeIcon.className = 'time-icon';
-  timeIcon.innerHTML = '📅';
-  timeContainer.appendChild(timeIcon);
+    const timeIcon = document.createElement('span');
+    timeIcon.className = 'time-icon';
+    timeIcon.innerHTML = '📅';
+    timeContainer.appendChild(timeIcon);
 
-  const gameTime = document.createElement('span');
-  gameTime.id = 'gameTime';
-  gameTime.className = 'game-time';
-  gameTime.textContent = window.ui.formatDateTime(window.gameState.currentDate);
-  timeContainer.appendChild(gameTime);
+    const gameTime = document.createElement('span');
+    gameTime.id = 'gameTime';
+    gameTime.className = 'game-time';
+    gameTime.textContent = window.ui.formatDateTime(window.gameState.currentDate);
+    timeContainer.appendChild(gameTime);
 
-  rightSection.appendChild(financialSummary);
-  rightSection.appendChild(timeContainer);
+    rightSection.appendChild(financialSummary);
+    rightSection.appendChild(timeContainer);
 
-  // Save button
-  const saveButton = document.createElement('button');
-  saveButton.className = 'save-button';
-  saveButton.innerHTML = '💾 Save';
-  saveButton.title = 'Save game (Ctrl+S)';
-  saveButton.addEventListener('click', () => {
-    if (typeof window.saveGame === 'function') {
-      window.saveGame();
-    } else {
-      console.error('window.saveGame is not available');
-    }
-  });
-  rightSection.appendChild(saveButton);
+    // Save button
+    const saveButton = document.createElement('button');
+    saveButton.className = 'save-button';
+    saveButton.innerHTML = '💾 Save';
+    saveButton.title = 'Save game (Ctrl+S)';
+    saveButton.addEventListener('click', () => {
+        if (typeof window.saveGame === 'function') {
+            window.saveGame();
+        } else {
+            console.error('window.saveGame is not available');
+        }
+    });
+    rightSection.appendChild(saveButton);
 
-  // Notifications button (new feature)
-  const notificationsButton = document.createElement('button');
-  notificationsButton.className = 'notifications-button';
-  notificationsButton.innerHTML = '🔔';
-  notificationsButton.title = 'Notifications';
+    // Notifications button (new feature)
+    const notificationsButton = document.createElement('button');
+    notificationsButton.className = 'notifications-button';
+    notificationsButton.innerHTML = '🔔';
+    notificationsButton.title = 'Notifications';
 
-  // Add notification count badge
-  const notificationCount = document.createElement('span');
-  notificationCount.className = 'notification-count';
-  notificationCount.id = 'notificationCount';
-  notificationCount.textContent = '0';
-  notificationCount.style.display = 'none'; // Hide initially
-  notificationsButton.appendChild(notificationCount);
+    // Add notification count badge
+    const notificationCount = document.createElement('span');
+    notificationCount.className = 'notification-count';
+    notificationCount.id = 'notificationCount';
+    notificationCount.textContent = '0';
+    notificationCount.style.display = 'none'; // Hide initially
+    notificationsButton.appendChild(notificationCount);
 
-  // Notification click handler
-  notificationsButton.addEventListener('click', () => {
-    showNotificationsPanel();
-  });
+    // Notification click handler
+    notificationsButton.addEventListener('click', () => {
+        showNotificationsPanel();
+    });
 
-  rightSection.appendChild(notificationsButton);
+    rightSection.appendChild(notificationsButton);
 
-  // Add sections to topbar
-  topBarContent.appendChild(leftSection);
-  topBarContent.appendChild(rightSection);
-  topBar.appendChild(topBarContent);
+    // Add sections to topbar
+    topBarContent.appendChild(leftSection);
+    topBarContent.appendChild(rightSection);
+    topBar.appendChild(topBarContent);
 
-  // Add notifications panel (hidden initially)
-  const notificationsPanel = document.createElement('div');
-  notificationsPanel.className = 'notifications-panel';
-  notificationsPanel.id = 'notificationsPanel';
-  notificationsPanel.style.display = 'none';
+    // Add notifications panel (hidden initially)
+    const notificationsPanel = document.createElement('div');
+    notificationsPanel.className = 'notifications-panel';
+    notificationsPanel.id = 'notificationsPanel';
+    notificationsPanel.style.display = 'none';
 
-  const notificationsHeader = document.createElement('div');
-  notificationsHeader.className = 'notifications-header';
-  notificationsHeader.innerHTML = `
+    const notificationsHeader = document.createElement('div');
+    notificationsHeader.className = 'notifications-header';
+    notificationsHeader.innerHTML = `
     <h3>Notifications</h3>
     <button id="closeNotifications">✕</button>
   `;
-  notificationsPanel.appendChild(notificationsHeader);
+    notificationsPanel.appendChild(notificationsHeader);
 
-  const notificationsList = document.createElement('div');
-  notificationsList.className = 'notifications-list';
-  notificationsList.id = 'notificationsList';
-  notificationsList.innerHTML = '<p class="no-notifications">No new notifications</p>';
-  notificationsPanel.appendChild(notificationsList);
+    const notificationsList = document.createElement('div');
+    notificationsList.className = 'notifications-list';
+    notificationsList.id = 'notificationsList';
+    notificationsList.innerHTML = '<p class="no-notifications">No new notifications</p>';
+    notificationsPanel.appendChild(notificationsList);
 
-  topBar.appendChild(notificationsPanel);
+    topBar.appendChild(notificationsPanel);
 
-  // Initialize notifications system if it doesn't exist
-  if (!window.notifications) {
-    window.notifications = {
-      items: [],
-      unreadCount: 0,
+    // Initialize notifications system if it doesn't exist
+    if (!window.notifications) {
+        window.notifications = {
+            items: [],
+            unreadCount: 0,
 
-      add: function(message: string, type = 'info'): number {
-        const notification: NotificationItem = {
-          id: Date.now(),
-          message,
-          type,
-          timestamp: new Date(),
-          read: false
+            add: function (message: string, type = 'info'): number {
+                const notification: NotificationItem = {
+                    id: Date.now(),
+                    message,
+                    type,
+                    timestamp: new Date(),
+                    read: false,
+                };
+
+                this.items.unshift(notification); // Add to beginning of array
+                this.unreadCount++;
+
+                // Update the UI
+                this.updateUI();
+
+                // Limit to most recent 50 notifications
+                if (this.items.length > 50) {
+                    this.items.pop();
+                }
+
+                return notification.id;
+            },
+
+            markAsRead: function (id: number): void {
+                const notification = this.items.find((n) => n.id === id);
+                if (notification && !notification.read) {
+                    notification.read = true;
+                    this.unreadCount--;
+                    this.updateUI();
+                }
+            },
+
+            markAllAsRead: function (): void {
+                this.items.forEach((n) => {
+                    n.read = true;
+                });
+                this.unreadCount = 0;
+                this.updateUI();
+            },
+
+            updateUI: function (): void {
+                const countElem = document.getElementById('notificationCount');
+                if (countElem) {
+                    countElem.textContent = String(this.unreadCount);
+                    countElem.style.display = this.unreadCount > 0 ? 'block' : 'none';
+                }
+
+                const listElem = document.getElementById('notificationsList');
+                if (listElem) {
+                    if (this.items.length === 0) {
+                        listElem.innerHTML = '<p class="no-notifications">No new notifications</p>';
+                    } else {
+                        listElem.innerHTML = '';
+
+                        this.items.forEach((notification) => {
+                            const notificationItem = document.createElement('div');
+                            notificationItem.className = `notification-item ${notification.type} ${notification.read ? 'read' : 'unread'}`;
+
+                            // Format the timestamp
+                            const timeString = notification.timestamp.toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            });
+
+                            // textContent, not innerHTML - messages can carry
+                            // player-supplied text (names, pharmacy name).
+                            const content = document.createElement('div');
+                            content.className = 'notification-content';
+                            const messageEl = document.createElement('span');
+                            messageEl.className = 'notification-message';
+                            messageEl.textContent = notification.message;
+                            const timeEl = document.createElement('span');
+                            timeEl.className = 'notification-time';
+                            timeEl.textContent = timeString;
+                            content.append(messageEl, timeEl);
+                            notificationItem.appendChild(content);
+
+                            // Mark as read when clicked
+                            notificationItem.addEventListener('click', () => {
+                                this.markAsRead(notification.id);
+                                notificationItem.classList.remove('unread');
+                                notificationItem.classList.add('read');
+                            });
+
+                            listElem.appendChild(notificationItem);
+                        });
+                    }
+                }
+            },
         };
 
-        this.items.unshift(notification); // Add to beginning of array
-        this.unreadCount++;
-
-        // Update the UI
-        this.updateUI();
-
-        // Limit to most recent 50 notifications
-        if (this.items.length > 50) {
-          this.items.pop();
-        }
-
-        return notification.id;
-      },
-
-      markAsRead: function(id: number): void {
-        const notification = this.items.find(n => n.id === id);
-        if (notification && !notification.read) {
-          notification.read = true;
-          this.unreadCount--;
-          this.updateUI();
-        }
-      },
-
-      markAllAsRead: function(): void {
-        this.items.forEach(n => {
-          n.read = true;
-        });
-        this.unreadCount = 0;
-        this.updateUI();
-      },
-
-      updateUI: function(): void {
-        const countElem = document.getElementById('notificationCount');
-        if (countElem) {
-          countElem.textContent = String(this.unreadCount);
-          countElem.style.display = this.unreadCount > 0 ? 'block' : 'none';
-        }
-
-        const listElem = document.getElementById('notificationsList');
-        if (listElem) {
-          if (this.items.length === 0) {
-            listElem.innerHTML = '<p class="no-notifications">No new notifications</p>';
-          } else {
-            listElem.innerHTML = '';
-
-            this.items.forEach(notification => {
-              const notificationItem = document.createElement('div');
-              notificationItem.className = `notification-item ${notification.type} ${notification.read ? 'read' : 'unread'}`;
-
-              // Format the timestamp
-              const timeString = notification.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-              // textContent, not innerHTML - messages can carry
-              // player-supplied text (names, pharmacy name).
-              const content = document.createElement('div');
-              content.className = 'notification-content';
-              const messageEl = document.createElement('span');
-              messageEl.className = 'notification-message';
-              messageEl.textContent = notification.message;
-              const timeEl = document.createElement('span');
-              timeEl.className = 'notification-time';
-              timeEl.textContent = timeString;
-              content.append(messageEl, timeEl);
-              notificationItem.appendChild(content);
-
-              // Mark as read when clicked
-              notificationItem.addEventListener('click', () => {
-                this.markAsRead(notification.id);
-                notificationItem.classList.remove('unread');
-                notificationItem.classList.add('read');
-              });
-
-              listElem.appendChild(notificationItem);
-            });
-          }
-        }
-      }
-    };
-
-    setTimeout(() => {
-      window.notifications!.add('Welcome to PharmaSim!', 'success');
-    }, 2000);
-  }
-
-  // Function to show notifications panel
-  function showNotificationsPanel(): void {
-    const panel = document.getElementById('notificationsPanel');
-    if (panel) {
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-
-      // Update notifications list
-      window.notifications!.updateUI();
-
-      // Set up close button
-      const closeBtn = document.getElementById('closeNotifications');
-      if (closeBtn) {
-        closeBtn.onclick = function() {
-          panel.style.display = 'none';
-        };
-      }
+        setTimeout(() => {
+            window.notifications!.add('Welcome to PharmaSim!', 'success');
+        }, 2000);
     }
-  }
 
-  // Add CSS for top bar
-  const style = document.createElement('style');
-  style.textContent = `
+    // Function to show notifications panel
+    function showNotificationsPanel(): void {
+        const panel = document.getElementById('notificationsPanel');
+        if (panel) {
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+
+            // Update notifications list
+            window.notifications!.updateUI();
+
+            // Set up close button
+            const closeBtn = document.getElementById('closeNotifications');
+            if (closeBtn) {
+                closeBtn.onclick = function () {
+                    panel.style.display = 'none';
+                };
+            }
+        }
+    }
+
+    // Add CSS for top bar
+    const style = document.createElement('style');
+    style.textContent = `
     .top-bar {
       background-color: var(--primary);
       color: white;
@@ -511,33 +514,33 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     }
   `;
 
-  document.head.appendChild(style);
+    document.head.appendChild(style);
 
-  return topBar;
+    return topBar;
 };
 
 // Update financial summary (to be called when finances change)
-window.updateFinancialSummary = function(financesData: FinancesData): void {
-  const currentCash = document.getElementById('currentCash');
-  if (currentCash) {
-    currentCash.textContent = `$${financesData.cash.toFixed(2)}`;
-  }
+window.updateFinancialSummary = function (financesData: FinancesData): void {
+    const currentCash = document.getElementById('currentCash');
+    if (currentCash) {
+        currentCash.textContent = `$${financesData.cash.toFixed(2)}`;
+    }
 
-  const dailyIncome = document.getElementById('dailyIncome');
-  if (dailyIncome) {
-    dailyIncome.textContent = `$${financesData.dailyIncome.toFixed(2)}`;
-  }
+    const dailyIncome = document.getElementById('dailyIncome');
+    if (dailyIncome) {
+        dailyIncome.textContent = `$${financesData.dailyIncome.toFixed(2)}`;
+    }
 
-  const pendingInsurance = document.getElementById('pendingInsurance');
-  if (pendingInsurance) {
-    pendingInsurance.textContent = `$${financesData.pendingInsuranceIncome.toFixed(2)}`;
-  }
+    const pendingInsurance = document.getElementById('pendingInsurance');
+    if (pendingInsurance) {
+        pendingInsurance.textContent = `$${financesData.pendingInsuranceIncome.toFixed(2)}`;
+    }
 };
 
 // Update time display
-window.updateTimeDisplay = function(date: Date): void {
-  const gameTime = document.getElementById('gameTime');
-  if (gameTime) {
-    gameTime.textContent = window.ui.formatDateTime(date);
-  }
+window.updateTimeDisplay = function (date: Date): void {
+    const gameTime = document.getElementById('gameTime');
+    if (gameTime) {
+        gameTime.textContent = window.ui.formatDateTime(date);
+    }
 };

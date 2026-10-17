@@ -16,26 +16,26 @@ window.financesData = {
         thisWeek: 0,
         thisMonth: 0,
         lastMonth: 0,
-        total: 0
+        total: 0,
     },
     expenses: {
         today: 0,
         thisWeek: 0,
         thisMonth: 0,
         lastMonth: 0,
-        total: 0
+        total: 0,
     },
     profit: {
         today: 0,
         thisWeek: 0,
         thisMonth: 0,
         lastMonth: 0,
-        total: 0
+        total: 0,
     },
     insuranceReimbursements: {
         pending: 0,
         received: 0,
-        rejected: 0
+        rejected: 0,
     },
     expenseCategories: {
         wages: 0,
@@ -43,26 +43,26 @@ window.financesData = {
         overhead: 0,
         equipment: 0,
         research: 0,
-        other: 0
+        other: 0,
     },
     revenueCategories: {
         prescriptions: 0,
         copays: 0,
         insurance: 0,
-        other: 0
+        other: 0,
     },
     targetDailyRevenue: 1000, // Default target
-    targetMonthlyRevenue: 30000 // Default target
+    targetMonthlyRevenue: 30000, // Default target
 };
 
 window.finances = {
     // Apply daily costs (called at end of day)
     applyDailyCosts() {
-        console.log("[finances.js] Applying daily costs...");
+        console.log('[finances.js] Applying daily costs...');
 
         // 1) Sum employee daily wages
         let totalWages = 0;
-        window.employeesData.forEach(emp => {
+        window.employeesData.forEach((emp) => {
             const dailyPay = emp.salary / 365;
             totalWages += dailyPay;
 
@@ -111,14 +111,16 @@ window.finances = {
         this.updateProfitMetrics();
 
         // 7) Update UI
-        window.updateUI("finances");
+        window.updateUI('finances');
 
-        console.log(`[finances.js] Daily costs applied: Wages $${totalWages.toFixed(2)}, Overhead $${overheadCost.toFixed(2)}`);
+        console.log(
+            `[finances.js] Daily costs applied: Wages $${totalWages.toFixed(2)}, Overhead $${overheadCost.toFixed(2)}`,
+        );
     },
 
     // Call this whenever an order is completed
     completePrescription(customerId, prescriptionId) {
-        const customer = window.customers.activeCustomers.find(c => c.id === customerId);
+        const customer = window.customers.activeCustomers.find((c) => c.id === customerId);
         const prescription = window.prescriptions.getPrescription(prescriptionId);
 
         if (!customer) {
@@ -131,7 +133,7 @@ window.finances = {
             return;
         }
 
-        const product = window.productsData.find(p => p.id === prescription.productId);
+        const product = window.productsData.find((p) => p.id === prescription.productId);
         if (!product) {
             console.error(`[finances.js] Product not found for ID: ${prescription.productId}`);
             return;
@@ -167,7 +169,7 @@ window.finances = {
                 ? `Copay for ${prescription.productName} (Prescription ID: ${prescription.id})`
                 : `Full price for ${prescription.productName}, not on insurance formulary (Prescription ID: ${prescription.id})`,
             customerId: customerId,
-            prescriptionId: prescription.id
+            prescriptionId: prescription.id,
         });
 
         // If the product isn't on the customer's formulary, they've already
@@ -178,8 +180,8 @@ window.finances = {
             window.insuranceClaims.addClaim(customerId, prescriptionId, price, copay);
 
             // Update pending insurance income
-            window.financesData.pendingInsuranceIncome += (price - copay);
-            window.financesData.insuranceReimbursements.pending += (price - copay);
+            window.financesData.pendingInsuranceIncome += price - copay;
+            window.financesData.insuranceReimbursements.pending += price - copay;
 
             // Add insurance income transaction (pending)
             window.finances.addTransaction({
@@ -190,7 +192,7 @@ window.finances = {
                 description: `Pending insurance claim for ${prescription.productName} (Prescription ID: ${prescription.id})`,
                 customerId: customerId,
                 prescriptionId: prescription.id,
-                pending: true
+                pending: true,
             });
         }
 
@@ -199,10 +201,12 @@ window.finances = {
 
         window.financesData.completedOrders++;
 
-        console.log(`[finances.js] Order completed for customer ${customerId}. Copay: $${copay.toFixed(2)}, Price: $${price.toFixed(2)}`);
+        console.log(
+            `[finances.js] Order completed for customer ${customerId}. Copay: $${copay.toFixed(2)}, Price: $${price.toFixed(2)}`,
+        );
 
         // Update UI
-        window.updateUI("finances");
+        window.updateUI('finances');
 
         // Calculate new profit metrics
         this.updateProfitMetrics();
@@ -212,7 +216,7 @@ window.finances = {
 
     // Process insurance claims and update finances
     processInsuranceClaims() {
-        let totalClaimAmount = window.insuranceClaims.processAllClaims();
+        const totalClaimAmount = window.insuranceClaims.processAllClaims();
 
         // When claims are processed, update revenue metrics
         if (totalClaimAmount > 0) {
@@ -233,7 +237,7 @@ window.finances = {
         window.financesData.pendingInsuranceIncome = 0;
 
         // Update UI
-        window.updateUI("finances");
+        window.updateUI('finances');
     },
 
     // Add generic income (e.g., from a cash sale without insurance)
@@ -261,14 +265,14 @@ window.finances = {
             type: 'income',
             category: category,
             amount: amount,
-            description: description
+            description: description,
         });
 
         // Update profit metrics
         this.updateProfitMetrics();
 
         // Update UI
-        window.updateUI("finances");
+        window.updateUI('finances');
 
         console.log(`[finances.js] Added income: $${amount.toFixed(2)} (${category})`);
     },
@@ -302,14 +306,14 @@ window.finances = {
             type: 'expense',
             category: category,
             amount: amount,
-            description: description
+            description: description,
         });
 
         // Update profit metrics
         this.updateProfitMetrics();
 
         // Update UI
-        window.updateUI("finances");
+        window.updateUI('finances');
 
         console.log(`[finances.js] Added expense: $${amount.toFixed(2)} (${category})`);
         return true;
@@ -336,7 +340,7 @@ window.finances = {
 
     // Update a product's price (manually or by the user)
     updateProductPrice(productId, newPrice) {
-        const product = window.productsData.find(p => p.id === productId);
+        const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
             console.error(`[finances.js] Product not found: ${productId}`);
             return;
@@ -344,17 +348,19 @@ window.finances = {
 
         const oldPrice = product.price;
         product.price = newPrice;
-        console.log(`[finances.js] Price for ${product.name} updated: $${oldPrice.toFixed(2)} -> $${newPrice.toFixed(2)}`);
+        console.log(
+            `[finances.js] Price for ${product.name} updated: $${oldPrice.toFixed(2)} -> $${newPrice.toFixed(2)}`,
+        );
 
         // Optionally re-render finances or inventory UI
-        window.updateUI("finances");
-        window.updateUI("inventory");
+        window.updateUI('finances');
+        window.updateUI('inventory');
     },
 
     // Set all product prices to their suggested price
     setToSuggestedPrices() {
         let changeCount = 0;
-        window.productsData.forEach(product => {
+        window.productsData.forEach((product) => {
             const cost = window.calculateProductCost(product.id);
             const suggestedPrice = cost * window.globalMarkup;
 
@@ -364,15 +370,17 @@ window.finances = {
             }
         });
 
-        console.log(`[finances.js] Set ${changeCount} product prices to suggested markup (${(window.globalMarkup * 100 - 100).toFixed(0)}%)`);
-        window.updateUI("inventory");
+        console.log(
+            `[finances.js] Set ${changeCount} product prices to suggested markup (${(window.globalMarkup * 100 - 100).toFixed(0)}%)`,
+        );
+        window.updateUI('inventory');
     },
 
     // Apply a markup to all product prices
     applyMarkupToAllProducts(markupPercentage) {
-        const markupFactor = 1 + (markupPercentage / 100);
+        const markupFactor = 1 + markupPercentage / 100;
 
-        window.productsData.forEach(product => {
+        window.productsData.forEach((product) => {
             const cost = window.calculateProductCost(product.id);
             const newPrice = cost * markupFactor;
             product.price = newPrice;
@@ -382,14 +390,13 @@ window.finances = {
         window.globalMarkup = markupFactor;
 
         console.log(`[finances.js] Applied ${markupPercentage.toFixed(0)}% markup to all product prices.`);
-        window.updateUI("inventory");
+        window.updateUI('inventory');
     },
 
     // Calculate and update profit metrics
     updateProfitMetrics() {
         // Today's profit
-        window.financesData.profit.today =
-            window.financesData.revenue.today - window.financesData.expenses.today;
+        window.financesData.profit.today = window.financesData.revenue.today - window.financesData.expenses.today;
 
         // This week's profit
         window.financesData.profit.thisWeek =
@@ -400,8 +407,7 @@ window.finances = {
             window.financesData.revenue.thisMonth - window.financesData.expenses.thisMonth;
 
         // Total profit
-        window.financesData.profit.total =
-            window.financesData.revenue.total - window.financesData.expenses.total;
+        window.financesData.profit.total = window.financesData.revenue.total - window.financesData.expenses.total;
     },
 
     // Reset daily stats (called at start of day)
@@ -447,21 +453,23 @@ window.finances = {
 
         // Aggregate sales by hour
         window.financesData.transactions
-            .filter(t => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
-            .forEach(t => {
+            .filter((t) => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
+            .forEach((t) => {
                 const hour = t.date.getHours();
                 hourlySales[hour] += t.amount;
             });
 
         return {
-            labels: Object.keys(hourlySales).map(hour => `${hour}:00`),
-            datasets: [{
-                label: 'Hourly Sales',
-                data: Object.values(hourlySales),
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 1
-            }]
+            labels: Object.keys(hourlySales).map((hour) => `${hour}:00`),
+            datasets: [
+                {
+                    label: 'Hourly Sales',
+                    data: Object.values(hourlySales),
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1,
+                },
+            ],
         };
     },
 
@@ -481,21 +489,23 @@ window.finances = {
 
         // Aggregate sales by day
         window.financesData.transactions
-            .filter(t => t.type === 'income' && t.date >= startOfMonth && t.date <= endOfMonth)
-            .forEach(t => {
+            .filter((t) => t.type === 'income' && t.date >= startOfMonth && t.date <= endOfMonth)
+            .forEach((t) => {
                 const day = t.date.getDate();
                 dailySales[day] += t.amount;
             });
 
         return {
-            labels: Object.keys(dailySales).map(day => `Day ${day}`),
-            datasets: [{
-                label: 'Daily Sales',
-                data: Object.values(dailySales),
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
+            labels: Object.keys(dailySales).map((day) => `Day ${day}`),
+            datasets: [
+                {
+                    label: 'Daily Sales',
+                    data: Object.values(dailySales),
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1,
+                },
+            ],
         };
     },
 
@@ -519,16 +529,16 @@ window.finances = {
 
         // Aggregate revenue by day
         window.financesData.transactions
-            .filter(t => t.type === 'income' && t.date >= startOfMonth && t.date <= endOfMonth)
-            .forEach(t => {
+            .filter((t) => t.type === 'income' && t.date >= startOfMonth && t.date <= endOfMonth)
+            .forEach((t) => {
                 const day = t.date.getDate();
                 dailyRevenue[day] += t.amount;
             });
 
         // Aggregate expenses by day
         window.financesData.transactions
-            .filter(t => t.type === 'expense' && t.date >= startOfMonth && t.date <= endOfMonth)
-            .forEach(t => {
+            .filter((t) => t.type === 'expense' && t.date >= startOfMonth && t.date <= endOfMonth)
+            .forEach((t) => {
                 const day = t.date.getDate();
                 dailyExpenses[day] += t.amount;
             });
@@ -539,30 +549,30 @@ window.finances = {
         }
 
         return {
-            labels: Object.keys(dailyRevenue).map(day => `Day ${day}`),
+            labels: Object.keys(dailyRevenue).map((day) => `Day ${day}`),
             datasets: [
                 {
                     label: 'Revenue',
                     data: Object.values(dailyRevenue),
                     backgroundColor: 'rgba(75, 192, 192, 0.2)',
                     borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
+                    borderWidth: 1,
                 },
                 {
                     label: 'Expenses',
                     data: Object.values(dailyExpenses),
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
                     borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1
+                    borderWidth: 1,
                 },
                 {
                     label: 'Profit',
                     data: Object.values(dailyProfit),
                     backgroundColor: 'rgba(54, 162, 235, 0.2)',
                     borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }
-            ]
+                    borderWidth: 1,
+                },
+            ],
         };
     },
 
@@ -578,7 +588,7 @@ window.finances = {
             'rgba(255, 206, 86, 0.2)',
             'rgba(75, 192, 192, 0.2)',
             'rgba(153, 102, 255, 0.2)',
-            'rgba(255, 159, 64, 0.2)'
+            'rgba(255, 159, 64, 0.2)',
         ];
 
         const borderColors = [
@@ -587,18 +597,20 @@ window.finances = {
             'rgba(255, 206, 86, 1)',
             'rgba(75, 192, 192, 1)',
             'rgba(153, 102, 255, 1)',
-            'rgba(255, 159, 64, 1)'
+            'rgba(255, 159, 64, 1)',
         ];
 
         return {
-            labels: categories.map(c => c.charAt(0).toUpperCase() + c.slice(1)), // Capitalize first letter
-            datasets: [{
-                label: 'Expense Categories',
-                data: values,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1
-            }]
+            labels: categories.map((c) => c.charAt(0).toUpperCase() + c.slice(1)), // Capitalize first letter
+            datasets: [
+                {
+                    label: 'Expense Categories',
+                    data: values,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1,
+                },
+            ],
         };
     },
 
@@ -612,25 +624,27 @@ window.finances = {
             'rgba(75, 192, 192, 0.2)',
             'rgba(54, 162, 235, 0.2)',
             'rgba(153, 102, 255, 0.2)',
-            'rgba(255, 159, 64, 0.2)'
+            'rgba(255, 159, 64, 0.2)',
         ];
 
         const borderColors = [
             'rgba(75, 192, 192, 1)',
             'rgba(54, 162, 235, 1)',
             'rgba(153, 102, 255, 1)',
-            'rgba(255, 159, 64, 1)'
+            'rgba(255, 159, 64, 1)',
         ];
 
         return {
-            labels: categories.map(c => c.charAt(0).toUpperCase() + c.slice(1)), // Capitalize first letter
-            datasets: [{
-                label: 'Revenue Categories',
-                data: values,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1
-            }]
+            labels: categories.map((c) => c.charAt(0).toUpperCase() + c.slice(1)), // Capitalize first letter
+            datasets: [
+                {
+                    label: 'Revenue Categories',
+                    data: values,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1,
+                },
+            ],
         };
     },
 
@@ -640,7 +654,7 @@ window.finances = {
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
         return window.financesData.transactions
-            .filter(t => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter((t) => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
             .reduce((total, t) => total + t.amount, 0);
     },
 
@@ -650,11 +664,11 @@ window.finances = {
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
         const income = window.financesData.transactions
-            .filter(t => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter((t) => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
             .reduce((total, t) => total + t.amount, 0);
 
         const expenses = window.financesData.transactions
-            .filter(t => t.type === 'expense' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter((t) => t.type === 'expense' && t.date >= startOfDay && t.date <= endOfDay)
             .reduce((total, t) => total + t.amount, 0);
 
         return income - expenses;
@@ -666,40 +680,41 @@ window.finances = {
 
         // Filter by date range
         if (options.startDate) {
-            filtered = filtered.filter(t => t.date >= options.startDate!);
+            filtered = filtered.filter((t) => t.date >= options.startDate!);
         }
 
         if (options.endDate) {
-            filtered = filtered.filter(t => t.date <= options.endDate!);
+            filtered = filtered.filter((t) => t.date <= options.endDate!);
         }
 
         // Filter by type
         if (options.type) {
-            filtered = filtered.filter(t => t.type === options.type);
+            filtered = filtered.filter((t) => t.type === options.type);
         }
 
         // Filter by category
         if (options.category) {
-            filtered = filtered.filter(t => t.category === options.category);
+            filtered = filtered.filter((t) => t.category === options.category);
         }
 
         // Filter by minimum amount
         if (options.minAmount) {
-            filtered = filtered.filter(t => t.amount >= options.minAmount!);
+            filtered = filtered.filter((t) => t.amount >= options.minAmount!);
         }
 
         // Filter by maximum amount
         if (options.maxAmount) {
-            filtered = filtered.filter(t => t.amount <= options.maxAmount!);
+            filtered = filtered.filter((t) => t.amount <= options.maxAmount!);
         }
 
         // Filter by search term (checks description)
         if (options.searchTerm) {
             const term = options.searchTerm.toLowerCase();
-            filtered = filtered.filter(t =>
-                t.description.toLowerCase().includes(term) ||
-                (t.customerId && t.customerId.toLowerCase().includes(term)) ||
-                (t.prescriptionId && t.prescriptionId.toLowerCase().includes(term))
+            filtered = filtered.filter(
+                (t) =>
+                    t.description.toLowerCase().includes(term) ||
+                    (t.customerId && t.customerId.toLowerCase().includes(term)) ||
+                    (t.prescriptionId && t.prescriptionId.toLowerCase().includes(term)),
             );
         }
 
@@ -718,7 +733,7 @@ window.finances = {
             expenseCategories: window.financesData.expenseCategories,
             targetDailyRevenue: window.financesData.targetDailyRevenue,
             targetMonthlyRevenue: window.financesData.targetMonthlyRevenue,
-            completedOrders: window.financesData.completedOrders
+            completedOrders: window.financesData.completedOrders,
         };
-    }
+    },
 };

@@ -1,0 +1,6 @@
+# tsc output from main/**/*.ts
+main/**/*.js
+dist/
+test-results/
+playwright-report/
+package-lock.json

@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const gameIntegration = require('./game-integration');
+const { initGameIntegration } = require('./game-integration');
 const log = require('electron-log');
 
 // Lets tests run against a throwaway profile instead of the player's real
@@ -32,7 +32,7 @@ let mainWindow = null;
 function createWindow() {
   log.info('Creating main application window...');
   log.info('App path:', app.getAppPath());
-  
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -42,8 +42,8 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
       // Enable DevTools in production for debugging
-      devTools: true
-    }
+      devTools: true,
+    },
   });
 
   // Log the preload script path
@@ -51,7 +51,7 @@ function createWindow() {
   log.info('Preload script path:', preloadPath);
   const preloadExists = fs.existsSync(preloadPath);
   log.info('Preload script exists:', preloadExists);
-  
+
   if (!preloadExists) {
     log.error('Preload script is missing! Application may not function correctly.');
   }
@@ -61,15 +61,15 @@ function createWindow() {
   log.info('Index path:', indexPath);
   const indexExists = fs.existsSync(indexPath);
   log.info('Index exists:', indexExists);
-  
+
   if (!indexExists) {
     log.error('Index.html is missing! Application cannot start properly.');
   }
-  
+
   // Add a global variable for the resource path
   global.resourcesPath = path.join(__dirname, 'main');
   log.info('Resources path set to:', global.resourcesPath);
-  
+
   mainWindow.loadFile(indexPath);
 
   // Show window when ready
@@ -82,18 +82,18 @@ function createWindow() {
       mainWindow.webContents.openDevTools();
     }
   });
-  
+
   // Handle window close
   mainWindow.on('closed', () => {
     log.info('Main window closed');
     mainWindow = null;
   });
-  
+
   // Handle errors
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
     log.error('Failed to load application:', errorCode, errorDescription);
   });
-  
+
   // Log renderer console messages to electron-log. Packaged builds only keep
   // warnings and errors, so routine game logging doesn't fill the log file.
   mainWindow.webContents.on('console-message', (event) => {
@@ -101,7 +101,7 @@ function createWindow() {
     if (app.isPackaged && logLevel !== 'warn' && logLevel !== 'error') return;
     (log[logLevel] || log.info)(`[Renderer] ${event.message} (${event.sourceId}:${event.lineNumber})`);
   });
-  
+
   return mainWindow;
 }
 
@@ -113,7 +113,7 @@ app.whenReady().then(() => {
   // throws on a second registration (e.g. macOS 'activate' re-creating the
   // window).
   try {
-    gameIntegration.initGameIntegration();
+    initGameIntegration();
     log.info('Game integration initialized successfully');
   } catch (error) {
     log.error('Failed to initialize game integration:', error);
@@ -122,12 +122,12 @@ app.whenReady().then(() => {
   try {
     createWindow();
     log.info('Main window created successfully');
-    
+
     // Check for updates
-    autoUpdater.checkForUpdatesAndNotify().catch(err => {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       log.error('Error checking for updates:', err);
     });
-    
+
     // On macOS, re-create a window when dock icon is clicked
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
@@ -142,7 +142,7 @@ app.whenReady().then(() => {
 
 // NOTE: 'read-file', 'write-file', 'start-new-game', 'get-new-game-options',
 // 'load-game', 'save-game', 'get-settings', and 'update-settings' are handled
-// by gameIntegration.initGameIntegration() (see game-integration.js), which
+// by initGameIntegration() (see game-integration.js), which
 // persists to disk under the app's userData directory. They used to also be
 // registered here as in-memory-only duplicates, which made Electron throw on
 // the second registration and silently aborted the rest of

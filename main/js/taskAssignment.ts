@@ -1,7 +1,6 @@
 // taskAssignment.js
 
-window.taskAssignment = (function(): TaskAssignmentApi {
-
+window.taskAssignment = (function (): TaskAssignmentApi {
     /**
      * Keeps Prescription.assignedEmployeeId in sync with a fillPrescription
      * task's own assignedTo - Task remains the source of truth, this just
@@ -19,8 +18,8 @@ window.taskAssignment = (function(): TaskAssignmentApi {
      * Assigns a task to an employee, updating both the task and employee objects.
      */
     function assignTaskToEmployee(taskId: string, employeeId: string): boolean {
-        const task = window.taskManager.tasks.find(t => t.id === taskId);
-        const employee = window.employeesData.find(emp => emp.id === employeeId);
+        const task = window.taskManager.tasks.find((t) => t.id === taskId);
+        const employee = window.employeesData.find((emp) => emp.id === employeeId);
 
         if (!task) {
             console.error(`[assignTaskToEmployee] Task not found: ${taskId}`);
@@ -33,9 +32,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
         // Check if the task is already assigned
         if (task.assignedTo) {
-            console.warn(`[assignTaskToEmployee] Task ${task.id} already assigned to ${task.assignedTo}. Unassigning first.`);
+            console.warn(
+                `[assignTaskToEmployee] Task ${task.id} already assigned to ${task.assignedTo}. Unassigning first.`,
+            );
             // Unassign from the previous employee
-            const prevEmployee = window.employeesData.find(emp => emp.id === task.assignedTo);
+            const prevEmployee = window.employeesData.find((emp) => emp.id === task.assignedTo);
             if (prevEmployee && prevEmployee.currentTaskId === task.id) {
                 prevEmployee.currentTaskId = null;
             }
@@ -43,9 +44,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
         // Check if employee already has a task
         if (employee.currentTaskId) {
-            console.warn(`[assignTaskToEmployee] Employee ${employee.id} already has task ${employee.currentTaskId}. Clearing it first.`);
+            console.warn(
+                `[assignTaskToEmployee] Employee ${employee.id} already has task ${employee.currentTaskId}. Clearing it first.`,
+            );
             // Remove the employee's assignment from the previous task
-            const prevTask = window.taskManager.tasks.find(t => t.id === employee.currentTaskId);
+            const prevTask = window.taskManager.tasks.find((t) => t.id === employee.currentTaskId);
             if (prevTask && prevTask.assignedTo === employee.id) {
                 prevTask.assignedTo = null;
                 prevTask.status = 'pending';
@@ -63,7 +66,9 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         // Set a timestamp (game time) for when the task was assigned
         task.assignedAt = window.clock.now();
 
-        console.log(`[assignTaskToEmployee] Successfully assigned task ${taskId} (${task.type}) to ${employee.firstName} ${employee.lastName} (${employee.role})`);
+        console.log(
+            `[assignTaskToEmployee] Successfully assigned task ${taskId} (${task.type}) to ${employee.firstName} ${employee.lastName} (${employee.role})`,
+        );
         return true;
     }
 
@@ -71,7 +76,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
      * Unassigns an employee from a task, returning the task to 'pending' status.
      */
     function unassignTask(taskId: string): void {
-        const task = window.taskManager.tasks.find(t => t.id === taskId);
+        const task = window.taskManager.tasks.find((t) => t.id === taskId);
         if (!task) {
             console.error(`[unassignTask] Task not found: ${taskId}`);
             return;
@@ -79,9 +84,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
         // Get the assigned employee (if any)
         if (task.assignedTo) {
-            const employee = window.employeesData.find(emp => emp.id === task.assignedTo);
+            const employee = window.employeesData.find((emp) => emp.id === task.assignedTo);
             if (employee) {
-                console.log(`[unassignTask] Clearing task ${taskId} from employee ${employee.firstName} ${employee.lastName}`);
+                console.log(
+                    `[unassignTask] Clearing task ${taskId} from employee ${employee.firstName} ${employee.lastName}`,
+                );
                 // Only clear the employee's currentTaskId if it matches this task
                 if (employee.currentTaskId === task.id) {
                     employee.currentTaskId = null;
@@ -125,11 +132,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
                 // Standard priority order
                 const priorityOrder: Record<string, number> = {
-                    'consultation': 2,
-                    'fillPrescription': 3,
-                    'compound': 4,
-                    'production': 5,
-                    'customerInteraction': 6, // Default for other customerInteractions
+                    consultation: 2,
+                    fillPrescription: 3,
+                    compound: 4,
+                    production: 5,
+                    customerInteraction: 6, // Default for other customerInteractions
                 };
 
                 // Return the priority, or a low priority if not found
@@ -159,7 +166,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         normalizeEmployeeRoles();
 
         // Get unassigned eligible tasks
-        const unassignedTasks = window.taskManager.tasks.filter(task => {
+        const unassignedTasks = window.taskManager.tasks.filter((task) => {
             // Skip tasks that are already assigned or complete
             if (task.assignedTo || task.status === 'completed') {
                 return false;
@@ -172,7 +179,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
             // For compound tasks, check material availability
             if (task.type === 'compound') {
-                const product = window.productsData?.find(p => p.id === task.productId);
+                const product = window.productsData?.find((p) => p.id === task.productId);
                 if (!product) {
                     console.error(`[autoAssignTasks] Product not found for compound task: ${task.productId}`);
                     return false;
@@ -194,17 +201,17 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         }
 
         // Get available employees
-        const availableEmployees = window.employeesData.filter(emp => !emp.currentTaskId);
+        const availableEmployees = window.employeesData.filter((emp) => !emp.currentTaskId);
         if (availableEmployees.length === 0) {
             return;
         }
 
         // First, handle prioritized tasks for Cashiers
-        const cashiers = availableEmployees.filter(emp => emp.role === 'Cashier');
+        const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
 
         // If we have cashiers, first try to assign them to checkout tasks (highest priority)
         if (cashiers.length > 0) {
-            const checkoutTasks = unassignedTasks.filter(t => {
+            const checkoutTasks = unassignedTasks.filter((t) => {
                 if (t.type !== 'customerInteraction') return false;
                 // customerInteraction tasks are always created with a
                 // customerId (see customers.ts) — asserted rather than
@@ -214,7 +221,9 @@ window.taskAssignment = (function(): TaskAssignmentApi {
             });
 
             if (checkoutTasks.length > 0) {
-                console.log(`[autoAssignTasks] Found ${checkoutTasks.length} checkout tasks for ${cashiers.length} available cashiers`);
+                console.log(
+                    `[autoAssignTasks] Found ${checkoutTasks.length} checkout tasks for ${cashiers.length} available cashiers`,
+                );
                 for (let i = 0; i < Math.min(cashiers.length, checkoutTasks.length); i++) {
                     assignTaskToEmployee(checkoutTasks[i].id, cashiers[i].id);
                     // Remove assigned cashier from available list
@@ -227,8 +236,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         }
 
         // Get updated list of unassigned tasks after checkout assignments
-        const remainingTasks = window.taskManager.tasks.filter(t =>
-            !t.assignedTo && t.status === 'pending');
+        const remainingTasks = window.taskManager.tasks.filter((t) => !t.assignedTo && t.status === 'pending');
 
         if (remainingTasks.length === 0 || availableEmployees.length === 0) {
             return; // Exit if no more tasks or employees
@@ -240,12 +248,14 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         // Process each prioritized task
         let assignmentsMade = false;
 
-        for (let task of prioritizedTasks) {
+        for (const task of prioritizedTasks) {
             // Try to find the best employee for this task
             const employee = findBestEmployeeForTask(task, availableEmployees);
 
             if (employee) {
-                console.log(`[autoAssignTasks] Assigning ${task.type} task (${task.id}) to ${employee.firstName} ${employee.lastName} (${employee.role})`);
+                console.log(
+                    `[autoAssignTasks] Assigning ${task.type} task (${task.id}) to ${employee.firstName} ${employee.lastName} (${employee.role})`,
+                );
                 assignTaskToEmployee(task.id, employee.id);
 
                 // Remove this employee from available list
@@ -265,7 +275,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
         // If we made assignments, we'll run auto-assign again on the next loop
         if (assignmentsMade) {
-            console.log("[autoAssignTasks] Assignments made, scheduling another round of assignment checks.");
+            console.log('[autoAssignTasks] Assignments made, scheduling another round of assignment checks.');
             setTimeout(autoAssignTasks, 100); // Run again after a short delay
         }
     }
@@ -276,35 +286,39 @@ window.taskAssignment = (function(): TaskAssignmentApi {
     function normalizeEmployeeRoles(): void {
         const roleMap: Record<string, string> = {
             'Sales Rep': 'Cashier',
-            'SalesRep': 'Cashier',
-            'Technician': 'Lab Technician',
-            'Tech': 'Lab Technician',
-            'LabTech': 'Lab Technician',
-            'Doctor': 'Pharmacist',
-            'PharmD': 'Pharmacist',
-            'Pharm': 'Pharmacist',
+            SalesRep: 'Cashier',
+            Technician: 'Lab Technician',
+            Tech: 'Lab Technician',
+            LabTech: 'Lab Technician',
+            Doctor: 'Pharmacist',
+            PharmD: 'Pharmacist',
+            Pharm: 'Pharmacist',
             'Pharmacy Tech': 'Lab Technician',
             'Pharmacist Assistant': 'Lab Technician',
-            'Assistant': 'Cashier',
-            'Clerk': 'Cashier',
+            Assistant: 'Cashier',
+            Clerk: 'Cashier',
             'Customer Service': 'Cashier',
-            'Cashier/Sales': 'Cashier'
+            'Cashier/Sales': 'Cashier',
         };
 
         let normalizedCount = 0;
 
-        window.employeesData.forEach(employee => {
+        window.employeesData.forEach((employee) => {
             // Check if the role needs to be normalized
             const normalizedRole = roleMap[employee.role];
             if (normalizedRole) {
-                console.log(`[normalizeEmployeeRoles] Normalizing employee ${employee.firstName} ${employee.lastName} role from "${employee.role}" to "${normalizedRole}"`);
+                console.log(
+                    `[normalizeEmployeeRoles] Normalizing employee ${employee.firstName} ${employee.lastName} role from "${employee.role}" to "${normalizedRole}"`,
+                );
                 employee.role = normalizedRole;
                 normalizedCount++;
             }
 
             // Make sure roles are one of the three expected values
             if (!['Pharmacist', 'Lab Technician', 'Cashier'].includes(employee.role)) {
-                console.warn(`[normalizeEmployeeRoles] Employee ${employee.firstName} ${employee.lastName} has unrecognized role "${employee.role}". Defaulting to "Cashier".`);
+                console.warn(
+                    `[normalizeEmployeeRoles] Employee ${employee.firstName} ${employee.lastName} has unrecognized role "${employee.role}". Defaulting to "Cashier".`,
+                );
                 employee.role = 'Cashier';
                 normalizedCount++;
             }
@@ -325,7 +339,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
             return false;
         }
 
-        const product = window.productsData?.find(p => p.id === prescription.productId);
+        const product = window.productsData?.find((p) => p.id === prescription.productId);
         if (!product) {
             console.error(`[canFillPrescription] Product ${prescription.productId} not found.`);
             return false;
@@ -343,11 +357,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
     function findBestEmployeeForTask(task: Task, availableEmployees: Employee[]): Employee | null {
         // Define roles eligible for each task type, with priority order
         const eligibleRoles: Record<string, string[]> = {
-            'customerInteraction': ['Cashier', 'Pharmacist', 'Lab Technician'], // Cashier preferred, but anyone can help
-            'consultation': ['Pharmacist'],
-            'fillPrescription': ['Lab Technician', 'Pharmacist'], // Lab Technician preferred
-            'compound': ['Lab Technician', 'Pharmacist'],
-            'production': ['Lab Technician', 'Pharmacist']
+            customerInteraction: ['Cashier', 'Pharmacist', 'Lab Technician'], // Cashier preferred, but anyone can help
+            consultation: ['Pharmacist'],
+            fillPrescription: ['Lab Technician', 'Pharmacist'], // Lab Technician preferred
+            compound: ['Lab Technician', 'Pharmacist'],
+            production: ['Lab Technician', 'Pharmacist'],
         };
 
         // Special handling for customer interactions
@@ -356,11 +370,11 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
             // For checkout, prefer a Cashier but allow others if none available
             if (customer && customer.status === 'readyForCheckout') {
-                const cashiers = availableEmployees.filter(emp => emp.role === 'Cashier');
+                const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
                 if (cashiers.length > 0) {
                     // Find the cashier with best customer service skills
-                    return cashiers.sort((a, b) =>
-                        (b.skills?.customerService || 0) - (a.skills?.customerService || 0)
+                    return cashiers.sort(
+                        (a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0),
                     )[0];
                 }
                 // If no cashiers, anyone can help with checkout
@@ -369,10 +383,10 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
             // For check-in, prefer a Cashier but allow others if none available
             if (customer && customer.status === 'waitingForCheckIn') {
-                const cashiers = availableEmployees.filter(emp => emp.role === 'Cashier');
+                const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
                 if (cashiers.length > 0) {
-                    return cashiers.sort((a, b) =>
-                        (b.skills?.customerService || 0) - (a.skills?.customerService || 0)
+                    return cashiers.sort(
+                        (a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0),
                     )[0];
                 }
                 // If no cashiers, anyone can help with check-in
@@ -386,7 +400,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         // Try each role in priority order
         let eligibleEmployees: Employee[] = [];
         for (const role of taskRoles) {
-            const employeesWithRole = availableEmployees.filter(emp => emp.role === role);
+            const employeesWithRole = availableEmployees.filter((emp) => emp.role === role);
             if (employeesWithRole.length > 0) {
                 eligibleEmployees = employeesWithRole;
                 break; // Found employees with the highest priority role
@@ -396,7 +410,9 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         // If no employees with preferred roles, use any available employee
         // This is a fallback to ensure tasks don't get stuck
         if (eligibleEmployees.length === 0 && availableEmployees.length > 0) {
-            console.log(`[findBestEmployeeForTask] No employees with preferred roles ${taskRoles.join(', ')} for ${task.type}. Using any available employee.`);
+            console.log(
+                `[findBestEmployeeForTask] No employees with preferred roles ${taskRoles.join(', ')} for ${task.type}. Using any available employee.`,
+            );
             eligibleEmployees = availableEmployees;
         }
 
@@ -408,7 +424,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         let bestEmployee = eligibleEmployees[0];
         let bestScore = -1;
 
-        for (let employee of eligibleEmployees) {
+        for (const employee of eligibleEmployees) {
             // Calculate a score based on skills relevant to the task
             let score = 0;
 
@@ -419,34 +435,33 @@ window.taskAssignment = (function(): TaskAssignmentApi {
             // Add bonus for specific skills
             if (task.type === 'fillPrescription') {
                 score += (employee.skills?.compounding || 0) * 1.5;
-                score += (employee.skills?.dispensing || 0);
-            }
-            else if (task.type === 'compound') {
+                score += employee.skills?.dispensing || 0;
+            } else if (task.type === 'compound') {
                 score += (employee.skills?.compounding || 0) * 2;
-            }
-            else if (task.type === 'customerInteraction') {
+            } else if (task.type === 'customerInteraction') {
                 score += (employee.skills?.customerService || 0) * 2;
-            }
-            else if (task.type === 'consultation') {
-                score += (employee.skills?.customerService || 0);
+            } else if (task.type === 'consultation') {
+                score += employee.skills?.customerService || 0;
                 score += (employee.skills?.dispensing || 0) * 1.5;
             }
 
             // Preference for employee with higher morale
-            score += (employee.morale / 20); // 0-5 bonus points based on morale
+            score += employee.morale / 20; // 0-5 bonus points based on morale
 
             // Preference for same employee who created a related compound
             if (task.type === 'fillPrescription' && task.dependencyTaskId) {
-                const compoundTask = window.taskManager.tasks.find(t => t.id === task.dependencyTaskId);
+                const compoundTask = window.taskManager.tasks.find((t) => t.id === task.dependencyTaskId);
                 if (compoundTask && compoundTask.assignedTo === employee.id) {
                     score += 50; // Strong preference for continuity
                 }
             }
 
             // If this is the employee's primary role, give a significant bonus
-            if ((task.type === 'fillPrescription' && employee.role === 'Lab Technician') ||
+            if (
+                (task.type === 'fillPrescription' && employee.role === 'Lab Technician') ||
                 (task.type === 'consultation' && employee.role === 'Pharmacist') ||
-                (task.type === 'customerInteraction' && employee.role === 'Cashier')) {
+                (task.type === 'customerInteraction' && employee.role === 'Cashier')
+            ) {
                 score += 30; // Strong bonus for primary role
             }
 
@@ -480,7 +495,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         const avgSkill = skillCount > 0 ? skillSum / skillCount : 50;
 
         // Apply morale factor
-        const moraleFactor = 0.5 + (employee.morale / 200); // 0.5 to 1.0 based on morale
+        const moraleFactor = 0.5 + employee.morale / 200; // 0.5 to 1.0 based on morale
 
         // Calculate base efficiency (0-100 scale)
         const baseEfficiency = avgSkill * moraleFactor;
@@ -490,67 +505,69 @@ window.taskAssignment = (function(): TaskAssignmentApi {
 
     // Log current task assignment state - useful for debugging
     function logTaskAssignmentState(): void {
-        console.log("=== TASK ASSIGNMENT STATE ===");
+        console.log('=== TASK ASSIGNMENT STATE ===');
 
         // Count employees by role
         const roleCounts: Record<string, number> = {};
-        window.employeesData.forEach(emp => {
+        window.employeesData.forEach((emp) => {
             roleCounts[emp.role] = (roleCounts[emp.role] || 0) + 1;
         });
-        console.log("Employees by role:", roleCounts);
+        console.log('Employees by role:', roleCounts);
 
         // Count tasks by type
         const taskTypeCounts: Record<string, number> = {};
-        window.taskManager.tasks.forEach(task => {
+        window.taskManager.tasks.forEach((task) => {
             taskTypeCounts[task.type] = (taskTypeCounts[task.type] || 0) + 1;
         });
-        console.log("Tasks by type:", taskTypeCounts);
+        console.log('Tasks by type:', taskTypeCounts);
 
         // Count assigned vs unassigned tasks
-        const assignedTasks = window.taskManager.tasks.filter(t => t.assignedTo).length;
-        const unassignedTasks = window.taskManager.tasks.filter(t => !t.assignedTo && t.status === 'pending').length;
+        const assignedTasks = window.taskManager.tasks.filter((t) => t.assignedTo).length;
+        const unassignedTasks = window.taskManager.tasks.filter((t) => !t.assignedTo && t.status === 'pending').length;
         console.log(`Assigned tasks: ${assignedTasks}, Unassigned tasks: ${unassignedTasks}`);
 
         // Count busy vs free employees
-        const busyEmployees = window.employeesData.filter(emp => emp.currentTaskId).length;
-        const freeEmployees = window.employeesData.filter(emp => !emp.currentTaskId).length;
+        const busyEmployees = window.employeesData.filter((emp) => emp.currentTaskId).length;
+        const freeEmployees = window.employeesData.filter((emp) => !emp.currentTaskId).length;
         console.log(`Busy employees: ${busyEmployees}, Free employees: ${freeEmployees}`);
 
         // Check for role-task mismatches
-        window.taskManager.tasks.forEach(task => {
+        window.taskManager.tasks.forEach((task) => {
             if (task.assignedTo) {
-                const emp = window.employeesData.find(e => e.id === task.assignedTo);
+                const emp = window.employeesData.find((e) => e.id === task.assignedTo);
                 if (emp) {
                     const eligibleRoles: Record<string, string[]> = {
-                        'customerInteraction': ['Cashier'],
-                        'consultation': ['Pharmacist'],
-                        'fillPrescription': ['Lab Technician', 'Pharmacist'],
-                        'compound': ['Lab Technician', 'Pharmacist'],
-                        'production': ['Lab Technician', 'Pharmacist']
+                        customerInteraction: ['Cashier'],
+                        consultation: ['Pharmacist'],
+                        fillPrescription: ['Lab Technician', 'Pharmacist'],
+                        compound: ['Lab Technician', 'Pharmacist'],
+                        production: ['Lab Technician', 'Pharmacist'],
                     };
 
                     const preferredRoles = eligibleRoles[task.type] || [];
                     if (!preferredRoles.includes(emp.role)) {
-                        console.warn(`Potential role mismatch: ${emp.firstName} ${emp.lastName} (${emp.role}) assigned to ${task.type} task`);
+                        console.warn(
+                            `Potential role mismatch: ${emp.firstName} ${emp.lastName} (${emp.role}) assigned to ${task.type} task`,
+                        );
                     }
                 }
             }
         });
 
-        console.log("============================");
+        console.log('============================');
     }
 
     // Force task reassignment for all tasks - useful for recovery
     function forceTaskReassignment(): void {
-        console.log("[forceTaskReassignment] Forcing reassignment of all tasks");
+        console.log('[forceTaskReassignment] Forcing reassignment of all tasks');
 
         // Clear all employee task assignments
-        window.employeesData.forEach(emp => {
+        window.employeesData.forEach((emp) => {
             emp.currentTaskId = null;
         });
 
         // Reset all in-progress tasks to pending
-        window.taskManager.tasks.forEach(task => {
+        window.taskManager.tasks.forEach((task) => {
             if (task.status === 'inProgress') {
                 task.status = 'pending';
                 task.assignedTo = null;
@@ -570,7 +587,7 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         canFillPrescription,
         normalizeEmployeeRoles,
         logTaskAssignmentState,
-        forceTaskReassignment
+        forceTaskReassignment,
     };
 })();
 

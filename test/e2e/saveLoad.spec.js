@@ -36,7 +36,7 @@ async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     win.webContents.closeDevTools();
   });
@@ -73,7 +73,7 @@ test('saving writes a real save file, and loading it restores game state', async
       type: 'expense',
       category: 'other',
       amount: 1,
-      description: 'e2e test transaction'
+      description: 'e2e test transaction',
     });
   });
 
@@ -113,15 +113,18 @@ test('saving writes a real save file, and loading it restores game state', async
   const timeAfterLoad = await page2.evaluate(() => window.gameState.currentDate.getTime());
   await page2.waitForTimeout(1500);
 
-  const loaded = await page2.evaluate((before) => ({
-    pharmacyName: window.gameState?.pharmacyName,
-    cash: window.financesData?.cash,
-    currentDateIsDate: window.gameState?.currentDate instanceof Date,
-    transactionDatesAreDates: window.financesData.transactions.every(t => t.date instanceof Date),
-    clockAdvanced: window.gameState.currentDate.getTime() > before,
-    equipmentIsUnlockedIsFunction: typeof window.equipmentData?.[0]?.isUnlocked === 'function',
-    brandReputationHasMethods: typeof window.brandReputation?.calcCustomers === 'function',
-  }), timeAfterLoad);
+  const loaded = await page2.evaluate(
+    (before) => ({
+      pharmacyName: window.gameState?.pharmacyName,
+      cash: window.financesData?.cash,
+      currentDateIsDate: window.gameState?.currentDate instanceof Date,
+      transactionDatesAreDates: window.financesData.transactions.every((t) => t.date instanceof Date),
+      clockAdvanced: window.gameState.currentDate.getTime() > before,
+      equipmentIsUnlockedIsFunction: typeof window.equipmentData?.[0]?.isUnlocked === 'function',
+      brandReputationHasMethods: typeof window.brandReputation?.calcCustomers === 'function',
+    }),
+    timeAfterLoad,
+  );
 
   expect(loaded.pharmacyName).toBe('Round Trip Pharmacy');
   expect(loaded.cash).toBe(100000);

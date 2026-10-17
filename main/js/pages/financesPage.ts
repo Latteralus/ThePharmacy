@@ -1,6 +1,6 @@
 // improved-financesPage.js (concise version)
 
-window.renderFinancesPage = function(mainContent: HTMLElement): void {
+window.renderFinancesPage = function (mainContent: HTMLElement): void {
     mainContent.innerHTML = '';
 
     const container = document.createElement('div');
@@ -14,46 +14,38 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
     // Financial Summary Cards Section
     const summarySection = document.createElement('div');
     summarySection.className = 'financial-summary-section';
-    
+
     // Create summary cards in a grid layout
     const summaryGrid = document.createElement('div');
     summaryGrid.className = 'summary-grid';
-    
+
     // Cash card
     const cashCard = createSummaryCard(
-        'Cash on Hand', 
+        'Cash on Hand',
         `$${window.financesData.cash.toFixed(2)}`,
-        window.financesData.cash > 5000 ? 'good' : (window.financesData.cash > 1000 ? 'neutral' : 'warning')
+        window.financesData.cash > 5000 ? 'good' : window.financesData.cash > 1000 ? 'neutral' : 'warning',
     );
     summaryGrid.appendChild(cashCard);
-    
+
     // Today's Revenue card
     const todayRevenue = window.financesData.revenue?.today || 0;
-    const revenueCard = createSummaryCard(
-        'Today\'s Revenue', 
-        `$${todayRevenue.toFixed(2)}`, 
-        'neutral'
-    );
+    const revenueCard = createSummaryCard("Today's Revenue", `$${todayRevenue.toFixed(2)}`, 'neutral');
     summaryGrid.appendChild(revenueCard);
-    
+
     // Today's Profit card
     const todayProfit = window.financesData.profit?.today || 0;
     const profitCard = createSummaryCard(
-        'Today\'s Profit', 
+        "Today's Profit",
         `$${todayProfit.toFixed(2)}`,
-        todayProfit > 0 ? 'good' : 'warning'
+        todayProfit > 0 ? 'good' : 'warning',
     );
     summaryGrid.appendChild(profitCard);
-    
+
     // Pending Insurance card
     const pendingInsurance = window.financesData.pendingInsuranceIncome;
-    const insuranceCard = createSummaryCard(
-        'Pending Insurance', 
-        `$${pendingInsurance.toFixed(2)}`,
-        'neutral'
-    );
+    const insuranceCard = createSummaryCard('Pending Insurance', `$${pendingInsurance.toFixed(2)}`, 'neutral');
     summaryGrid.appendChild(insuranceCard);
-    
+
     summarySection.appendChild(summaryGrid);
     container.appendChild(summarySection);
 
@@ -63,7 +55,7 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
     const tabHeaders = ['Overview', 'Daily Report', 'Monthly Report', 'Transactions'];
     const tabContents: HTMLDivElement[] = [];
 
-    tabHeaders.forEach(headerText => {
+    tabHeaders.forEach((headerText) => {
         const tabHeader = document.createElement('button');
         tabHeader.className = 'tab';
         tabHeader.textContent = headerText;
@@ -78,8 +70,8 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
         tabHeader.addEventListener('click', () => {
             // Deactivate all tabs and hide content
             const allTabs = document.querySelectorAll('.tab');
-            allTabs.forEach(tab => tab.classList.remove('active'));
-            tabContents.forEach(content => content.style.display = 'none');
+            allTabs.forEach((tab) => tab.classList.remove('active'));
+            tabContents.forEach((content) => (content.style.display = 'none'));
 
             // Activate clicked tab and show content
             tabHeader.classList.add('active');
@@ -93,7 +85,7 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
 
     // --- Overview Tab Content ---
     const overviewContent = tabContents[0];
-    
+
     // Revenue/Expense summary section
     const overviewGrid = document.createElement('div');
     overviewGrid.className = 'overview-grid';
@@ -119,7 +111,7 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
         </div>
     `;
     overviewGrid.appendChild(monthlyStatsCard);
-    
+
     // Pricing controls card
     const pricingCard = document.createElement('div');
     pricingCard.className = 'finance-card';
@@ -138,30 +130,30 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
         </div>
     `;
     overviewGrid.appendChild(pricingCard);
-    
+
     overviewContent.appendChild(overviewGrid);
-    
+
     // Revenue vs Expenses Chart
     const chartSection = document.createElement('div');
     chartSection.className = 'chart-section';
-    
+
     const chartTitle = document.createElement('h3');
     chartTitle.textContent = 'Monthly Financial Overview';
     chartSection.appendChild(chartTitle);
-    
+
     const chartCanvas = document.createElement('canvas');
     chartCanvas.id = 'monthly-financials-chart';
     chartSection.appendChild(chartCanvas);
-    
+
     overviewContent.appendChild(chartSection);
 
     // --- Daily Report Tab Content ---
     const dailyReportContent = tabContents[1];
-    
+
     const dailySalesChartCanvas = document.createElement('canvas');
     dailySalesChartCanvas.id = 'dailySalesChart';
     dailyReportContent.appendChild(dailySalesChartCanvas);
-    
+
     // Today's financial summary
     const todaySummary = document.createElement('div');
     todaySummary.className = 'today-summary';
@@ -192,11 +184,11 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
 
     // --- Monthly Report Tab Content ---
     const monthlyReportContent = tabContents[2];
-    
+
     const monthlySalesChartCanvas = document.createElement('canvas');
     monthlySalesChartCanvas.id = 'monthlySalesChart';
     monthlyReportContent.appendChild(monthlySalesChartCanvas);
-    
+
     // Add monthly statistics
     const monthlyStats = document.createElement('div');
     monthlyStats.className = 'monthly-stats';
@@ -207,18 +199,24 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                 <div class="stat-title">Revenue</div>
                 <div class="stat-value">$${(window.financesData.revenue?.thisMonth || 0).toFixed(2)}</div>
                 <div class="stat-subtitle">vs Last Month: ${
-                    window.financesData.revenue?.lastMonth > 0 ? 
-                    ((window.financesData.revenue?.thisMonth / window.financesData.revenue?.lastMonth - 1) * 100).toFixed(1) + '%' :
-                    'N/A'
+                    window.financesData.revenue?.lastMonth > 0
+                        ? (
+                              (window.financesData.revenue?.thisMonth / window.financesData.revenue?.lastMonth - 1) *
+                              100
+                          ).toFixed(1) + '%'
+                        : 'N/A'
                 }</div>
             </div>
             <div class="stat-card">
                 <div class="stat-title">Expenses</div>
                 <div class="stat-value">$${(window.financesData.expenses?.thisMonth || 0).toFixed(2)}</div>
                 <div class="stat-subtitle">vs Last Month: ${
-                    window.financesData.expenses?.lastMonth > 0 ? 
-                    ((window.financesData.expenses?.thisMonth / window.financesData.expenses?.lastMonth - 1) * 100).toFixed(1) + '%' :
-                    'N/A'
+                    window.financesData.expenses?.lastMonth > 0
+                        ? (
+                              (window.financesData.expenses?.thisMonth / window.financesData.expenses?.lastMonth - 1) *
+                              100
+                          ).toFixed(1) + '%'
+                        : 'N/A'
                 }</div>
             </div>
             <div class="stat-card">
@@ -227,9 +225,12 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                     $${(window.financesData.profit?.thisMonth || 0).toFixed(2)}
                 </div>
                 <div class="stat-subtitle">Profit Margin: ${
-                    window.financesData.revenue?.thisMonth > 0 ?
-                    ((window.financesData.profit?.thisMonth / window.financesData.revenue?.thisMonth) * 100).toFixed(1) + '%' :
-                    '0%'
+                    window.financesData.revenue?.thisMonth > 0
+                        ? (
+                              (window.financesData.profit?.thisMonth / window.financesData.revenue?.thisMonth) *
+                              100
+                          ).toFixed(1) + '%'
+                        : '0%'
                 }</div>
             </div>
         </div>
@@ -238,7 +239,7 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
 
     // --- Transactions Tab Content ---
     const transactionsContent = tabContents[3];
-    
+
     // Add a basic filter
     const transactionFilter = document.createElement('div');
     transactionFilter.className = 'transaction-filter';
@@ -260,7 +261,7 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
         </div>
     `;
     transactionsContent.appendChild(transactionFilter);
-    
+
     // Transactions table
     const transactionsTable = document.createElement('table');
     transactionsTable.className = 'transactions-table';
@@ -285,31 +286,31 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
 
     // Initialize charts
     initializeCharts();
-    
+
     // Add event listeners for interactive elements
     addEventListeners();
 
     // ===== Helper Functions =====
-    
+
     // Create a financial summary card
     function createSummaryCard(title: string, value: string, status: string): HTMLDivElement {
         const card = document.createElement('div');
         card.className = `summary-card ${status}`;
-        
+
         const cardTitle = document.createElement('div');
         cardTitle.className = 'card-title';
         cardTitle.textContent = title;
-        
+
         const cardValue = document.createElement('div');
         cardValue.className = 'card-value';
         cardValue.textContent = value;
-        
+
         card.appendChild(cardTitle);
         card.appendChild(cardValue);
-        
+
         return card;
     }
-    
+
     // Generate transaction table rows
     function generateTransactionRows(transactions: Transaction[], limit: number = 20): string {
         if (!transactions || transactions.length === 0) {
@@ -317,14 +318,16 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
         }
 
         // Sort transactions by date (newest first)
-        const sortedTransactions = [...transactions].sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
+        const sortedTransactions = [...transactions].sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
         );
-        
+
         // Take only the first 'limit' transactions
         const limitedTransactions = sortedTransactions.slice(0, limit);
-        
-        return limitedTransactions.map(t => `
+
+        return limitedTransactions
+            .map(
+                (t) => `
             <tr class="${t.type}">
                 <td>${formatDate(t.date)}</td>
                 <td>${capitalizeFirstLetter(t.type)}</td>
@@ -334,9 +337,11 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                 </td>
                 <td>${t.description}</td>
             </tr>
-        `).join('');
+        `,
+            )
+            .join('');
     }
-    
+
     // Format date
     function formatDate(date: Date): string {
         if (!(date instanceof Date)) {
@@ -354,11 +359,13 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
     function capitalizeFirstLetter(str: string): string {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
-    
+
     // Initialize chart.js charts
     function initializeCharts(): void {
         // Monthly Financials Chart
-        const monthlyFinancialsCtx = document.querySelector<HTMLCanvasElement>('#monthly-financials-chart')?.getContext('2d');
+        const monthlyFinancialsCtx = document
+            .querySelector<HTMLCanvasElement>('#monthly-financials-chart')
+            ?.getContext('2d');
         if (monthlyFinancialsCtx) {
             const chartData = window.finances.getMonthlyFinancialChartData();
             new Chart(monthlyFinancialsCtx, {
@@ -370,13 +377,13 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Monthly Revenue, Expenses & Profit'
-                        }
-                    }
-                }
+                            text: 'Monthly Revenue, Expenses & Profit',
+                        },
+                    },
+                },
             });
         }
-        
+
         // Daily Sales Chart
         const dailySalesCtx = document.querySelector<HTMLCanvasElement>('#dailySalesChart')?.getContext('2d');
         if (dailySalesCtx) {
@@ -389,13 +396,13 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Hourly Sales for Today'
-                        }
-                    }
-                }
+                            text: 'Hourly Sales for Today',
+                        },
+                    },
+                },
             });
         }
-        
+
         // Monthly Sales Chart
         const monthlySalesCtx = document.querySelector<HTMLCanvasElement>('#monthlySalesChart')?.getContext('2d');
         if (monthlySalesCtx) {
@@ -408,23 +415,23 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Daily Sales for This Month'
-                        }
-                    }
-                }
+                            text: 'Daily Sales for This Month',
+                        },
+                    },
+                },
             });
         }
     }
-    
+
     // Add event listeners
     function addEventListeners(): void {
         // Apply markup button
         const applyMarkupBtn = document.getElementById('apply-markup-btn');
         if (applyMarkupBtn) {
-            applyMarkupBtn.addEventListener('click', function() {
+            applyMarkupBtn.addEventListener('click', function () {
                 const markupInput = document.querySelector<HTMLInputElement>('#global-markup')!;
                 const markup = parseFloat(markupInput.value);
-                
+
                 if (!isNaN(markup) && markup >= 0) {
                     window.finances.applyMarkupToAllProducts(markup);
                     alert(`Applied ${markup}% markup to all products.`);
@@ -433,37 +440,40 @@ window.renderFinancesPage = function(mainContent: HTMLElement): void {
                 }
             });
         }
-        
+
         // Set suggested prices button
         const suggestedPricesBtn = document.getElementById('set-suggested-prices-btn');
         if (suggestedPricesBtn) {
-            suggestedPricesBtn.addEventListener('click', function() {
+            suggestedPricesBtn.addEventListener('click', function () {
                 window.finances.setToSuggestedPrices();
                 alert('All product prices set to suggested values.');
             });
         }
-        
+
         // Transaction filter button
         const filterBtn = document.getElementById('apply-transaction-filter');
         if (filterBtn) {
-            filterBtn.addEventListener('click', function() {
+            filterBtn.addEventListener('click', function () {
                 const typeFilter = document.querySelector<HTMLSelectElement>('#transaction-type')!.value;
-                const searchFilter = document.querySelector<HTMLInputElement>('#transaction-search')!.value.toLowerCase();
-                
+                const searchFilter = document
+                    .querySelector<HTMLInputElement>('#transaction-search')!
+                    .value.toLowerCase();
+
                 // Filter transactions
                 let filteredTransactions = window.financesData.transactions || [];
-                
+
                 if (typeFilter) {
-                    filteredTransactions = filteredTransactions.filter(t => t.type === typeFilter);
+                    filteredTransactions = filteredTransactions.filter((t) => t.type === typeFilter);
                 }
-                
+
                 if (searchFilter) {
-                    filteredTransactions = filteredTransactions.filter(t => 
-                        t.description.toLowerCase().includes(searchFilter) ||
-                        t.category.toLowerCase().includes(searchFilter)
+                    filteredTransactions = filteredTransactions.filter(
+                        (t) =>
+                            t.description.toLowerCase().includes(searchFilter) ||
+                            t.category.toLowerCase().includes(searchFilter),
                     );
                 }
-                
+
                 // Update the table
                 const tbody = document.getElementById('transactions-tbody');
                 if (tbody) {

@@ -9,7 +9,7 @@ const GAME_CONFIG = {
     GAME_MINUTE_IN_MS: 1000, // 1 second real time = 1 minute game time
     FIXED_TIMESTEP: 1000 / 60, // 60 fps for logic updates
     MAX_UPDATES_PER_FRAME: 10, // Prevent spiral of death if browser freezes temporarily
-    END_DAY_HOUR: 22 // 10 PM is end of day
+    END_DAY_HOUR: 22, // 10 PM is end of day
 };
 
 // Global flag to track if the game has been initialized
@@ -28,8 +28,6 @@ function gameLoop(timestamp: number): void {
 
     frameCount++;
 
-    // Calculate delta time (time since last frame)
-    const deltaTime = timestamp - window.gameState.lastFrameTime;
     window.gameState.lastFrameTime = timestamp;
 
     // Only run simulation if game is active and not paused
@@ -62,15 +60,19 @@ function updateSimulation(timestamp: number): void {
     let updates = 0;
 
     // While we have accumulated enough time to process a fixed step
-    while (window.gameState.simulationAccumulator >= GAME_CONFIG.FIXED_TIMESTEP && updates < GAME_CONFIG.MAX_UPDATES_PER_FRAME) {
+    while (
+        window.gameState.simulationAccumulator >= GAME_CONFIG.FIXED_TIMESTEP &&
+        updates < GAME_CONFIG.MAX_UPDATES_PER_FRAME
+    ) {
         // Calculate the game time to advance (in milliseconds)
-        const gameTimeDelta = (GAME_CONFIG.FIXED_TIMESTEP * GAME_CONFIG.SIMULATION_SPEED) / GAME_CONFIG.GAME_MINUTE_IN_MS * 60 * 1000;
+        const gameTimeDelta =
+            ((GAME_CONFIG.FIXED_TIMESTEP * GAME_CONFIG.SIMULATION_SPEED) / GAME_CONFIG.GAME_MINUTE_IN_MS) * 60 * 1000;
 
         try {
             // Update the game time
             updateGameTime(gameTimeDelta);
         } catch (error) {
-            console.error("[main] Error in updateGameTime:", error);
+            console.error('[main] Error in updateGameTime:', error);
         }
 
         // Decrement the accumulator
@@ -84,7 +86,7 @@ function updateGameTime(msElapsed: number): void {
     // Make sure currentDate exists before trying to modify it
     if (!window.gameState.currentDate) {
         window.gameState.currentDate = new Date(startDate.getTime());
-        console.warn("[main] currentDate was undefined, initializing with startDate");
+        console.warn('[main] currentDate was undefined, initializing with startDate');
     }
 
     // Advance the game time
@@ -99,7 +101,7 @@ function updateGameTime(msElapsed: number): void {
         try {
             window.taskManager.updateTasks(minutesElapsed);
         } catch (error) {
-            console.error("[main] Error updating tasks:", error);
+            console.error('[main] Error updating tasks:', error);
         }
     }
 
@@ -111,7 +113,7 @@ function updateGameTime(msElapsed: number): void {
     if (currentHour >= GAME_CONFIG.END_DAY_HOUR) {
         // Trigger end of day only once
         if (window.gameState.isDayActive) {
-            console.log("End of day reached");
+            console.log('End of day reached');
             window.gameState.isDayActive = false; // Stop advancing time
             if (window.timeEvents) {
                 try {
@@ -124,7 +126,7 @@ function updateGameTime(msElapsed: number): void {
                         window.timeEvents.endOfDay(window.gameState);
                     }
                 } catch (error) {
-                    console.error("[main] Error in endOfDay event:", error);
+                    console.error('[main] Error in endOfDay event:', error);
                 }
             }
         }
@@ -135,11 +137,15 @@ function updateGameTime(msElapsed: number): void {
         const minuteIndex = Math.floor(window.gameState.currentDate.getTime() / 60000);
         const previousMinuteIndex = Math.floor(previousTime / 60000);
 
-        if (minuteIndex !== previousMinuteIndex && window.timeEvents && typeof window.timeEvents.minuteCheck === 'function') {
+        if (
+            minuteIndex !== previousMinuteIndex &&
+            window.timeEvents &&
+            typeof window.timeEvents.minuteCheck === 'function'
+        ) {
             try {
                 window.timeEvents.minuteCheck(window.gameState);
             } catch (error) {
-                console.error("[main] Error in minuteCheck event:", error);
+                console.error('[main] Error in minuteCheck event:', error);
             }
         }
 
@@ -163,22 +169,22 @@ function renderUI(): void {
             window.updateTaskProgressBars();
         }
     } catch (error) {
-        console.error("[main] Error in renderUI:", error);
+        console.error('[main] Error in renderUI:', error);
     }
 }
 
 // Add game speed controls
-window.setGameSpeed = function(speedMultiplier: number): void {
+window.setGameSpeed = function (speedMultiplier: number): void {
     GAME_CONFIG.SIMULATION_SPEED = speedMultiplier;
     console.log(`Game speed set to ${speedMultiplier}x`);
 };
 
-window.getGameSpeed = function(): number {
+window.getGameSpeed = function (): number {
     return GAME_CONFIG.SIMULATION_SPEED;
 };
 
 // Pause/resume game simulation
-window.toggleGamePause = function(): void {
+window.toggleGamePause = function (): void {
     window.gameState.isPaused = !window.gameState.isPaused;
     console.log(`Game ${window.gameState.isPaused ? 'paused' : 'resumed'}`);
 
@@ -195,7 +201,7 @@ window.gameLoop = gameLoop;
 
 // Check if we need to initialize the game state manually (fallback)
 if (!window.isGameInitialized && typeof window.initializeNewGame !== 'function') {
-    console.log("Initializing game state directly from main.js (fallback)");
+    console.log('Initializing game state directly from main.js (fallback)');
 
     // Initialize minimal game state for fallback
     window.gameState = {
@@ -209,11 +215,11 @@ if (!window.isGameInitialized && typeof window.initializeNewGame !== 'function')
         renderInfo: {
             fps: 0,
             frameCount: 0,
-            lastFpsUpdate: 0
+            lastFpsUpdate: 0,
         },
-        pharmacyName: "Default Pharmacy",
-        difficulty: "normal",
-        location: "suburban"
+        pharmacyName: 'Default Pharmacy',
+        difficulty: 'normal',
+        location: 'suburban',
     };
 
     window.isGameInitialized = true;
@@ -221,7 +227,7 @@ if (!window.isGameInitialized && typeof window.initializeNewGame !== 'function')
 
 // Define the showPage function if it doesn't exist
 if (typeof window.showPage !== 'function') {
-    window.showPage = function(pageName: string): void {
+    window.showPage = function (pageName: string): void {
         console.log(`Navigating to page: ${pageName}`);
 
         // Update the active navigation item in the sidebar
@@ -254,7 +260,7 @@ if (typeof window.showPage !== 'function') {
 
                 // Dispatch custom event that page has changed (for components that need to react)
                 const event = new CustomEvent('pageChanged', {
-                    detail: { page: pageName }
+                    detail: { page: pageName },
                 });
                 document.dispatchEvent(event);
             } catch (error) {
@@ -287,22 +293,23 @@ setInterval(() => {
     lastFrameTime = now;
 
     // Add safety checks for all gameState properties
-    const gameTimeStr = window.gameState?.currentDate instanceof Date
-        ? window.gameState.currentDate.toLocaleTimeString()
-        : 'unknown';
+    const gameTimeStr =
+        window.gameState?.currentDate instanceof Date ? window.gameState.currentDate.toLocaleTimeString() : 'unknown';
 
-    console.log(`[main] Game loop health check: ${elapsed}ms since last frame, ` +
-                `FPS: ${fps.toFixed(1)}, ` +
-                `game time: ${gameTimeStr}`);
+    console.log(
+        `[main] Game loop health check: ${elapsed}ms since last frame, ` +
+            `FPS: ${fps.toFixed(1)}, ` +
+            `game time: ${gameTimeStr}`,
+    );
 
     // Check if game is paused or day is inactive
     if (window.gameState?.isPaused) {
-        console.log("[main] Game is currently PAUSED");
+        console.log('[main] Game is currently PAUSED');
     }
 
     if (!window.gameState?.isDayActive) {
-        console.log("[main] Day is currently INACTIVE");
+        console.log('[main] Day is currently INACTIVE');
     }
 }, 5000);
 
-console.log("main.js loaded successfully");
+console.log('main.js loaded successfully');

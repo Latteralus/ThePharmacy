@@ -7,7 +7,7 @@ window.insuranceClaims = {
 
     // Function to add a new claim
     addClaim(customerId, prescriptionId, totalAmount, copayAmount) {
-        const customer = window.customers.activeCustomers.find(c => c.id === customerId);
+        const customer = window.customers.activeCustomers.find((c) => c.id === customerId);
         if (!customer) {
             console.error(`[insuranceClaims.js] No customer found for claim: ${customerId}`);
             return false;
@@ -28,11 +28,13 @@ window.insuranceClaims = {
             processedDate: null,
             paid: false,
             rejected: false,
-            status: 'pending'
+            status: 'pending',
         };
 
         this.pendingClaims.push(claim);
-        console.log(`[insuranceClaims.js] New claim added: ${claim.id} for ${insurancePlan.planName}, amount: $${claim.amountDue.toFixed(2)}`);
+        console.log(
+            `[insuranceClaims.js] New claim added: ${claim.id} for ${insurancePlan.planName}, amount: $${claim.amountDue.toFixed(2)}`,
+        );
 
         return claim;
     },
@@ -40,10 +42,10 @@ window.insuranceClaims = {
     // Determine processing time based on insurance company
     calculateProcessingTime(insuranceName) {
         // Base processing time is 1-3 days
-        let processingDays = 1;
+        let processingDays: number;
 
         // Different companies have different processing speeds
-        switch(insuranceName) {
+        switch (insuranceName) {
             case 'MediQuick':
                 processingDays = 1; // Fastest processor
                 break;
@@ -77,14 +79,13 @@ window.insuranceClaims = {
         let rejectionCount = 0;
 
         // Process claims that have reached their processing time
-        const claimsToProcess = this.pendingClaims.filter(claim =>
-            !claim.paid &&
-            (currentTime - claim.submittedDate.getTime() >= claim.processingTime)
+        const claimsToProcess = this.pendingClaims.filter(
+            (claim) => !claim.paid && currentTime - claim.submittedDate.getTime() >= claim.processingTime,
         );
 
         console.log(`[insuranceClaims.js] Found ${claimsToProcess.length} claims ready for processing`);
 
-        claimsToProcess.forEach(claim => {
+        claimsToProcess.forEach((claim) => {
             // Determine if claim is rejected (small random chance)
             const isRejected = Math.random() < this.rejectionRate;
 
@@ -107,7 +108,7 @@ window.insuranceClaims = {
                     amount: claim.amountDue,
                     description: `Rejected insurance claim for prescription ${claim.prescriptionId}`,
                     customerId: claim.customerId,
-                    prescriptionId: claim.prescriptionId
+                    prescriptionId: claim.prescriptionId,
                 });
 
                 rejectionCount++;
@@ -134,7 +135,7 @@ window.insuranceClaims = {
                     amount: claim.amountDue,
                     description: `Insurance payment for prescription ${claim.prescriptionId}`,
                     customerId: claim.customerId,
-                    prescriptionId: claim.prescriptionId
+                    prescriptionId: claim.prescriptionId,
                 });
 
                 totalPaid += claim.amountDue;
@@ -146,25 +147,27 @@ window.insuranceClaims = {
         });
 
         // Remove processed claims from pending list
-        this.pendingClaims = this.pendingClaims.filter(claim =>
-            !claimsToProcess.some(processed => processed.id === claim.id)
+        this.pendingClaims = this.pendingClaims.filter(
+            (claim) => !claimsToProcess.some((processed) => processed.id === claim.id),
         );
 
-        console.log(`[insuranceClaims.js] Processed ${claimsToProcess.length} claims. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`);
+        console.log(
+            `[insuranceClaims.js] Processed ${claimsToProcess.length} claims. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`,
+        );
 
         return totalPaid;
     },
 
     // Function to process claims for a specific insurance company
     processClaims(insuranceName) {
-        const claimsToProcess = this.pendingClaims.filter(claim =>
-            claim.insurancePlan === insuranceName && !claim.paid
+        const claimsToProcess = this.pendingClaims.filter(
+            (claim) => claim.insurancePlan === insuranceName && !claim.paid,
         );
 
         let totalPaid = 0;
         let rejectionCount = 0;
 
-        claimsToProcess.forEach(claim => {
+        claimsToProcess.forEach((claim) => {
             // Determine if claim is rejected (small random chance)
             const isRejected = Math.random() < this.rejectionRate;
 
@@ -202,18 +205,20 @@ window.insuranceClaims = {
         });
 
         // Remove processed claims from pending list
-        this.pendingClaims = this.pendingClaims.filter(claim =>
-            !claimsToProcess.some(processed => processed.id === claim.id)
+        this.pendingClaims = this.pendingClaims.filter(
+            (claim) => !claimsToProcess.some((processed) => processed.id === claim.id),
         );
 
-        console.log(`[insuranceClaims.js] Processed ${claimsToProcess.length} claims for ${insuranceName}. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`);
+        console.log(
+            `[insuranceClaims.js] Processed ${claimsToProcess.length} claims for ${insuranceName}. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`,
+        );
 
         return totalPaid;
     },
 
     // Function to remove a claim (e.g., if a prescription is canceled)
     removeClaim(prescriptionId) {
-        const index = this.pendingClaims.findIndex(claim => claim.prescriptionId === prescriptionId);
+        const index = this.pendingClaims.findIndex((claim) => claim.prescriptionId === prescriptionId);
         if (index !== -1) {
             const claim = this.pendingClaims[index];
 
@@ -234,17 +239,23 @@ window.insuranceClaims = {
     // Get statistics about claims
     getClaimStats() {
         const totalPending = this.pendingClaims.reduce((sum, claim) => sum + claim.amountDue, 0);
-        const totalProcessed = this.processedClaims.reduce((sum, claim) => claim.paid ? sum + claim.amountDue : sum, 0);
-        const totalRejected = this.processedClaims.reduce((sum, claim) => claim.rejected ? sum + claim.amountDue : sum, 0);
+        const totalProcessed = this.processedClaims.reduce(
+            (sum, claim) => (claim.paid ? sum + claim.amountDue : sum),
+            0,
+        );
+        const totalRejected = this.processedClaims.reduce(
+            (sum, claim) => (claim.rejected ? sum + claim.amountDue : sum),
+            0,
+        );
 
         const pendingCount = this.pendingClaims.length;
-        const processedCount = this.processedClaims.filter(claim => claim.paid).length;
-        const rejectedCount = this.processedClaims.filter(claim => claim.rejected).length;
+        const processedCount = this.processedClaims.filter((claim) => claim.paid).length;
+        const rejectedCount = this.processedClaims.filter((claim) => claim.rejected).length;
 
         // Claims by insurance company
         const claimsByInsurance: Record<string, ClaimStatsByInsurance> = {};
 
-        this.pendingClaims.forEach(claim => {
+        this.pendingClaims.forEach((claim) => {
             if (!claimsByInsurance[claim.insurancePlan]) {
                 claimsByInsurance[claim.insurancePlan] = {
                     pending: 0,
@@ -252,7 +263,7 @@ window.insuranceClaims = {
                     rejected: 0,
                     pendingAmount: 0,
                     processedAmount: 0,
-                    rejectedAmount: 0
+                    rejectedAmount: 0,
                 };
             }
 
@@ -260,7 +271,7 @@ window.insuranceClaims = {
             claimsByInsurance[claim.insurancePlan].pendingAmount += claim.amountDue;
         });
 
-        this.processedClaims.forEach(claim => {
+        this.processedClaims.forEach((claim) => {
             if (!claimsByInsurance[claim.insurancePlan]) {
                 claimsByInsurance[claim.insurancePlan] = {
                     pending: 0,
@@ -268,7 +279,7 @@ window.insuranceClaims = {
                     rejected: 0,
                     pendingAmount: 0,
                     processedAmount: 0,
-                    rejectedAmount: 0
+                    rejectedAmount: 0,
                 };
             }
 
@@ -288,34 +299,34 @@ window.insuranceClaims = {
             pendingCount,
             processedCount,
             rejectedCount,
-            claimsByInsurance
+            claimsByInsurance,
         };
     },
 
     // Get all claims for a customer
     getClaimsForCustomer(customerId) {
-        const pendingClaims = this.pendingClaims.filter(claim => claim.customerId === customerId);
-        const processedClaims = this.processedClaims.filter(claim => claim.customerId === customerId);
+        const pendingClaims = this.pendingClaims.filter((claim) => claim.customerId === customerId);
+        const processedClaims = this.processedClaims.filter((claim) => claim.customerId === customerId);
 
         return {
             pending: pendingClaims,
-            processed: processedClaims
+            processed: processedClaims,
         };
     },
 
     // Initialize insurance claims system
     init() {
-        console.log("[insuranceClaims.js] Initializing insurance claims system");
+        console.log('[insuranceClaims.js] Initializing insurance claims system');
 
         // Make sure financesData has necessary insurance tracking properties
         if (!window.financesData.insuranceReimbursements) {
             window.financesData.insuranceReimbursements = {
                 pending: 0,
                 received: 0,
-                rejected: 0
+                rejected: 0,
             };
         }
 
         // Claims are processed from timeEvents' hourlyCheck, on game time.
-    }
+    },
 };

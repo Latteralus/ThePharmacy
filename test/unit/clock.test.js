@@ -98,7 +98,7 @@ describe('clock', () => {
     expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  test('a backward jump (in-game load) keeps each job\'s remaining delay', () => {
+  test("a backward jump (in-game load) keeps each job's remaining delay", () => {
     const fn = jest.fn();
     window.clock.every(60, fn);
     advanceMinutes(50);
@@ -132,7 +132,9 @@ describe('clock', () => {
   test('a throwing job does not stop the others', () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     const fn = jest.fn();
-    window.clock.every(1, () => { throw new Error('boom'); });
+    window.clock.every(1, () => {
+      throw new Error('boom');
+    });
     window.clock.every(1, fn);
 
     advanceMinutes(1);

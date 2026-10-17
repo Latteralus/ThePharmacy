@@ -56,7 +56,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
     // Set Max Inventory for All Products
     const setMaxInvLabel = document.createElement('label');
     setMaxInvLabel.textContent = 'Set Max Inventory for All:';
-    setMaxInvLabel.style.marginLeft = "15px";
+    setMaxInvLabel.style.marginLeft = '15px';
     settingsSection.appendChild(setMaxInvLabel);
 
     const maxInvInput = document.createElement('input');
@@ -71,7 +71,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
     applyMaxInvButton.onclick = () => {
         const maxInventory = parseInt(maxInvInput.value);
         if (!isNaN(maxInventory)) {
-            window.productsData.forEach(product => {
+            window.productsData.forEach((product) => {
                 product.maxInventory = maxInventory;
             });
             renderProducts(); // Re-render the products to show updated max inventory
@@ -124,7 +124,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
         productsGrid.innerHTML = '';
         const filterText = filterInput.value.toLowerCase().trim();
 
-        window.productsData.forEach(prod => {
+        window.productsData.forEach((prod) => {
             if (filterText && !prod.name.toLowerCase().includes(filterText)) {
                 return;
             }
@@ -253,7 +253,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
         materialsGrid.innerHTML = '';
         const filterText = filterInput.value.toLowerCase().trim();
 
-        window.materialsData.forEach(mat => {
+        window.materialsData.forEach((mat) => {
             if (filterText && !mat.name.toLowerCase().includes(filterText)) {
                 return;
             }
