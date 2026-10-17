@@ -26,6 +26,8 @@ function gameLoop(timestamp: number): void {
         return;
     }
 
+    frameCount++;
+
     // Calculate delta time (time since last frame)
     const deltaTime = timestamp - window.gameState.lastFrameTime;
     window.gameState.lastFrameTime = timestamp;
@@ -56,8 +58,6 @@ function updateSimulation(timestamp: number): void {
     window.gameState.simulationAccumulator += simulationDelta;
     window.gameState.lastSimulationTime = timestamp;
 
-    console.log(`[main] Simulation update, accumulator: ${window.gameState.simulationAccumulator.toFixed(2)}ms`);
-
     // Limit updates to prevent spiral of death
     let updates = 0;
 
@@ -65,8 +65,6 @@ function updateSimulation(timestamp: number): void {
     while (window.gameState.simulationAccumulator >= GAME_CONFIG.FIXED_TIMESTEP && updates < GAME_CONFIG.MAX_UPDATES_PER_FRAME) {
         // Calculate the game time to advance (in milliseconds)
         const gameTimeDelta = (GAME_CONFIG.FIXED_TIMESTEP * GAME_CONFIG.SIMULATION_SPEED) / GAME_CONFIG.GAME_MINUTE_IN_MS * 60 * 1000;
-
-        console.log(`[main] Advancing game time by ${gameTimeDelta.toFixed(2)}ms (${(gameTimeDelta / (60 * 1000)).toFixed(2)} game minutes)`);
 
         try {
             // Update the game time
@@ -90,7 +88,8 @@ function updateGameTime(msElapsed: number): void {
     }
 
     // Advance the game time
-    window.gameState.currentDate.setTime(window.gameState.currentDate.getTime() + msElapsed);
+    const previousTime = window.gameState.currentDate.getTime();
+    window.gameState.currentDate.setTime(previousTime + msElapsed);
 
     // Convert milliseconds to minutes for task updates
     const minutesElapsed = msElapsed / (60 * 1000);
@@ -104,32 +103,41 @@ function updateGameTime(msElapsed: number): void {
         }
     }
 
-    // Check for end of day (22:00 is 10 PM)
+    // Check for end of day (22:00 is 10 PM). `>=` rather than an exact
+    // 22:00 match, so a time jump (Settings' "+1 Hour", a load) that lands
+    // past 22:00 still ends the day instead of running on through the night.
     const currentHour = window.gameState.currentDate.getHours();
-    const currentMinute = window.gameState.currentDate.getMinutes();
 
-    if (currentHour === GAME_CONFIG.END_DAY_HOUR && currentMinute === 0) {
+    if (currentHour >= GAME_CONFIG.END_DAY_HOUR) {
         // Trigger end of day only once
         if (window.gameState.isDayActive) {
             console.log("End of day reached");
             window.gameState.isDayActive = false; // Stop advancing time
-            if (window.timeEvents && typeof window.timeEvents.endOfDay === 'function') {
+            if (window.timeEvents) {
                 try {
-                    window.timeEvents.endOfDay(window.gameState);
+                    if (window.gameState.lastEndedDayIndex === window.gameState.dayIndex) {
+                        // This day was already settled (a save made while
+                        // the daily summary was open) - don't charge wages
+                        // and overhead again, just roll over.
+                        window.timeEvents.skipToNextDay(window.gameState);
+                    } else {
+                        window.timeEvents.endOfDay(window.gameState);
+                    }
                 } catch (error) {
                     console.error("[main] Error in endOfDay event:", error);
                 }
             }
         }
     } else {
-        // Run minute checks at the appropriate frequency
-        const minuteDelta = Math.floor(msElapsed / (60 * 1000)); // Convert ms to minutes
+        // Each fixed step advances only a game second or so, so detect the
+        // step that crosses a minute boundary rather than counting whole
+        // minutes per step (which was always 0, so minuteCheck never ran).
+        const minuteIndex = Math.floor(window.gameState.currentDate.getTime() / 60000);
+        const previousMinuteIndex = Math.floor(previousTime / 60000);
 
-        if (minuteDelta > 0 && window.timeEvents && typeof window.timeEvents.minuteCheck === 'function') {
+        if (minuteIndex !== previousMinuteIndex && window.timeEvents && typeof window.timeEvents.minuteCheck === 'function') {
             try {
-                for (let i = 0; i < minuteDelta; i++) {
-                    window.timeEvents.minuteCheck(window.gameState);
-                }
+                window.timeEvents.minuteCheck(window.gameState);
             } catch (error) {
                 console.error("[main] Error in minuteCheck event:", error);
             }
@@ -262,8 +270,7 @@ if (typeof window.showPage !== 'function') {
     };
 }
 
-// Set up game loop monitoring
-console.log("[main] Setting up game loop monitoring");
+// Game loop monitoring. frameCount is incremented by gameLoop itself.
 let lastFrameTime = Date.now();
 let frameCount = 0;
 
@@ -292,12 +299,5 @@ setInterval(() => {
         console.log("[main] Day is currently INACTIVE");
     }
 }, 5000);
-
-// Monkey-patch gameLoop to count frames
-const originalGameLoop = window.gameLoop;
-window.gameLoop = function(timestamp: number): void {
-    frameCount++;
-    return originalGameLoop(timestamp);
-};
 
 console.log("main.js loaded successfully");

@@ -181,11 +181,8 @@ window.taskManager = (function(): TaskManagerApi {
     // Update task progress based on elapsed game time
     function updateTasks(minutes: number): void {
         if (!minutes || minutes <= 0) {
-            console.log(`[taskManager.js] Skipping task updates - invalid minutes: ${minutes}`);
             return; // Skip if no time has passed
         }
-
-        console.log(`[taskManager.js] Updating tasks for ${minutes} minute(s). Current tasks: ${tasks.length}`);
 
         // Track tasks to finalize after the loop
         const tasksToFinalize: Task[] = [];
@@ -282,8 +279,6 @@ window.taskManager = (function(): TaskManagerApi {
                         progressVerified: progressVerified
                     });
                 }
-
-                console.log(`[taskManager.js] Task ${task.id} (${task.type}) progress: ${task.progress.toFixed(1)}/${task.totalTime} minutes (${((task.progress / task.totalTime) * 100).toFixed(1)}%)`);
 
                 // Check if the task is now complete
                 if (task.progress >= task.totalTime) {

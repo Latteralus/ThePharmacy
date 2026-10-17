@@ -317,13 +317,19 @@
             
             const saveItem = document.createElement('div');
             saveItem.className = 'save-item';
-            saveItem.innerHTML = `
-              <div>${save.pharmacyName || 'Unnamed Pharmacy'}</div>
-              <div class="save-meta">
-                ${formattedDate} • ${save.difficulty || 'Normal'} • $${formatMoney(save.cash || 0)}
-                <button class="delete-button" data-index="${index}">Delete</button>
-              </div>
-            `;
+            // Save contents are untrusted (a save file can be shared), so
+            // build this with textContent rather than innerHTML.
+            const nameEl = document.createElement('div');
+            nameEl.textContent = save.pharmacyName || 'Unnamed Pharmacy';
+            const metaEl = document.createElement('div');
+            metaEl.className = 'save-meta';
+            metaEl.textContent = `${formattedDate} • ${save.difficulty || 'Normal'} • $${formatMoney(Number(save.cash) || 0)} `;
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-button';
+            deleteBtn.dataset.index = String(index);
+            deleteBtn.textContent = 'Delete';
+            metaEl.appendChild(deleteBtn);
+            saveItem.append(nameEl, metaEl);
             
             // Add click handler for loading the game
             saveItem.addEventListener('click', (event) => {

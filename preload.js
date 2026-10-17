@@ -1,11 +1,4 @@
 // preload.js
-let path;
-try {
-  path = require('path');
-} catch (error) {
-  console.error('Error requiring path module:', error);
-}
-
 let contextBridge;
 let ipcRenderer;
 try {
@@ -46,23 +39,6 @@ if (contextBridge && ipcRenderer) {
       getNewGameOptions: () => {
         return ipcRenderer.invoke('get-new-game-options');
       },
-      // File system access for game data
-      readFile: async (filePath, options = {}) => {
-        try {
-          return await ipcRenderer.invoke('read-file', filePath, options);
-        } catch (error) {
-          console.error(`Error reading file ${filePath}:`, error);
-          throw error;
-        }
-      },
-      writeFile: async (filePath, data, options = {}) => {
-        try {
-          return await ipcRenderer.invoke('write-file', filePath, data, options);
-        } catch (error) {
-          console.error(`Error writing file ${filePath}:`, error);
-          throw error;
-        }
-      },
       // Add simple quit function
       quit: () => {
         ipcRenderer.send('quit-app');
@@ -88,43 +64,6 @@ if (contextBridge && ipcRenderer) {
       }
     }
   );
-
-  // Expose window file system API for game data - but use IPC instead of direct fs access
-  contextBridge.exposeInMainWorld('fs', {
-    readFile: async (filepath, options = {}) => {
-      try {
-        // Use ipcRenderer.invoke instead of direct fs access
-        return await ipcRenderer.invoke('read-file', filepath, options);
-      } catch (error) {
-        console.error(`Error reading file ${filepath}:`, error);
-        throw error;
-      }
-    }
-  });
-
-  // Expose app paths to the renderer process
-  if (path) {
-    try {
-      contextBridge.exposeInMainWorld('appPath', {
-        resourcesPath: path.join(__dirname, 'main'),
-        getResourcePath: (relativePath) => {
-          return path.join(__dirname, 'main', relativePath);
-        }
-      });
-    } catch (error) {
-      console.error('Error creating appPath object:', error);
-      contextBridge.exposeInMainWorld('appPath', {
-        resourcesPath: null,
-        getResourcePath: () => null
-      });
-    }
-  } else {
-    console.warn('Path module not available, app paths will not be exposed');
-    contextBridge.exposeInMainWorld('appPath', {
-      resourcesPath: null,
-      getResourcePath: () => null
-    });
-  }
 } else {
   console.error('Required Electron modules not available. Preload script cannot function properly.');
 }

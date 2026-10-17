@@ -36,6 +36,15 @@ coverage/
 # Other
 *.env.*
 
+# Internal docs and notes - not for the public repo. Player-facing docs
+# (docs/readme.md, docs/install-instructions.md) stay tracked.
+findings.md
+docs/Changelog.md
+docs/overview.md
+docs/Complete/
+CLAUDE.md
+.claude/
+
 # TypeScript build output — .ts is the source of truth, .js is generated
 # by `npm run build:ts` (chained in front of start/test/dist/publish).
 # Add each converted file's .js path here as it migrates off plain JS.

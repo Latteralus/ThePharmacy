@@ -58,8 +58,11 @@
                     // item carries an isUnlocked() method - none of that can
                     // cross IPC's structured-clone boundary, so only send plain
                     // data fields.
+                    // Frame-loop bookkeeping (performance.now() timestamps)
+                    // is only meaningful in this session - leave it out.
+                    const { lastFrameTime, lastSimulationTime, simulationAccumulator, renderInfo, ...gameState } = window.gameState;
                     const gameData = {
-                        gameState: window.gameState,
+                        gameState,
                         financesData: window.financesData,
                         employeesData: window.employeesData,
                         productsData: window.productsData,
@@ -104,55 +107,11 @@
                     const gameData = await window.gameAPI!.loadGame!();
 
                     if (gameData) {
-                        // Restore game state. Non-null assertions throughout:
-                        // SavedGameData's fields are optional because they
-                        // describe an arbitrary on-disk JSON blob in general,
-                        // but a save file written by this file's own
-                        // saveGame() always has all of them.
-                        window.gameState = gameData.gameState!;
-                        window.financesData = gameData.financesData!;
-                        window.employeesData = gameData.employeesData!;
-                        window.productsData = gameData.productsData!;
-                        window.materialsData = gameData.materialsData!;
-                        window.equipmentData = gameData.equipmentData!;
+                        // Same restore path as the main-menu load
+                        // (gameInitializer.ts) - revives dates and resets the
+                        // frame-loop timestamps.
+                        window.applySavedGame(gameData);
 
-                        // researchData and the prescription/refill state weren't
-                        // part of older saves - fall back to safe defaults
-                        // rather than leaving these undefined.
-                        if (gameData.researchData) {
-                            window.researchData = gameData.researchData;
-                        }
-                        if (window.prescriptions) {
-                            window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
-                            window.prescriptions.refillRegistry = gameData.refillRegistry || [];
-                        }
-
-                        // The save file round-trips through JSON, so Date fields
-                        // come back as plain strings - revive them.
-                        if (window.gameState) {
-                            if (window.gameState.currentDate) {
-                                window.gameState.currentDate = new Date(window.gameState.currentDate);
-                            }
-                            if (window.gameState.dateCreated) {
-                                window.gameState.dateCreated = new Date(window.gameState.dateCreated);
-                            }
-                        }
-
-                        // isUnlocked() couldn't survive IPC (see saveGame) -
-                        // re-attach it so equipmentPage.js's eq.isUnlocked() calls
-                        // keep working after a load.
-                        window.equipmentData.forEach(item => {
-                            item.isUnlocked = function(this: EquipmentItem) {
-                                return window.researchData.currentLevel >= this.researchLevelRequired;
-                            };
-                        });
-                        // Merge saved data into the existing brandReputation module
-                        // instead of replacing it, so its methods (calcCustomers,
-                        // gainReputation, loseReputation) survive the load.
-                        if (window.brandReputation && gameData.brandReputation) {
-                            Object.assign(window.brandReputation, gameData.brandReputation);
-                        }
-                        
                         console.log('Game loaded successfully');
                         
                         // Update UI

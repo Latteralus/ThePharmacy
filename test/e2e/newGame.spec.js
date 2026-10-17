@@ -5,6 +5,8 @@
 // function" / "window.ui.formatDateTime is not a function" incident).
 
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const { test, expect } = require('@playwright/test');
 const { _electron: electron } = require('playwright');
 
@@ -12,7 +14,9 @@ test('starting a new game reaches the game screen without console errors', async
   // The parent process may have ELECTRON_RUN_AS_NODE set (e.g. inside an
   // agent sandbox); strip it for the child so Electron actually launches
   // as a GUI app instead of a plain Node process.
-  const env = { ...process.env };
+  // Throwaway profile so the test can't touch the player's real saves.
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'thepharmacy-e2e-'));
+  const env = { ...process.env, THEPHARMACY_USER_DATA: userDataDir };
   delete env.ELECTRON_RUN_AS_NODE;
 
   const app = await electron.launch({
@@ -38,17 +42,8 @@ test('starting a new game reaches the game screen without console errors', async
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
   await page.waitForSelector('.sidebar', { timeout: 20_000 });
 
-  // Known, pre-existing, non-fatal noise unrelated to game initialization:
-  // preload.js can't require('path') under Electron's sandboxed preload
-  // (gracefully degraded, "Path module not available" warning). Doesn't
-  // prevent the game from starting; only the game-breaking crash matters
-  // here.
-  const knownNoise = [/module not found: path/, /Path module not available/];
-  const unexpectedErrors = consoleErrors.filter(
-    (msg) => !knownNoise.some((pattern) => pattern.test(msg))
-  );
-
-  expect(unexpectedErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
 
   await app.close();
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 });

@@ -10,17 +10,14 @@ const fs = require('fs');
 let gameState = null;
 let newGameOptions = null;
 
-// Initialize game integration
-function initGameIntegration(mainWindow) {
-  // Set up IPC listeners for game events
-  setupIpcListeners(mainWindow);
-  
-  // Load initial game state
-  loadGameState();
+// Initialize game integration. Call once per app - ipcMain.handle throws if a
+// channel is registered twice.
+function initGameIntegration() {
+  setupIpcListeners();
 }
 
 // Set up IPC listeners to handle game-related events
-function setupIpcListeners(mainWindow) {
+function setupIpcListeners() {
   // Handle save game requests - using handle instead of on for invoke compatibility
   ipcMain.handle('save-game', async (event, gameData) => {
     const success = saveGameState(gameData);
@@ -41,29 +38,6 @@ function setupIpcListeners(mainWindow) {
   // Handle get settings request
   ipcMain.handle('get-settings', async () => {
     return loadSettings();
-  });
-  
-  // Handle the file read operation
-  ipcMain.handle('read-file', async (event, filePath, options) => {
-    try {
-      log.info(`Reading file: ${filePath}`);
-      const content = await fs.promises.readFile(filePath, options);
-      return content;
-    } catch (error) {
-      log.error(`Error reading file ${filePath}:`, error);
-      throw error;
-    }
-  });
-  
-  // Handle file write operation
-  ipcMain.handle('write-file', async (event, filePath, data, options) => {
-    try {
-      await fs.promises.writeFile(filePath, data, options);
-      return true;
-    } catch (error) {
-      log.error(`Error writing file ${filePath}:`, error);
-      throw error;
-    }
   });
   
   // Handle get saved games list
@@ -154,12 +128,17 @@ function saveGameState(gameData) {
       fs.mkdirSync(savePath, { recursive: true });
     }
     
-    // Write game data to file
-    fs.writeFileSync(
-      path.join(savePath, 'pharmacy_save.json'), 
-      JSON.stringify(gameData, null, 2)
-    );
-    
+    // Write to a temp file and rename it into place, so a crash mid-write
+    // can't corrupt the save. The previous save is kept as a .bak (outside
+    // the *.json pattern the Load menu lists).
+    const saveFile = path.join(savePath, 'pharmacy_save.json');
+    const tmpFile = saveFile + '.tmp';
+    fs.writeFileSync(tmpFile, JSON.stringify(gameData, null, 2));
+    if (fs.existsSync(saveFile)) {
+      fs.copyFileSync(saveFile, saveFile + '.bak');
+    }
+    fs.renameSync(tmpFile, saveFile);
+
     log.info('Game saved successfully');
     return true;
   } catch (error) {

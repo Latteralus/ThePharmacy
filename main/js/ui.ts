@@ -60,12 +60,19 @@ window.ui = (function(): UiApi {
     let updateQueue = new Set<UpdateType>();
     let updateScheduled = false;
 
+    let initialized = false;
+
     // Initialize UI system and cache DOM elements
     function init(): void {
-        console.log("[ui.js] Initializing UI system");
-
         // Initial cache of DOM elements
         refreshDomCache();
+
+        // init() is called both on DOMContentLoaded and from
+        // gameInitializer's ensureGameSystemsInitialized - only attach one
+        // body-wide MutationObserver.
+        if (initialized) return;
+        initialized = true;
+        console.log("[ui.js] Initializing UI system");
 
         // Add a mutation observer to update the DOM cache when the page changes
         const observer = new MutationObserver((mutations) => {

@@ -256,6 +256,10 @@ interface GameState {
   lastSimulationTime?: number;
   renderInfo?: RenderInfo;
   dateCreated?: Date;
+  // dayIndex of the last day whose end-of-day costs were applied. Lets a
+  // save made while the daily summary was open load without charging that
+  // day's wages and overhead a second time.
+  lastEndedDayIndex?: number;
 }
 
 // Options passed from the new-game form, through gameAPI, to
@@ -781,6 +785,7 @@ interface Window {
   toggleGamePause: () => void;
   initializeNewGame: (gameOptions: NewGameOptions) => boolean;
   loadSavedGame: () => Promise<boolean>;
+  applySavedGame: (gameData: SavedGameData) => void;
   runFallbackInitialization: () => boolean;
   bootstrapGame: BootstrapApi;
   // Set by settingsPage.ts's setCustomerFrequency the first time the

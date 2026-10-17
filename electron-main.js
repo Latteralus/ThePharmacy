@@ -1,10 +1,15 @@
-const { app, BrowserWindow, ipcMain, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const gameIntegration = require('./game-integration');
 const log = require('electron-log');
 
+// Lets tests run against a throwaway profile instead of the player's real
+// saves. Must be set before the app is ready.
+if (process.env.THEPHARMACY_USER_DATA) {
+  app.setPath('userData', process.env.THEPHARMACY_USER_DATA);
+}
 
 // Configure electron-log
 log.transports.file.level = 'info';
@@ -67,22 +72,15 @@ function createWindow() {
   
   mainWindow.loadFile(indexPath);
 
-  // Initialize game integration
-  try {
-    gameIntegration.initGameIntegration(mainWindow);
-    log.info('Game integration initialized successfully');
-  } catch (error) {
-    log.error('Failed to initialize game integration:', error);
-  }
-  
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
     log.info('Main window ready to show');
     mainWindow.show();
-    
-    // Open DevTools for debugging
-    mainWindow.webContents.openDevTools();
-    log.info('DevTools opened for debugging');
+
+    // Open DevTools automatically only in development
+    if (!app.isPackaged) {
+      mainWindow.webContents.openDevTools();
+    }
   });
   
   // Handle window close
@@ -96,11 +94,12 @@ function createWindow() {
     log.error('Failed to load application:', errorCode, errorDescription);
   });
   
-  // Log renderer console messages to electron-log
-  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    const levels = ['debug', 'info', 'warning', 'error'];
-    const logLevel = levels[level] || 'info';
-    log[logLevel](`[Renderer] ${message} (${sourceId}:${line})`);
+  // Log renderer console messages to electron-log. Packaged builds only keep
+  // warnings and errors, so routine game logging doesn't fill the log file.
+  mainWindow.webContents.on('console-message', (event) => {
+    const logLevel = event.level === 'warning' ? 'warn' : event.level;
+    if (app.isPackaged && logLevel !== 'warn' && logLevel !== 'error') return;
+    (log[logLevel] || log.info)(`[Renderer] ${event.message} (${event.sourceId}:${event.lineNumber})`);
   });
   
   return mainWindow;
@@ -109,15 +108,17 @@ function createWindow() {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(() => {
   log.info('Electron app is ready!');
-  
-  // Register resource protocol to load files from the main directory
-  protocol.registerFileProtocol('app', (request, callback) => {
-    const url = request.url.substring(6); // Remove 'app://'
-    const filePath = path.join(__dirname, 'main', url);
-    log.info(`Resolving app:// path request: ${url} to ${filePath}`);
-    callback({ path: filePath });
-  });
-  
+
+  // Register IPC handlers once per app, not per window - ipcMain.handle
+  // throws on a second registration (e.g. macOS 'activate' re-creating the
+  // window).
+  try {
+    gameIntegration.initGameIntegration();
+    log.info('Game integration initialized successfully');
+  } catch (error) {
+    log.error('Failed to initialize game integration:', error);
+  }
+
   try {
     createWindow();
     log.info('Main window created successfully');

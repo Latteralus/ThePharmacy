@@ -4,6 +4,11 @@
 // module that defines window.saveGame()/the only Save UI lived at the wrong
 // path and was never loaded. Both are fixed; this exercises the real
 // save -> quit -> relaunch -> load round trip end to end.
+//
+// Also covers the 2026-09-25 review findings C1 (stale frame-loop
+// timestamps restored from a save froze the clock) and C2 (transaction
+// dates came back as strings, so the first addTransaction after a load -
+// including end of day's - threw and softlocked the game at 22:00).
 
 const path = require('path');
 const os = require('os');
@@ -12,20 +17,25 @@ const { test, expect } = require('@playwright/test');
 const { _electron: electron } = require('playwright');
 
 const APP_DIR = path.resolve(__dirname, '..', '..');
-const savesDir = path.join(os.homedir(), 'AppData', 'Roaming', 'thepharmacy', 'saves');
+
+// A throwaway profile, so the test never touches the player's real saves
+// (electron-main.js honours THEPHARMACY_USER_DATA).
+let userDataDir;
+let savesDir;
 
 function launchOptions() {
-  const env = { ...process.env };
+  const env = { ...process.env, THEPHARMACY_USER_DATA: userDataDir };
   delete env.ELECTRON_RUN_AS_NODE;
   return { executablePath: require('electron'), args: [APP_DIR], env };
 }
 
 test.beforeEach(() => {
-  fs.rmSync(savesDir, { recursive: true, force: true });
+  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'thepharmacy-e2e-'));
+  savesDir = path.join(userDataDir, 'saves');
 });
 
-test.afterAll(() => {
-  fs.rmSync(savesDir, { recursive: true, force: true });
+test.afterEach(() => {
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 });
 
 test('saving writes a real save file, and loading it restores game state', async () => {
@@ -42,6 +52,17 @@ test('saving writes a real save file, and loading it restores game state', async
   await page1.waitForSelector('.top-bar', { timeout: 20_000 });
   await page1.waitForSelector('.save-button', { timeout: 20_000 });
 
+  // Make sure the save has at least one transaction (C2 only shows up then).
+  await page1.evaluate(() => {
+    window.finances.addTransaction({
+      date: new Date(window.gameState.currentDate),
+      type: 'expense',
+      category: 'other',
+      amount: 1,
+      description: 'e2e test transaction'
+    });
+  });
+
   await page1.click('.save-button');
   await page1.waitForTimeout(1000);
 
@@ -52,6 +73,9 @@ test('saving writes a real save file, and loading it restores game state', async
   const saved = JSON.parse(fs.readFileSync(savedFile, 'utf8'));
   expect(saved.gameState.pharmacyName).toBe('Round Trip Pharmacy');
   expect(saved.financesData.cash).toBe(100000);
+  expect(saved.financesData.transactions.length).toBeGreaterThan(0);
+  // Frame-loop bookkeeping must not be persisted (C1)
+  expect(saved.gameState.lastSimulationTime).toBeUndefined();
 
   // --- Second launch: load it from the main menu ---
   const app2 = await electron.launch(launchOptions());
@@ -60,9 +84,7 @@ test('saving writes a real save file, and loading it restores game state', async
   const errors = [];
   page2.on('pageerror', (err) => errors.push(err.message));
   page2.on('console', (msg) => {
-    if (msg.type() === 'error' && !msg.text().includes('module not found: path')) {
-      errors.push(msg.text());
-    }
+    if (msg.type() === 'error') errors.push(msg.text());
   });
 
   await page2.waitForSelector('#loadGameBtn');
@@ -72,21 +94,41 @@ test('saving writes a real save file, and loading it restores game state', async
 
   await page2.waitForURL(/mode=load/);
   await page2.waitForSelector('.top-bar', { timeout: 20_000 });
-  await page2.waitForTimeout(1000);
 
-  const loaded = await page2.evaluate(() => ({
+  const timeAfterLoad = await page2.evaluate(() => window.gameState.currentDate.getTime());
+  await page2.waitForTimeout(1500);
+
+  const loaded = await page2.evaluate((before) => ({
     pharmacyName: window.gameState?.pharmacyName,
     cash: window.financesData?.cash,
     currentDateIsDate: window.gameState?.currentDate instanceof Date,
+    transactionDatesAreDates: window.financesData.transactions.every(t => t.date instanceof Date),
+    clockAdvanced: window.gameState.currentDate.getTime() > before,
     equipmentIsUnlockedIsFunction: typeof window.equipmentData?.[0]?.isUnlocked === 'function',
     brandReputationHasMethods: typeof window.brandReputation?.calcCustomers === 'function',
-  }));
+  }), timeAfterLoad);
 
   expect(loaded.pharmacyName).toBe('Round Trip Pharmacy');
   expect(loaded.cash).toBe(100000);
   expect(loaded.currentDateIsDate).toBe(true);
+  expect(loaded.transactionDatesAreDates).toBe(true);
+  expect(loaded.clockAdvanced).toBe(true);
   expect(loaded.equipmentIsUnlockedIsFunction).toBe(true);
   expect(loaded.brandReputationHasMethods).toBe(true);
+
+  // --- Force end of day: the daily summary must open (C2 softlock) ---
+  await page2.evaluate(() => {
+    window.gameState.currentDate.setHours(21, 59, 59, 0);
+  });
+  await page2.waitForSelector('.modal', { timeout: 10_000 });
+  const endOfDay = await page2.evaluate(() => ({
+    isDayActive: window.gameState.isDayActive,
+    lastEndedDayIndex: window.gameState.lastEndedDayIndex,
+    dayIndex: window.gameState.dayIndex,
+  }));
+  expect(endOfDay.isDayActive).toBe(false);
+  expect(endOfDay.lastEndedDayIndex).toBe(endOfDay.dayIndex);
+
   expect(errors).toEqual([]);
 
   await app2.close();

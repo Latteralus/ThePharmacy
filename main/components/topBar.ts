@@ -251,12 +251,18 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
               // Format the timestamp
               const timeString = notification.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-              notificationItem.innerHTML = `
-                <div class="notification-content">
-                  <span class="notification-message">${notification.message}</span>
-                  <span class="notification-time">${timeString}</span>
-                </div>
-              `;
+              // textContent, not innerHTML - messages can carry
+              // player-supplied text (names, pharmacy name).
+              const content = document.createElement('div');
+              content.className = 'notification-content';
+              const messageEl = document.createElement('span');
+              messageEl.className = 'notification-message';
+              messageEl.textContent = notification.message;
+              const timeEl = document.createElement('span');
+              timeEl.className = 'notification-time';
+              timeEl.textContent = timeString;
+              content.append(messageEl, timeEl);
+              notificationItem.appendChild(content);
 
               // Mark as read when clicked
               notificationItem.addEventListener('click', () => {
@@ -272,10 +278,8 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
       }
     };
 
-    // Add some example notifications
     setTimeout(() => {
       window.notifications!.add('Welcome to PharmaSim!', 'success');
-      window.notifications!.add('New customer has arrived', 'info');
     }, 2000);
   }
 

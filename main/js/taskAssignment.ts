@@ -155,8 +155,6 @@ window.taskAssignment = (function(): TaskAssignmentApi {
      * with improved handling of customer tasks
      */
     function autoAssignTasks(): void {
-        console.log("[autoAssignTasks] Running auto-assignment logic");
-
         // Normalize employee roles to ensure proper assignment
         normalizeEmployeeRoles();
 
@@ -192,19 +190,14 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         });
 
         if (unassignedTasks.length === 0) {
-            console.log("[autoAssignTasks] No eligible unassigned tasks.");
             return;
         }
 
         // Get available employees
         const availableEmployees = window.employeesData.filter(emp => !emp.currentTaskId);
         if (availableEmployees.length === 0) {
-            console.log("[autoAssignTasks] No available employees.");
             return;
         }
-
-        console.log(`[autoAssignTasks] Found ${unassignedTasks.length} unassigned tasks and ${availableEmployees.length} available employees.`);
-        console.log(`[autoAssignTasks] Employee roles: ${availableEmployees.map(e => e.role).join(', ')}`);
 
         // First, handle prioritized tasks for Cashiers
         const cashiers = availableEmployees.filter(emp => emp.role === 'Cashier');
@@ -267,8 +260,6 @@ window.taskAssignment = (function(): TaskAssignmentApi {
                 if (availableEmployees.length === 0) {
                     break;
                 }
-            } else {
-                console.log(`[autoAssignTasks] No suitable employee found for ${task.type} task (${task.id}).`);
             }
         }
 

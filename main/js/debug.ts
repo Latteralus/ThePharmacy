@@ -93,6 +93,7 @@
       const error = console.error;
       const warn = console.warn;
       const info = console.info;
+      const MAX_LOG_LINES = 500;
 
       function appendToLog(message: unknown, type = 'log') {
         const logElement = document.getElementById('debug-log');
@@ -111,6 +112,12 @@
 
           entry.innerHTML = `<span style="color: #8bc34a">[${timestamp}]</span> <span style="color: ${color}">${formatMessage(message)}</span>`;
           logElement.appendChild(entry);
+
+          // Keep only the most recent lines - otherwise the overlay grows
+          // without bound for as long as the game runs.
+          while (logElement.childElementCount > MAX_LOG_LINES) {
+            logElement.firstElementChild!.remove();
+          }
 
           // Auto-scroll to bottom
           logElement.scrollTop = logElement.scrollHeight;

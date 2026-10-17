@@ -72,6 +72,7 @@ window.timeEvents = (function(): TimeEventsApi {
         if (window.finances && window.finances.applyDailyCosts) {
             window.finances.applyDailyCosts();
         }
+        gameState.lastEndedDayIndex = gameState.dayIndex;
 
         // Show the daily summary, then wait for the user to start next day
         if (window.showDailySummaryModal) {
@@ -154,17 +155,11 @@ window.timeEvents = (function(): TimeEventsApi {
     }
 
     // ---------------------------------------------------------
-    // Called each in-game minute from main.js
+    // Called each in-game minute from main.js. Task progress is not
+    // advanced here - main.ts's updateGameTime already does that every step.
     // ---------------------------------------------------------
     function minuteCheck(gameState: GameState): void {
         try {
-            // Always update tasks with 1 minute
-            // Note: main.js now directly updates tasks with exact minutes,
-            // but we'll keep this as a backup in case that doesn't happen
-            if (window.taskManager && window.taskManager.updateTasks) {
-                window.taskManager.updateTasks(1);
-            }
-
             // If it's exactly XX:00, run hourly check
             if (gameState.currentDate.getMinutes() === 0) {
                 const hour = gameState.currentDate.getHours();

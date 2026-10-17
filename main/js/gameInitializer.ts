@@ -167,6 +167,74 @@ window.initializeNewGame = function(gameOptions: NewGameOptions): boolean {
     }
 };
 
+// Restores a save into the live globals. The single load implementation,
+// shared by the main-menu load (loadSavedGame below) and the in-game Ctrl+L
+// load (electron-integration.ts).
+window.applySavedGame = function(gameData: SavedGameData): void {
+    window.gameState = gameData.gameState!;
+    window.financesData = gameData.financesData!;
+    window.employeesData = gameData.employeesData!;
+    window.productsData = gameData.productsData!;
+    window.materialsData = gameData.materialsData!;
+    window.equipmentData = gameData.equipmentData!;
+
+    // researchData (currentLevel + any in-progress research timer) and the
+    // prescription/refill state weren't part of older saves - fall back to
+    // safe defaults rather than leaving these undefined.
+    if (gameData.researchData) {
+        window.researchData = gameData.researchData;
+    }
+    if (window.prescriptions) {
+        window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
+        window.prescriptions.refillRegistry = gameData.refillRegistry || [];
+    }
+
+    // The save file round-trips through JSON, so Date fields come back as
+    // plain strings - revive every one of them. A transaction date left as a
+    // string makes addTransaction's sort throw, which softlocks end of day.
+    window.gameState.currentDate = new Date(window.gameState.currentDate);
+    if (window.gameState.dateCreated) {
+        window.gameState.dateCreated = new Date(window.gameState.dateCreated);
+    }
+    if (window.financesData && Array.isArray(window.financesData.transactions)) {
+        window.financesData.transactions.forEach(t => {
+            t.date = new Date(t.date);
+        });
+    }
+    if (Array.isArray(window.employeesData)) {
+        window.employeesData.forEach(emp => {
+            if (emp.hireDate) emp.hireDate = new Date(emp.hireDate);
+        });
+    }
+
+    // Frame-loop bookkeeping holds performance.now() timestamps from the
+    // session that wrote the save, which mean nothing in this one (a stale
+    // lastSimulationTime freezes or fast-forwards the clock). Zero them so
+    // gameLoop treats its next frame as the first.
+    window.gameState.lastFrameTime = 0;
+    window.gameState.lastSimulationTime = 0;
+    window.gameState.simulationAccumulator = 0;
+    window.gameState.renderInfo = { fps: 0, frameCount: 0, lastFpsUpdate: 0 };
+
+    // equipmentData items normally carry an isUnlocked() method that can't
+    // survive JSON/IPC - re-attach it so equipmentPage's eq.isUnlocked()
+    // calls keep working.
+    if (Array.isArray(window.equipmentData)) {
+        window.equipmentData.forEach(item => {
+            item.isUnlocked = function(this: EquipmentItem) {
+                return window.researchData.currentLevel >= this.researchLevelRequired;
+            };
+        });
+    }
+
+    // Merge into the existing brandReputation module instead of replacing it,
+    // so its methods (calcCustomers, gainReputation, loseReputation) survive
+    // the load.
+    if (window.brandReputation && gameData.brandReputation) {
+        Object.assign(window.brandReputation, gameData.brandReputation);
+    }
+};
+
 window.loadSavedGame = async function(): Promise<boolean> {
     console.log("[gameInitializer] Loading saved game");
 
@@ -178,55 +246,7 @@ window.loadSavedGame = async function(): Promise<boolean> {
 
             if (gameData) {
                 console.log("[gameInitializer] Game data loaded successfully, restoring state");
-                // Restore the game state from the saved data
-                window.gameState = gameData.gameState!;
-                window.financesData = gameData.financesData!;
-                window.employeesData = gameData.employeesData!;
-                window.productsData = gameData.productsData!;
-                window.materialsData = gameData.materialsData!;
-                window.equipmentData = gameData.equipmentData!;
-
-                // researchData (currentLevel + any in-progress research
-                // timer) and the prescription/refill state weren't part of
-                // older saves - fall back to safe defaults rather than
-                // leaving these undefined.
-                if (gameData.researchData) {
-                    window.researchData = gameData.researchData;
-                }
-                if (window.prescriptions) {
-                    window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
-                    window.prescriptions.refillRegistry = gameData.refillRegistry || [];
-                }
-
-                // The save file round-trips through JSON, so Date fields come
-                // back as plain strings - revive them or anything that calls
-                // .getMonth()/.getTime()/etc. on currentDate will throw.
-                if (window.gameState) {
-                    if (window.gameState.currentDate) {
-                        window.gameState.currentDate = new Date(window.gameState.currentDate);
-                    }
-                    if (window.gameState.dateCreated) {
-                        window.gameState.dateCreated = new Date(window.gameState.dateCreated);
-                    }
-                }
-
-                // equipmentData items normally carry an isUnlocked() method that
-                // can't survive JSON/IPC - re-attach it so equipmentPage.js's
-                // eq.isUnlocked() calls keep working.
-                if (Array.isArray(window.equipmentData)) {
-                    window.equipmentData.forEach(item => {
-                        item.isUnlocked = function(this: EquipmentItem) {
-                            return window.researchData.currentLevel >= this.researchLevelRequired;
-                        };
-                    });
-                }
-
-                // Merge into the existing brandReputation module instead of
-                // replacing it, so its methods (calcCustomers, gainReputation,
-                // loseReputation) survive the load.
-                if (window.brandReputation && gameData.brandReputation) {
-                    Object.assign(window.brandReputation, gameData.brandReputation);
-                }
+                window.applySavedGame(gameData);
 
                 console.log("[gameInitializer] Game data restored:", {
                     gameState: !!window.gameState,
