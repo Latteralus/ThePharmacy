@@ -44,11 +44,10 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
     applyMarkupButton.textContent = 'Apply Markup';
     applyMarkupButton.onclick = () => {
         const markupPercentage = parseFloat(markupInput.value);
-        if (!isNaN(markupPercentage)) {
-            window.finances.applyMarkupToAllProducts(markupPercentage);
+        if (window.finances.applyMarkupToAllProducts(markupPercentage)) {
             renderProducts(); // Re-render the products to show updated prices
         } else {
-            alert('Invalid markup percentage entered.');
+            alert('Enter a markup of 0% or more.');
         }
     };
     settingsSection.appendChild(applyMarkupButton);
@@ -152,6 +151,13 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             suggestedPriceLabel.textContent = `Suggested Price: $${suggestedPrice.toFixed(2)}`;
             card.appendChild(suggestedPriceLabel);
 
+            // What customers compare the price with (finances.quotePrice)
+            const marketPriceLabel = document.createElement('p');
+            marketPriceLabel.textContent = `Market Price: $${window.finances.marketPrice(prod.id).toFixed(2)}`;
+            marketPriceLabel.title =
+                'Customers always pay up to this. Above it, more of them refuse at check-in, and those who pay are less happy.';
+            card.appendChild(marketPriceLabel);
+
             const currentPriceLabel = document.createElement('p');
             currentPriceLabel.textContent = `Current Price: $${prod.price.toFixed(2)}`;
             card.appendChild(currentPriceLabel);
@@ -163,17 +169,16 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             const newPriceInput = document.createElement('input');
             newPriceInput.type = 'number';
             newPriceInput.value = prod.price.toFixed(2);
-            newPriceInput.min = '0';
+            newPriceInput.min = '0.01';
             newPriceInput.step = '0.01';
             const updatePriceButton = document.createElement('button');
             updatePriceButton.textContent = 'Update';
             updatePriceButton.onclick = () => {
                 const newPrice = parseFloat(newPriceInput.value);
-                if (!isNaN(newPrice)) {
-                    window.finances.updateProductPrice(prod.id, newPrice);
+                if (window.finances.updateProductPrice(prod.id, newPrice)) {
                     currentPriceLabel.textContent = `Current Price: $${newPrice.toFixed(2)}`;
                 } else {
-                    alert('Invalid price entered.');
+                    alert('Enter a price above $0.');
                 }
             };
             newPriceRow.appendChild(newPriceLabel);

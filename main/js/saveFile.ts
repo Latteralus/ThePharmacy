@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 3;
+    const SAVE_VERSION = 4;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -94,7 +94,11 @@ window.saveFile = (function (): SaveFileApi {
     }
 
     // Upgrades a save of version N to N + 1.
-    const migrations: { 1: (save: SaveFileV1) => SaveFile; 2: (save: SaveFile) => SaveFile } = {
+    const migrations: {
+        1: (save: SaveFileV1) => SaveFile;
+        2: (save: SaveFile) => SaveFile;
+        3: (save: SaveFile) => SaveFile;
+    } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
         1(save) {
@@ -163,6 +167,25 @@ window.saveFile = (function (): SaveFileApi {
             // already done are moved on there too.
             return { ...save, version: 3, tasks };
         },
+
+        // v3 compounds took their materials when they finished, so one under
+        // way holds none. Put it back in the queue, keeping its progress: it
+        // takes its materials when someone picks it up again, and waits (or,
+        // for a restock, shrinks) if they're short.
+        3(save) {
+            const requeued = new Set<string>();
+            save.tasks.forEach((task) => {
+                if (task.type === 'compound' && task.status === 'inProgress') {
+                    task.status = 'pending';
+                    task.assignedTo = null;
+                    requeued.add(task.id);
+                }
+            });
+            const employeesData = save.employeesData.map((emp) =>
+                emp.currentTaskId && requeued.has(emp.currentTaskId) ? { ...emp, currentTaskId: null } : emp,
+            );
+            return { ...save, version: 4, employeesData };
+        },
     };
 
     function migrate(raw: unknown): SaveFile {
@@ -230,14 +253,10 @@ window.saveFile = (function (): SaveFileApi {
             inProgress: save.research.inProgress,
         };
 
-        // In place: taskManager's closure holds this array. Clearing progress
-        // tracking before and after drops entries for the outgoing tasks and
-        // any loaded task that happens to share an id.
+        // In place: taskManager's closure holds this array.
         const tasks = window.taskManager.tasks;
-        window.taskManager.resetProgressVerification();
         tasks.length = 0;
         tasks.push(...save.tasks);
-        window.taskManager.resetProgressVerification();
 
         // Customers get the current definition of their insurance plan.
         save.customers.forEach((customer) => {

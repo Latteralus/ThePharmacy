@@ -2,7 +2,8 @@
  * Tests for the customer and task state machines (review finding A4) and
  * the bugs they fix: duplicate fill tasks (H1), the fill/consultation
  * desync (H4), fills racing for the last unit of stock (M8) and resets
- * leaving customers with nothing to wait on (M11). Runs the real task,
+ * leaving customers with nothing to wait on (M11). Also compounding
+ * materials (H2) and customers' response to price (H3). Runs the real task,
  * assignment, production, customer and prescription modules on the game
  * clock, one fixed step per game second like main.ts's updateGameTime.
  */
@@ -51,9 +52,11 @@ function loadGame({ employees = FULL_STAFF(), stock = 5, random = 0 } = {}) {
   window.employeesData = employees;
 
   require('../../main/js/clock.js');
+  require('../../main/js/ids.js');
   require('../../main/js/data/names.js');
   require('../../main/js/data/materials.js');
   require('../../main/js/data/products.js');
+  require('../../main/js/data/helpers.js');
   require('../../main/js/data/insurance.js');
   require('../../main/js/data/finances.js');
   require('../../main/js/insuranceClaims.js');
@@ -71,9 +74,6 @@ function loadGame({ employees = FULL_STAFF(), stock = 5, random = 0 } = {}) {
   window.financesData.cash = 1000;
 
   jest.spyOn(Math, 'random').mockReturnValue(random);
-  // Ids are Date.now() based; two customers in one millisecond would collide (M9).
-  let now = 1_700_000_000_000;
-  jest.spyOn(Date, 'now').mockImplementation(() => now++);
 }
 
 function product() {
@@ -94,6 +94,22 @@ function fillFor(customer) {
 
 function staff(id) {
   return window.employeesData.find((e) => e.id === id);
+}
+
+function material(id) {
+  return window.materialsData.find((m) => m.id === id);
+}
+
+// Leaves exactly enough of pd001's materials for `units` units.
+function materialsFor(units) {
+  product().ingredients.forEach((ing) => {
+    material(ing.id).inventory = ing.quantity * units;
+  });
+}
+
+// How many units of pd001 the materials left would make.
+function unitsOfMaterials() {
+  return Math.min(...product().ingredients.map((ing) => material(ing.id).inventory / ing.quantity));
 }
 
 // Advance game time one second per step, as updateGameTime does. With
@@ -332,5 +348,185 @@ describe('repairs (M11)', () => {
     expect(fillFor(b).status).toBe('pending-dependent');
     expect(task(`compound-${b.prescriptionId}`)).toBeDefined();
     expect(product().inventory).toBe(0);
+  });
+});
+
+describe('compounding takes materials for the whole batch (H2)', () => {
+  test('a compound that needs 2 units waits with materials for 1, then takes both when it starts', () => {
+    loadGame({ stock: 0, random: 0.5 }); // dosage 2
+    materialsFor(1);
+    const customer = window.customers.generateCustomer();
+    const compound = task(`compound-${customer.prescriptionId}`);
+    expect(compound.quantityToMake).toBe(2);
+
+    run(1);
+    expect(compound).toMatchObject({ status: 'pending', assignedTo: null });
+    expect(staff(LAB_TECH).currentTaskId).toBeNull();
+    expect(unitsOfMaterials()).toBe(1);
+
+    // The player buys more (purchases request an assignment round)
+    materialsFor(3);
+    window.taskAssignment.requestAutoAssign();
+    run(1);
+    expect(staff(LAB_TECH).currentTaskId).toBe(compound.id);
+    expect(compound.materialsTaken).toBe(true);
+    expect(unitsOfMaterials()).toBe(1); // both units' worth left when it started
+
+    run(60);
+    expect(window.customers.activeCustomers).toHaveLength(0);
+    expect(window.financesData.completedOrders).toBe(1);
+    expect(unitsOfMaterials()).toBe(1); // nothing more taken at completion
+    expect(product().inventory).toBe(0);
+  });
+
+  test('two compounds cannot both count on the same materials', () => {
+    loadGame({
+      stock: 0,
+      employees: [...FULL_STAFF(), employee('labtech2', 'Lab Technician')],
+    });
+    materialsFor(1);
+    const a = window.customers.generateCustomer();
+    const b = window.customers.generateCustomer();
+
+    run(1);
+    const started = [a, b].map((c) => task(`compound-${c.prescriptionId}`).status);
+    expect(started.sort()).toEqual(['inProgress', 'pending']);
+    expect(unitsOfMaterials()).toBe(0);
+    // The second lab tech wasn't tied up by the compound that couldn't start
+    expect([staff(LAB_TECH), staff('labtech2')].filter((e) => e.currentTaskId)).toHaveLength(1);
+  });
+
+  test('a compound that is cancelled puts its materials back', () => {
+    loadGame({ stock: 0 });
+    materialsFor(4);
+    const customer = window.customers.generateCustomer();
+    run(1);
+    expect(task(`compound-${customer.prescriptionId}`).materialsTaken).toBe(true);
+    expect(unitsOfMaterials()).toBe(3);
+
+    window.customers.customerLeaves(customer.id, 'impatient');
+
+    expect(unitsOfMaterials()).toBe(4);
+    expect(tasks()).toHaveLength(0);
+    expect(staff(LAB_TECH).currentTaskId).toBeNull();
+  });
+
+  test('a restock makes what the materials cover', () => {
+    loadGame({ stock: 0, employees: [employee(LAB_TECH, 'Lab Technician')] });
+    product().maxInventory = 5;
+    materialsFor(2);
+    window.production.checkAndCreateCompoundTasks();
+    const restock = tasks().find((t) => t.type === 'compound' && t.productId === 'pd001');
+    expect(restock.quantityToMake).toBe(2);
+
+    // Queued for 5, but materials for only 3 are left when it starts
+    [...tasks()].forEach((t) => window.taskManager.cancelTask(t.id));
+    materialsFor(5);
+    const big = window.production.createCompoundTask(product(), 5);
+    materialsFor(3);
+    run(1);
+    expect(big).toMatchObject({ status: 'inProgress', quantityToMake: 3, materialsTaken: true });
+    expect(big.totalTime).toBe(window.production.compoundTime(product(), 3));
+    expect(unitsOfMaterials()).toBe(0);
+
+    run(big.totalTime);
+    expect(product().inventory).toBe(3);
+  });
+
+  test('a restock waits for a lab technician, so the pharmacist stays free to consult', () => {
+    loadGame({ stock: 0, employees: [employee(CASHIER, 'Cashier'), employee(PHARMACIST, 'Pharmacist')] });
+    const restock = window.production.createCompoundTask(product(), 5);
+    const customer = window.customers.generateCustomer();
+
+    run(1);
+    expect(restock.status).toBe('pending');
+    // The customer's own compound is fine for a pharmacist
+    expect(staff(PHARMACIST).currentTaskId).toBe(`compound-${customer.prescriptionId}`);
+  });
+
+  test('compounding time grows with the batch', () => {
+    loadGame();
+    const minutes = (n) => window.production.compoundTime(product(), n);
+    expect(minutes(1)).toBe(product().productionTime);
+    expect(minutes(5)).toBe(Math.ceil(product().productionTime * 1.8));
+    expect(minutes(50)).toBeGreaterThan(minutes(5));
+  });
+});
+
+describe('price affects whether customers buy (H3)', () => {
+  const market = () => window.finances.marketPrice('pd001');
+
+  test('the market price ignores the player markup, and acceptance falls from 1 at market to 0 at 3x', () => {
+    loadGame();
+    const before = market();
+    window.finances.applyMarkupToAllProducts(900);
+    expect(market()).toBe(before);
+    expect(market()).toBeCloseTo(window.calculateProductCost('pd001') * 1.35);
+
+    const chance = window.finances.acceptanceChance;
+    expect(chance(0.5)).toBe(1);
+    expect(chance(1)).toBe(1);
+    expect(chance(2)).toBe(0.5);
+    expect(chance(3)).toBe(0);
+    expect(chance(10)).toBe(0);
+  });
+
+  test('at 3x the market price the customer walks out at check-in, and their stock goes back', () => {
+    loadGame({ stock: 5 });
+    product().price = market() * 3;
+    const customer = window.customers.generateCustomer();
+    expect(product().inventory).toBe(4);
+
+    run(4); // check-in takes 3 minutes
+
+    expect(window.customers.activeCustomers).toHaveLength(0);
+    expect(tasks()).toHaveLength(0);
+    expect(product().inventory).toBe(5);
+    expect(window.financesData.cash).toBe(1000);
+    expect(window.insuranceClaims.pendingClaims).toHaveLength(0);
+    expect(window.brandReputation.loseReputation).toHaveBeenCalledTimes(1);
+    expect(window.brandReputation.loseReputation).toHaveBeenCalledWith(0.5);
+    expect(customer.status).toBe('waitingForConsultation'); // left right after check-in
+  });
+
+  test('up to the market price everyone accepts, and pays the price agreed at check-in', () => {
+    loadGame({ stock: 5, random: 0.99 }); // the least likely roll to accept, dosage 3, uninsured
+    product().price = market();
+    const customer = window.customers.generateCustomer();
+    run(4);
+    const prescription = window.prescriptions.getPrescription(customer.prescriptionId);
+    expect(customer.status).toBe('waitingForConsultation');
+    expect(prescription.quotedPrice).toBeCloseTo(market() * 3);
+
+    // Raising the price afterwards doesn't change what they pay
+    product().price = market() * 10;
+    run(30);
+    expect(window.customers.activeCustomers).toHaveLength(0);
+    expect(window.financesData.cash).toBeCloseTo(1000 + market() * 3); // uninsured: full price
+  });
+
+  test('paying over the market price costs mood', () => {
+    loadGame({ stock: 5 });
+    product().price = market() * 2;
+    const customer = window.customers.generateCustomer();
+    const arrivalMood = customer.mood;
+
+    run(4);
+
+    // +1 for being checked in, -2 for paying twice the market price
+    expect(customer.status).toBe('waitingForConsultation');
+    expect(customer.mood).toBe(arrivalMood + 1 - 2);
+  });
+
+  test('prices must be above $0', () => {
+    loadGame();
+    expect(window.finances.updateProductPrice('pd001', 0)).toBe(false);
+    expect(window.finances.updateProductPrice('pd001', -5)).toBe(false);
+    expect(window.finances.updateProductPrice('pd001', NaN)).toBe(false);
+    expect(product().price).toBe(10);
+    expect(window.finances.applyMarkupToAllProducts(-50)).toBe(false);
+    expect(product().price).toBe(10);
+    expect(window.finances.updateProductPrice('pd001', 12.5)).toBe(true);
+    expect(product().price).toBe(12.5);
   });
 });

@@ -72,6 +72,9 @@ window.helpers = {
             }
         }
 
+        // A compound waiting on these materials can start now
+        window.taskAssignment.requestAutoAssign();
+
         // Update UI
         window.updateUI('inventory');
 
@@ -91,10 +94,7 @@ window.helpers = {
     calculateOrderCost(materialsNeeded: Record<string, number>): number {
         let totalCost = 0;
         for (const materialId in materialsNeeded) {
-            const material = window.materialsData.find((m) => m.id === materialId);
-            if (material) {
-                totalCost += material.cost * materialsNeeded[materialId];
-            }
+            totalCost += window.calculateMaterialCost(materialId, materialsNeeded[materialId]);
         }
         return totalCost;
     },
@@ -145,7 +145,7 @@ window.helpers = {
 
     // New helper function to generate a new employee ID
     generateNewEmployeeId(): string {
-        return `emp${Date.now()}`;
+        return window.nextId('emp');
     },
 
     // Use functions from names.js to generate names

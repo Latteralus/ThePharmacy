@@ -252,9 +252,7 @@ window.timeEvents = (function (): TimeEventsApi {
                 mat.autoOrderAmount > 0
             ) {
                 if (mat.inventory < mat.autoOrderThreshold) {
-                    const cost = window.calculateMaterialCost
-                        ? window.calculateMaterialCost(mat.id, mat.autoOrderAmount)
-                        : mat.cost * mat.autoOrderAmount;
+                    const cost = window.calculateMaterialCost(mat.id, mat.autoOrderAmount);
 
                     const paid = window.finances.transact({
                         type: 'expense',
@@ -281,6 +279,9 @@ window.timeEvents = (function (): TimeEventsApi {
         });
 
         if (ordersPlaced > 0) {
+            // A compound waiting on these materials can start now
+            window.taskAssignment.requestAutoAssign();
+
             if (window.currentPage === 'inventory' || window.currentPage === 'marketplace') {
                 window.showPage(window.currentPage); // Refresh the current inventory-related page
             }

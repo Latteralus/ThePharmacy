@@ -230,9 +230,18 @@ interface FinancesApi {
     startNewDay: (previousDate: Date, newDate: Date) => void;
     // Appends to the log only, without moving money. Use transact().
     addTransaction: (transaction: TransactionInput) => void;
-    updateProductPrice: (productId: string, newPrice: number) => void;
+    // Refuse (return false) a price that isn't above $0 / a negative markup.
+    updateProductPrice: (productId: string, newPrice: number) => boolean;
     setToSuggestedPrices: () => void;
-    applyMarkupToAllProducts: (markupPercentage: number) => void;
+    applyMarkupToAllProducts: (markupPercentage: number) => boolean;
+    // What customers judge a product's unit price against (materials at
+    // the standard markup; the player's markup doesn't move it).
+    marketPrice: (productId: string) => number;
+    // The chance a customer accepts a price of priceRatio x market price.
+    acceptanceChance: (priceRatio: number) => number;
+    // At check-in: the customer accepts (true; the price is fixed on the
+    // prescription and affects their mood) or refuses (false) the price.
+    quotePrice: (customerId: string, prescriptionId: string) => boolean;
     updateProfitMetrics: () => void;
     resetDailyStats: () => void;
     startNewWeek: () => void;
@@ -282,6 +291,9 @@ interface GameState {
     // save made while the daily summary was open load without charging that
     // day's wages and overhead a second time.
     lastEndedDayIndex?: number;
+    // The next number window.nextId hands out (ids.ts). Missing in a new
+    // game and in saves from before the counter; both start at 1.
+    nextId?: number;
 }
 
 // Options passed from the new-game form, through gameAPI, to
@@ -453,7 +465,7 @@ type CustomerEvent = 'checkedIn' | 'consulted' | 'filled' | 'paid';
 //   impatient: ran out of patience
 //   closing: still in the store at 22:00
 //   reset: removed by a Settings debug control (no change)
-type DepartureReason = 'served' | 'impatient' | 'closing' | 'reset';
+type DepartureReason = 'served' | 'impatient' | 'closing' | 'price' | 'reset';
 
 interface Customer {
     id: string;
@@ -536,20 +548,15 @@ interface Task {
     // fillPrescription tasks only: true once the task holds its product
     // (taken from inventory, returned if the task is cancelled).
     stockTaken?: boolean;
+    // compound tasks only: true once the task holds the whole batch's
+    // materials (taken when it starts, returned if it is cancelled).
+    materialsTaken?: boolean;
     // Game time (ms), from clock.now().
     createdAt?: number;
     lastUpdateTime?: number;
     lastProgressTime?: number;
     assignedAt?: number;
     [key: string]: unknown;
-}
-
-interface ProgressAnomaly {
-    taskId: string;
-    expected: number;
-    actual: number;
-    difference: number;
-    timestamp: number;
 }
 
 // Now the real, full shape (taskManager.ts owns it).
@@ -565,13 +572,11 @@ interface TaskManagerApi {
     // false) a move TASK_TRANSITIONS doesn't allow.
     setStatus: (task: Task, to: TaskStatus) => boolean;
     // Removes a task that won't be finished: frees its employee, returns a
-    // fill's stock, and cancels anything waiting on it.
+    // fill's stock or a compound's materials, and cancels anything waiting on it.
     cancelTask: (taskId: string) => void;
     debugTaskStatus: () => void;
     addEventListener: (event: string, callback: (data: unknown) => void) => void;
     removeEventListener: (event: string, callback: (data: unknown) => void) => void;
-    resetProgressVerification: (taskId?: string | null) => void;
-    getProgressAnomalies: () => ProgressAnomaly[];
     EVENTS: {
         TASK_ADDED: string;
         TASK_COMPLETED: string;
@@ -614,6 +619,8 @@ interface Prescription {
     // True when this prescription was generated from a RefillRecord rather
     // than freshly picked at random (see PrescriptionsApi.generateRefillPrescription).
     isRefill?: boolean;
+    // What the customer agreed to pay (all units) at check-in (finances.quotePrice).
+    quotedPrice?: number;
 }
 
 // A pending refill opportunity, registered when a prescription with
@@ -662,7 +669,19 @@ interface PrescriptionsApi {
 // handleTaskCompletion are read by prescriptions.ts and taskManager.js
 // (still plain JS) respectively.
 interface ProductionApi {
-    canCompound: (product: Product) => boolean;
+    // Whether the materials on hand cover `quantity` units (default 1).
+    canCompound: (product: Product, quantity?: number) => boolean;
+    // Minutes to make `quantity` units of a product.
+    compoundTime: (product: Product, quantity: number) => number;
+    // Compound tasks: whether it could start now (it holds its materials,
+    // or the materials for what it would make are on hand).
+    canStartCompound: (compound: Task) => boolean;
+    // Compound tasks: takes the batch's materials out of inventory (true),
+    // shrinking a restock to what the materials cover, or returns false if
+    // it can't start. True if it already holds them.
+    takeMaterials: (compound: Task) => boolean;
+    // Compound tasks: puts held materials back (the compound was cancelled).
+    returnMaterials: (compound: Task) => void;
     createCompoundTask: (product: Product, quantity: number) => Task;
     checkAndCreateCompoundTasks: () => void;
     // Fill tasks: takes the task's quantity out of inventory (true), or
@@ -881,6 +900,8 @@ interface Window {
     renderSettingsPage?: (container: HTMLElement) => void;
     timeEvents?: TimeEventsApi;
     clock: ClockApi;
+    // A new id, `${prefix}-${n}`, from the counter saved on gameState (ids.ts).
+    nextId: (prefix: string) => string;
     // Debug-only global set by timeEvents.ts (console-driven time skip), no
     // callers elsewhere in the codebase.
     forceTimeForward?: (minutes?: number) => boolean;

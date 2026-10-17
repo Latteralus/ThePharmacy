@@ -50,6 +50,13 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             return false;
         }
 
+        // A compound takes its batch's materials as it starts. If they've
+        // gone since the task was queued, it stays queued.
+        if (task.type === 'compound' && !window.production.takeMaterials(task)) {
+            console.warn(`[assignTaskToEmployee] Not enough materials to start ${task.id}.`);
+            return false;
+        }
+
         // Check if employee already has a task
         if (employee.currentTaskId) {
             console.warn(
@@ -174,14 +181,9 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                 return false;
             }
 
-            // For compound tasks, check material availability
+            // A compound needs materials for its batch (it takes them when it starts)
             if (task.type === 'compound') {
-                const product = window.productsData?.find((p) => p.id === task.productId);
-                if (!product) {
-                    console.error(`[autoAssignTasks] Product not found for compound task: ${task.productId}`);
-                    return false;
-                }
-                return window.production?.canCompound(product) ?? false;
+                return window.production?.canStartCompound(task) ?? false;
             }
 
             // A pending fill already holds its stock (prescriptions.supplyFill).
@@ -217,7 +219,7 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                     `[autoAssignTasks] Found ${checkoutTasks.length} checkout tasks for ${cashiers.length} available cashiers`,
                 );
                 for (let i = 0; i < Math.min(cashiers.length, checkoutTasks.length); i++) {
-                    assignTaskToEmployee(checkoutTasks[i].id, cashiers[i].id);
+                    if (!assignTaskToEmployee(checkoutTasks[i].id, cashiers[i].id)) continue;
                     // Remove assigned cashier from available list
                     const index = availableEmployees.indexOf(cashiers[i]);
                     if (index > -1) {
@@ -241,12 +243,9 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             // Try to find the best employee for this task
             const employee = findBestEmployeeForTask(task, availableEmployees);
 
-            if (employee) {
-                console.log(
-                    `[autoAssignTasks] Assigning ${task.type} task (${task.id}) to ${employee.firstName} ${employee.lastName} (${employee.role})`,
-                );
-                assignTaskToEmployee(task.id, employee.id);
-
+            // A compound whose materials an earlier compound in this round
+            // just took fails here, and the employee stays free.
+            if (employee && assignTaskToEmployee(task.id, employee.id)) {
                 // Remove this employee from available list
                 const index = availableEmployees.indexOf(employee);
                 if (index > -1) {
@@ -334,8 +333,16 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             return availableEmployees[0] ?? null;
         }
 
+        // Restocking (and Quick Compound) is lab work only. A batch can take
+        // the better part of an hour, and a pharmacist on one leaves every
+        // customer waiting for a consultation. A customer's own compound can
+        // still go to a pharmacist.
+        const isRestock = task.type === 'compound' && !task.prescriptionId;
+
         // Get the appropriate roles for this task type
-        const taskRoles = eligibleRoles[task.type] || ['Pharmacist', 'Lab Technician', 'Cashier'];
+        const taskRoles = isRestock
+            ? ['Lab Technician']
+            : eligibleRoles[task.type] || ['Pharmacist', 'Lab Technician', 'Cashier'];
 
         // Try each role in priority order
         let eligibleEmployees: Employee[] = [];
@@ -349,7 +356,7 @@ window.taskAssignment = (function (): TaskAssignmentApi {
 
         // If no employees with preferred roles, use any available employee
         // This is a fallback to ensure tasks don't get stuck
-        if (eligibleEmployees.length === 0 && availableEmployees.length > 0) {
+        if (eligibleEmployees.length === 0 && availableEmployees.length > 0 && !isRestock) {
             console.log(
                 `[findBestEmployeeForTask] No employees with preferred roles ${taskRoles.join(', ')} for ${task.type}. Using any available employee.`,
             );

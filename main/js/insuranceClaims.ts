@@ -54,7 +54,7 @@ window.insuranceClaims = {
         const insurancePlan = customer.insurance;
 
         const claim: InsuranceClaim = {
-            id: `claim-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: window.nextId('claim'),
             customerId,
             prescriptionId,
             insurancePlan: insurancePlan.planName,

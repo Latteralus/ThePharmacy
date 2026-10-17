@@ -20,6 +20,7 @@ beforeEach(() => {
   window.updateUI = jest.fn();
   window.employeesData = [];
 
+  require('../../main/js/ids.js');
   require('../../main/js/data/materials.js');
   require('../../main/js/data/products.js');
   require('../../main/js/data/finances.js');

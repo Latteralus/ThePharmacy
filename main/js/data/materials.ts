@@ -690,7 +690,9 @@ window.materialsData = [
 ];
 
 // --------------------------------------------------------
-// Helper Function to Calculate Material Cost with Discounts
+// The price of buying `quantity` of a material, after its bulk discount.
+// Every purchase uses this: the Marketplace, auto-orders and ordering a
+// product's materials.
 // --------------------------------------------------------
 window.calculateMaterialCost = function (materialId: string, quantity: number): number {
     const material = window.materialsData.find((m) => m.id === materialId);

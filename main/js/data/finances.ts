@@ -69,6 +69,24 @@ function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
     periods.total += amount;
 }
 
+// Pricing (H3). Customers judge a price against the market price: the
+// materials' cost at the standard 35% markup. It's fixed, so the player's
+// markup setting (globalMarkup) can't move it. At check-in a customer always
+// accepts a price up to the market price. Above it, the chance they accept
+// falls in a straight line, to 0 at MAX_PRICE_RATIO times the market price.
+// Those who accept are less happy the more they pay (PRICE_MOOD mood points
+// per 100% over market, up to MAX_PRICE_MOOD_LOSS), and those who refuse
+// walk out. So the best price is somewhat above market, not unlimited.
+const MARKET_MARKUP = 1.35;
+const MAX_PRICE_RATIO = 3;
+const PRICE_MOOD = 2;
+const MAX_PRICE_MOOD_LOSS = 3;
+
+function acceptanceChance(priceRatio: number): number {
+    if (priceRatio <= 1) return 1;
+    return Math.max(0, 1 - (priceRatio - 1) / (MAX_PRICE_RATIO - 1));
+}
+
 window.finances = {
     transact(entry) {
         const data = window.financesData;
@@ -162,7 +180,9 @@ window.finances = {
             return;
         }
 
-        const price = product.price * prescription.dosage;
+        // The price they agreed to at check-in (quotePrice). A prescription
+        // from an older save that was never quoted pays today's price.
+        const price = prescription.quotedPrice ?? product.price * prescription.dosage;
         const formulary = customer.insurance.formulary;
         const isCovered = !formulary || formulary.includes(product.id);
         const copayPercentage = isCovered ? customer.insurance.copayPercentage : 100;
@@ -197,6 +217,36 @@ window.finances = {
         );
 
         return { copay, price };
+    },
+
+    marketPrice(productId) {
+        return window.calculateProductCost(productId) * MARKET_MARKUP;
+    },
+
+    acceptanceChance,
+
+    // At check-in the customer hears the price. If they accept, it's fixed
+    // on the prescription (raising the price afterwards doesn't change what
+    // they pay) and the price affects their mood. Returns false if they
+    // refuse; customers.ts then sends them home.
+    quotePrice(customerId, prescriptionId) {
+        const prescription = window.prescriptions.getPrescription(prescriptionId);
+        const product = prescription && window.productsData.find((p) => p.id === prescription.productId);
+        if (!prescription || !product) return true; // nothing to charge for; reconcileTasks deals with it
+
+        const market = this.marketPrice(product.id);
+        const ratio = market > 0 ? product.price / market : 1;
+        if (Math.random() >= acceptanceChance(ratio)) {
+            console.log(
+                `[finances.js] Customer ${customerId} refused $${product.price.toFixed(2)} for ${product.name} (market $${market.toFixed(2)})`,
+            );
+            return false;
+        }
+
+        prescription.quotedPrice = product.price * prescription.dosage;
+        const moodChange = Math.max(-MAX_PRICE_MOOD_LOSS, Math.min(1, PRICE_MOOD * (1 - ratio)));
+        if (moodChange !== 0) window.customers.updateCustomerMood(customerId, moodChange);
+        return true;
     },
 
     // Pay out insurance claims that have finished processing. The payments
@@ -239,7 +289,7 @@ window.finances = {
     addTransaction(transaction) {
         // Make sure the transaction has a unique ID
         if (!transaction.id) {
-            transaction.id = `trans-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            transaction.id = window.nextId('trans');
         }
 
         // Add the transaction
@@ -254,12 +304,17 @@ window.finances = {
         }
     },
 
-    // Update a product's price (manually or by the user)
+    // Update a product's price (manually or by the user). Refuses (returns
+    // false) a price that isn't a positive number.
     updateProductPrice(productId, newPrice) {
         const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
             console.error(`[finances.js] Product not found: ${productId}`);
-            return;
+            return false;
+        }
+        if (!Number.isFinite(newPrice) || newPrice <= 0) {
+            console.warn(`[finances.js] Refused price $${newPrice} for ${product.name}: prices must be above $0`);
+            return false;
         }
 
         const oldPrice = product.price;
@@ -271,6 +326,7 @@ window.finances = {
         // Optionally re-render finances or inventory UI
         window.updateUI('finances');
         window.updateUI('inventory');
+        return true;
     },
 
     // Set all product prices to their suggested price
@@ -292,8 +348,13 @@ window.finances = {
         window.updateUI('inventory');
     },
 
-    // Apply a markup to all product prices
+    // Apply a markup to all product prices. Refuses (returns false) a
+    // markup that isn't a number of 0% or more, so prices stay above $0.
     applyMarkupToAllProducts(markupPercentage) {
+        if (!Number.isFinite(markupPercentage) || markupPercentage < 0) {
+            console.warn(`[finances.js] Refused markup ${markupPercentage}%: it must be 0% or more`);
+            return false;
+        }
         const markupFactor = 1 + markupPercentage / 100;
 
         window.productsData.forEach((product) => {
@@ -307,6 +368,7 @@ window.finances = {
 
         console.log(`[finances.js] Applied ${markupPercentage.toFixed(0)}% markup to all product prices.`);
         window.updateUI('inventory');
+        return true;
     },
 
     // Calculate and update profit metrics

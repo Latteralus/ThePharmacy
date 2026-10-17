@@ -48,82 +48,11 @@ window.taskManager = (function (): TaskManagerApi {
         },
     };
 
-    // Progress verification storage
-    const progressVerification = {
-        lastUpdates: {} as Record<string, number>, // Stores last update time by task ID
-        expectedProgress: {} as Record<string, number>, // Stores expected progress by task ID
-        anomalies: [] as ProgressAnomaly[], // Tracks progress anomalies
-
-        // Add or update progress tracking for a task
-        trackTask(taskId: string, currentProgress: number, minutes: number): void {
-            if (this.lastUpdates[taskId] === undefined) {
-                // First time tracking this task
-                this.lastUpdates[taskId] = window.clock.now();
-                this.expectedProgress[taskId] = currentProgress;
-            } else {
-                // Calculate expected progress based on minutes
-                this.expectedProgress[taskId] += minutes;
-
-                // Update timestamp
-                this.lastUpdates[taskId] = window.clock.now();
-            }
-        },
-
-        // Verify that progress matches expected value
-        verifyProgress(taskId: string, actualProgress: number): boolean {
-            if (this.expectedProgress[taskId] === undefined) return true;
-
-            // Allow small floating point differences (0.001 tolerance)
-            const tolerance = 0.001;
-            const difference = Math.abs(actualProgress - this.expectedProgress[taskId]);
-
-            if (difference > tolerance) {
-                // Progress anomaly detected
-                const anomaly: ProgressAnomaly = {
-                    taskId,
-                    expected: this.expectedProgress[taskId],
-                    actual: actualProgress,
-                    difference,
-                    timestamp: window.clock.now(),
-                };
-
-                this.anomalies.push(anomaly);
-                console.warn(
-                    `[taskManager.js] Progress anomaly detected for task ${taskId}: Expected ${this.expectedProgress[taskId].toFixed(2)}, Actual ${actualProgress.toFixed(2)}, Difference ${difference.toFixed(3)}`,
-                );
-
-                // Keep anomaly list manageable
-                if (this.anomalies.length > 100) {
-                    this.anomalies.shift(); // Remove oldest anomaly
-                }
-
-                return false;
-            }
-
-            return true;
-        },
-
-        // Clear tracking for a task
-        clearTask(taskId: string): void {
-            delete this.lastUpdates[taskId];
-            delete this.expectedProgress[taskId];
-        },
-
-        // Get verification statistics
-        getStats(): { trackedTasks: number; anomaliesDetected: number; latestAnomalies: ProgressAnomaly[] } {
-            return {
-                trackedTasks: Object.keys(this.lastUpdates).length,
-                anomaliesDetected: this.anomalies.length,
-                latestAnomalies: this.anomalies.slice(-5), // Last 5 anomalies
-            };
-        },
-    };
-
     // Add a task to the system
     function addTask(task: Task): Task {
         // Add an ID if it doesn't have one
         if (!task.id) {
-            task.id = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            task.id = window.nextId('task');
         }
 
         // Make sure progress is initialized
@@ -186,7 +115,6 @@ window.taskManager = (function (): TaskManagerApi {
     function removeTask(task: Task): void {
         const index = tasks.indexOf(task);
         if (index > -1) tasks.splice(index, 1);
-        progressVerification.clearTask(task.id);
     }
 
     function cancelTask(taskId: string): void {
@@ -202,6 +130,7 @@ window.taskManager = (function (): TaskManagerApi {
             task.assignedTo = null;
         }
         window.production?.returnStock(task);
+        window.production?.returnMaterials(task);
         removeTask(task);
         console.log(`[taskManager.js] Task cancelled: ${task.type} - ${task.id}`);
         taskEvents.emit('taskCancelled', task);
@@ -268,52 +197,19 @@ window.taskManager = (function (): TaskManagerApi {
                     continue;
                 }
 
-                // Fills need no stock check here: they hold their stock
-                // from before they can be assigned (prescriptions.supplyFill).
-                if (task.type === 'compound') {
-                    const product = window.productsData?.find((p) => p.id === task.productId);
-                    // canCompound already defensively handles a missing
-                    // product at runtime (returns false); the assertion
-                    // just satisfies its required-Product signature.
-                    if (!window.production.canCompound(product!)) {
-                        console.warn(
-                            `[taskManager.js] Insufficient materials to compound ${product ? product.name : task.productId}; unassigning employee.`,
-                        );
-                        window.taskAssignment.unassignTask(task.id);
-                        continue;
-                    }
-                }
+                // No stock or materials check here: a fill holds its product
+                // and a compound its materials from before it starts.
 
-                // Calculate the previous progress (before update)
                 const previousProgress = task.progress;
-
-                // Add progress for the elapsed time - update progress verification first
-                progressVerification.trackTask(task.id, previousProgress, minutes);
-
-                // Add progress for the elapsed time
                 task.progress += minutes;
                 task.lastProgressTime = now;
 
-                // Verify progress is as expected
-                const progressVerified = progressVerification.verifyProgress(task.id, task.progress);
-                if (!progressVerified) {
-                    console.warn(
-                        `[taskManager.js] Progress verification failed for task ${task.id} (${task.type}). Correcting progress.`,
-                    );
-                    // Correct the progress if verification failed
-                    task.progress = progressVerification.expectedProgress[task.id];
-                }
-
-                // Emit progress update event (only if progress actually changed)
-                if (task.progress !== previousProgress) {
-                    taskEvents.emit('taskProgressUpdated', {
-                        task: task,
-                        previousProgress: previousProgress,
-                        currentProgress: task.progress,
-                        deltaProgress: task.progress - previousProgress,
-                        progressVerified: progressVerified,
-                    });
-                }
+                taskEvents.emit('taskProgressUpdated', {
+                    task: task,
+                    previousProgress: previousProgress,
+                    currentProgress: task.progress,
+                    deltaProgress: minutes,
+                });
 
                 // Check if the task is now complete
                 if (task.progress >= task.totalTime) {
@@ -342,9 +238,6 @@ window.taskManager = (function (): TaskManagerApi {
         console.log(`[finalizeTask] Finalizing task: ${task.id} (${task.type}), assignedTo: ${task.assignedTo}`);
 
         try {
-            // Remove task from progress verification tracking
-            progressVerification.clearTask(task.id);
-
             // Find the employee assigned to this task
             let employee: Employee | null = null;
             if (task.assignedTo) {
@@ -465,9 +358,6 @@ window.taskManager = (function (): TaskManagerApi {
             }
         }
 
-        // Include progress verification stats
-        console.log('Progress verification stats:', progressVerification.getStats());
-
         console.log('========================');
     }
 
@@ -489,30 +379,6 @@ window.taskManager = (function (): TaskManagerApi {
         taskEvents.off(event, callback);
     }
 
-    // Reset progress verification for a specific task or all tasks
-    function resetProgressVerification(taskId: string | null = null): void {
-        if (taskId) {
-            progressVerification.clearTask(taskId);
-            console.log(`[taskManager.js] Progress verification reset for task ${taskId}`);
-        } else {
-            // Reset for all tasks
-            tasks.forEach((task) => {
-                if (task && task.id) {
-                    progressVerification.clearTask(task.id);
-                }
-            });
-
-            // Clear anomalies
-            progressVerification.anomalies = [];
-            console.log(`[taskManager.js] Progress verification reset for all tasks`);
-        }
-    }
-
-    // Get progress verification anomalies
-    function getProgressAnomalies(): ProgressAnomaly[] {
-        return progressVerification.anomalies;
-    }
-
     // Expose the public API
     return {
         tasks,
@@ -527,8 +393,6 @@ window.taskManager = (function (): TaskManagerApi {
         debugTaskStatus,
         addEventListener,
         removeEventListener,
-        resetProgressVerification,
-        getProgressAnomalies,
 
         // Constants for events
         EVENTS: {
@@ -618,23 +482,7 @@ window.taskManager = (function (): TaskManagerApi {
                 console.warn(`[taskManager.js] Integrity check repaired ${repaired} missing customer tasks`);
             }
 
-            // 4. Check for progress anomalies
-            const progressAnomalies = window.taskManager.getProgressAnomalies();
-            if (progressAnomalies && progressAnomalies.length > 0) {
-                console.warn(
-                    `[taskManager.js] ${progressAnomalies.length} progress anomalies detected. Latest anomaly: Task ${progressAnomalies[progressAnomalies.length - 1]?.taskId}`,
-                );
-
-                // Reset progress tracking if too many anomalies
-                if (progressAnomalies.length > 20) {
-                    console.warn(
-                        '[taskManager.js] Too many progress anomalies detected. Resetting progress verification.',
-                    );
-                    window.taskManager.resetProgressVerification();
-                }
-            }
-
-            // 5. Freed employees can pick up work at the end of this step
+            // 4. Freed employees can pick up work at the end of this step
             if (fixedEmployeeCount > 0) {
                 window.taskAssignment.requestAutoAssign();
             }

@@ -96,7 +96,10 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
+  // Ids come from a counter saved with the game (M9)
+  expect(customerId).toMatch(/^cust-\d+$/);
+  expect(saved.gameState.nextId).toBeGreaterThan(Number(customerId.split('-')[1]));
   expect(saved.products.find((p) => p.id === 'pd001')).toMatchObject({ price: 123.45 });
   expect(saved.products[0].name).toBeUndefined();
   expect(saved.productsData).toBeUndefined();

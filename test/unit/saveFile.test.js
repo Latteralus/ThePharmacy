@@ -36,8 +36,9 @@ function loadModules() {
   window.brandReputation = { reputationScore: 10, calcCustomers: () => 2 };
 
   const tasks = [];
-  window.taskManager = { tasks, resetProgressVerification: jest.fn() };
+  window.taskManager = { tasks };
 
+  require('../../main/js/ids.js');
   require('../../main/js/data/materials.js');
   require('../../main/js/data/products.js');
   require('../../main/js/data/equipment.js');
@@ -167,7 +168,6 @@ describe('save -> disk -> load round trip', () => {
     expect(window.taskManager.tasks).toHaveLength(1);
     expect(window.taskManager.tasks[0]).toMatchObject({ id: 'checkin-cust-1', progress: 1.5, assignedTo: 'emp1' });
     expect(window.employeesData[0].currentTaskId).toBe('checkin-cust-1');
-    expect(window.taskManager.resetProgressVerification).toHaveBeenCalled();
   });
 
   test('restores customers and their prescriptions', () => {
@@ -345,6 +345,40 @@ describe('migrating v1 saves', () => {
     expect(save.tasks[2].status).toBe('inProgress');
   });
 
+  test('a v3 save puts compounds under way back in the queue, since they hold no materials', () => {
+    playABit();
+    const v3 = throughDisk(window.saveFile.serialize());
+    v3.version = 3;
+    v3.employeesData.push({
+      ...v3.employeesData[0],
+      id: 'emp2',
+      role: 'Lab Technician',
+      currentTaskId: 'compound-pres-1',
+    });
+    v3.tasks.push({
+      id: 'compound-pres-1',
+      type: 'compound',
+      status: 'inProgress',
+      progress: 4,
+      totalTime: 15,
+      productId: 'pd001',
+      prescriptionId: 'pres-1',
+      quantityToMake: 1,
+      assignedTo: 'emp2',
+    });
+
+    const save = window.saveFile.migrate(v3);
+
+    expect(save.version).toBe(window.saveFile.version);
+    expect(save.tasks.find((t) => t.id === 'compound-pres-1')).toMatchObject({
+      status: 'pending',
+      assignedTo: null,
+      progress: 4,
+    });
+    expect(save.tasks.find((t) => t.id === 'checkin-cust-1')).toMatchObject({ status: 'inProgress' });
+    expect(save.employeesData.map((e) => e.currentTaskId)).toEqual(['checkin-cust-1', null]);
+  });
+
   test('loading gives customers whatever tasks their status needs', () => {
     playABit();
     const save = throughDisk(window.saveFile.serialize());
@@ -360,5 +394,32 @@ describe('migrating v1 saves', () => {
     const future = throughDisk(window.saveFile.serialize());
     future.version = window.saveFile.version + 1;
     expect(() => window.saveFile.migrate(future)).toThrow('newer');
+  });
+});
+
+describe('ids (M9)', () => {
+  test('come from one counter, so ids made in the same millisecond differ', () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    const ids = Array.from({ length: 5 }, () => window.nextId('emp'));
+    expect(new Set(ids).size).toBe(5);
+    expect(ids[0]).toBe('emp-1');
+  });
+
+  test('the counter is saved with the game, and carries on after a load', () => {
+    window.nextId('cust');
+    window.nextId('cust');
+    const save = throughDisk(window.saveFile.serialize());
+    expect(save.gameState.nextId).toBe(3);
+
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.nextId('cust')).toBe('cust-3');
+  });
+
+  test('a save from before the counter starts it at 1', () => {
+    const save = throughDisk(window.saveFile.serialize());
+    delete save.gameState.nextId;
+    window.saveFile.apply(save);
+    expect(window.nextId('pres')).toBe('pres-1');
   });
 });

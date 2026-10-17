@@ -4,17 +4,9 @@
 // HELPER FUNCTIONS
 // --------------------------------------------------------
 
-// Calculates material cost = quantity * material cost
-window.calculateMaterialCost = function (materialId: string, quantity: number): number {
-    const material = window.materialsData.find((m) => m.id === materialId);
-    if (!material) {
-        console.error(`Material not found: ${materialId}`);
-        return 0;
-    }
-    return material.cost * quantity;
-};
-
-// Helper function to calculate cost of a product based on ingredients
+// What the materials in one unit of a product cost, at list price. Bulk
+// discounts are for buying (calculateMaterialCost in materials.ts); a recipe
+// quantity isn't a purchase, so it doesn't earn one.
 window.calculateProductCost = function (productId: string): number {
     const product = window.productsData.find((p) => p.id === productId);
     if (!product) {
@@ -24,7 +16,12 @@ window.calculateProductCost = function (productId: string): number {
 
     let totalCost = 0;
     product.ingredients.forEach((ingredient) => {
-        totalCost += window.calculateMaterialCost(ingredient.id, ingredient.quantity);
+        const material = window.materialsData.find((m) => m.id === ingredient.id);
+        if (!material) {
+            console.error(`Material not found: ${ingredient.id}`);
+            return;
+        }
+        totalCost += material.cost * ingredient.quantity;
     });
 
     return totalCost;

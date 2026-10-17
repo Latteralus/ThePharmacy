@@ -178,6 +178,7 @@ describe('customer patience on the game clock', () => {
     window.ui = { updateCustomers: jest.fn() };
 
     require('../../main/js/clock.js');
+    require('../../main/js/ids.js');
     require('../../main/js/customers.js');
   });
 

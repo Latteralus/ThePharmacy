@@ -132,6 +132,15 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
 
             card.appendChild(titleRow);
 
+            // The total below applies these (calculateMaterialCost)
+            if (mat.bulkDiscounts.length > 0) {
+                const discountRow = document.createElement('small');
+                discountRow.textContent = `Bulk: ${mat.bulkDiscounts
+                    .map((d) => `${Math.round(d.discount * 100)}% off ${d.minQuantity}+`)
+                    .join(', ')}`;
+                card.appendChild(discountRow);
+            }
+
             // Inventory row: "Current inventory: N" with color-coded highlight
             const invRow = document.createElement('div');
             const invLabel = document.createElement('strong');
@@ -193,7 +202,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
         materialCards.forEach((entry) => {
             const qty = parseInt(entry.qtyInput.value, 10) || 0;
             if (qty > 0) {
-                sum += qty * entry.matObj.cost;
+                sum += window.calculateMaterialCost(entry.matObj.id, qty);
             }
         });
         return sum;
@@ -224,6 +233,9 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
                 entry.qtyInput.value = '0'; // reset after purchase
             }
         });
+
+        // A compound waiting on these materials can start now
+        window.taskAssignment.requestAutoAssign();
 
         // Possibly re-render finances, or do it in main UI
         window.updateFinancialSummary(window.financesData);

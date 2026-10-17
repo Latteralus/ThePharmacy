@@ -22,6 +22,7 @@ const CUSTOMER_TRANSITIONS: Record<CustomerEvent, Partial<Record<CustomerStatus,
 const DEPARTURE_PENALTY: Record<Exclude<DepartureReason, 'served'>, number> = {
     impatient: 1.5,
     closing: 1,
+    price: 0.5, // refused the price at check-in
     reset: 0,
 };
 
@@ -59,6 +60,18 @@ function taskForStatus(customer: Customer): { id: string; create: () => void } |
 
 // What happens on arriving in a status.
 function enterStatus(customer: Customer): void {
+    // Checked in: they hear the price, and may walk out (H3).
+    if (customer.status === 'waitingForConsultation' && customer.prescriptionId) {
+        if (!window.finances.quotePrice(customer.id, customer.prescriptionId)) {
+            window.notifications?.add(
+                `${customer.firstName} ${customer.lastName} left: the price was too high.`,
+                'warning',
+            );
+            window.customers.customerLeaves(customer.id, 'price');
+            return;
+        }
+    }
+
     taskForStatus(customer)?.create();
 
     const prescription = customer.prescriptionId
@@ -115,7 +128,7 @@ window.customers = {
         const baseMood = Math.min(10, Math.max(1, 7 + this.customerTypes[customerType].baseBoost / 10));
 
         const newCustomer: Customer = {
-            id: `cust-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: window.nextId('cust'),
             type: customerType,
             status: 'waitingForCheckIn',
             arrivedAt: window.gameState.currentDate.getTime(),

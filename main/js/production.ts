@@ -16,34 +16,93 @@ window.production = (function (): ProductionApi {
         });
     }
 
-    // Function to check if a product can be compounded based on material availability
-    function canCompound(product: Product): boolean {
+    // Making a batch shares its setup: the first unit takes the product's
+    // productionTime and each one after it a fifth of that. (Restocks used
+    // to take half the time whatever the quantity, so 50 units took as long
+    // as one.)
+    const EXTRA_UNIT_TIME = 0.2;
+
+    function compoundTime(product: Product, quantity: number): number {
+        return Math.max(1, Math.ceil(product.productionTime * (1 + EXTRA_UNIT_TIME * (Math.max(1, quantity) - 1))));
+    }
+
+    // Whether the materials on hand cover `quantity` units. Materials held
+    // by compounds already under way have left inventory, so they don't count.
+    function canCompound(product: Product, quantity = 1): boolean {
+        if (!product) return false;
+        return product.ingredients.every((ingredient) => {
+            const material = window.materialsData.find((m) => m.id === ingredient.id);
+            return !!material && material.inventory >= ingredient.quantity * quantity;
+        });
+    }
+
+    // How many units a compound can start with now. A customer's compound
+    // needs exactly its quantity. A restock or Quick Compound makes as many
+    // as the materials cover, so a shortage shrinks it instead of leaving it
+    // queued (and blocking the next restock) until someone buys materials.
+    function startableQuantity(compound: Task, product: Product): number {
+        const wanted = compound.quantityToMake ?? 1;
+        if (compound.prescriptionId) return canCompound(product, wanted) ? wanted : 0;
+        return Math.min(wanted, window.helpers.calculatePotentialProduction(product.id));
+    }
+
+    function canStartCompound(compound: Task): boolean {
+        if (compound.materialsTaken) return true;
+        const product = window.productsData.find((p) => p.id === compound.productId);
+        return !!product && startableQuantity(compound, product) >= 1;
+    }
+
+    // Takes the whole batch's materials out of inventory when someone starts
+    // the compound, so two compounds can't both count on the same stock and
+    // inventory can't go negative (H2). True if it already holds them.
+    function takeMaterials(compound: Task): boolean {
+        if (compound.materialsTaken) return true;
+        const product = window.productsData.find((p) => p.id === compound.productId);
         if (!product) return false;
 
-        for (const ingredient of product.ingredients) {
-            const material = window.materialsData.find((m) => m.id === ingredient.id);
-            if (!material || material.inventory < ingredient.quantity) {
-                console.log(
-                    `[production.js] Not enough ${material ? material.name : 'unknown material'} to compound ${product.name}`,
-                );
-                return false;
-            }
+        const quantity = startableQuantity(compound, product);
+        if (quantity < 1) return false;
+        if (quantity !== compound.quantityToMake) {
+            console.log(
+                `[production.js] Materials cover ${quantity} of the ${compound.quantityToMake} ${product.name} wanted; making ${quantity}.`,
+            );
+            compound.quantityToMake = quantity;
+            compound.totalTime = compoundTime(product, quantity);
         }
+
+        product.ingredients.forEach((ingredient) => {
+            const material = window.materialsData.find((m) => m.id === ingredient.id)!;
+            material.inventory -= ingredient.quantity * quantity;
+        });
+        compound.materialsTaken = true;
+        refreshInventoryUI();
         return true;
     }
 
-    // Function to create a compound task for a product
-    function createCompoundTask(product: Product, quantity: number): Task {
-        // Calculate the reduced time (half of the original)
-        const originalTime = product.productionTime;
-        const reducedTime = Math.max(Math.ceil(originalTime / 2), 1); // Ensure minimum of 1 minute
+    // Compound tasks: puts held materials back (the compound was cancelled).
+    function returnMaterials(compound: Task): void {
+        if (compound.type !== 'compound' || !compound.materialsTaken) return;
 
+        const product = window.productsData.find((p) => p.id === compound.productId);
+        if (product) {
+            product.ingredients.forEach((ingredient) => {
+                const material = window.materialsData.find((m) => m.id === ingredient.id);
+                if (material) material.inventory += ingredient.quantity * (compound.quantityToMake ?? 1);
+            });
+            refreshInventoryUI();
+        }
+        compound.materialsTaken = false;
+    }
+
+    // Function to create a compound task for a product (restocks and the
+    // Inventory page's Quick Compound)
+    function createCompoundTask(product: Product, quantity: number): Task {
         const compoundTask: Task = {
-            id: `compound-${product.id}-${Date.now()}`,
+            id: window.nextId(`compound-${product.id}`),
             type: 'compound',
             productId: product.id,
             productName: product.name,
-            totalTime: reducedTime, // Use the reduced time (half of original)
+            totalTime: compoundTime(product, quantity),
             progress: 0,
             roleNeeded: 'Lab Technician',
             status: 'pending',
@@ -53,7 +112,7 @@ window.production = (function (): ProductionApi {
 
         window.taskManager.addTask(compoundTask);
         console.log(
-            `[production.js] Created compound task for ${quantity} ${product.name} (Task ID: ${compoundTask.id}), time reduced from ${originalTime} to ${reducedTime} minutes`,
+            `[production.js] Created compound task for ${quantity} ${product.name} (Task ID: ${compoundTask.id}), ${compoundTask.totalTime} minutes`,
         );
 
         return compoundTask;
@@ -67,44 +126,21 @@ window.production = (function (): ProductionApi {
             const existingCompoundTask = window.taskManager.tasks.find(
                 (t) => t.type === 'compound' && t.productId === product.id && t.status !== 'completed',
             );
-            if (existingCompoundTask) {
-                console.log(`[production.js] Existing compound task found for ${product.name}, skipping.`); // EXISTING LOG
-                return;
-            } else {
-                // ADDED LOGGING - No existing task
-                console.log(
-                    `[production.js] No existing compound task found for ${product.name}, checking inventory...`,
-                ); // ADDED LOG
-            }
+            if (existingCompoundTask) return;
 
-            // Check if inventory is below the threshold
+            // Restock up to maxInventory, as far as the materials go
             if (product.inventory < product.maxInventory) {
-                const quantityToMake = product.maxInventory - product.inventory;
-                if (canCompound(product)) {
+                const quantityToMake = Math.min(
+                    product.maxInventory - product.inventory,
+                    window.helpers.calculatePotentialProduction(product.id),
+                );
+                if (quantityToMake >= 1) {
                     createCompoundTask(product, quantityToMake);
-                    console.log(
-                        `[production.js] Created compound task for ${product.name}, quantity: ${quantityToMake}`,
-                    ); // ADDED LOG - Task creation
                 } else {
                     console.warn(
                         `[production.js] Cannot create compound task for ${product.name} due to insufficient materials.`,
-                    ); // EXISTING LOG
-
-                    // Log material shortage details
-                    for (const ingredient of product.ingredients) {
-                        const material = window.materialsData.find((m) => m.id === ingredient.id);
-                        if (!material || material.inventory < ingredient.quantity) {
-                            console.log(
-                                `[production.js] Material shortage: ${material ? material.name : 'unknown material'}, needed: ${ingredient.quantity}, available: ${material ? material.inventory : 0}`,
-                            ); // ADDED LOG - Material shortage
-                        }
-                    }
+                    );
                 }
-            } else {
-                // ADDED LOGGING - Inventory not below threshold
-                console.log(
-                    `[production.js] Inventory for ${product.name} is NOT below maxInventory, skipping compound task creation.`,
-                ); // ADDED LOG
             }
         });
     }
@@ -145,15 +181,7 @@ window.production = (function (): ProductionApi {
         if (task.type === 'compound') {
             const product = window.productsData.find((p) => p.id === task.productId);
             if (product) {
-                // Deduct materials used in compounding
-                product.ingredients.forEach((ingredient) => {
-                    const material = window.materialsData.find((m) => m.id === ingredient.id);
-                    if (material) {
-                        material.inventory -= ingredient.quantity * task.quantityToMake!;
-                    }
-                });
-
-                // Increase product inventory
+                // The materials left inventory when the compound started (takeMaterials).
                 product.inventory += task.quantityToMake!;
                 console.log(
                     `[production.js] Compounding completed for ${task.quantityToMake} units of ${product.name}. Inventory updated.`,
@@ -203,11 +231,15 @@ window.production = (function (): ProductionApi {
         // After that, timeEvents' hourlyCheck re-checks every game hour.
         checkAndCreateCompoundTasks();
 
-        console.log('[production.js] Production system initialized with 50% reduced compounding times');
+        console.log('[production.js] Production system initialized');
     }
 
     return {
         canCompound,
+        compoundTime,
+        canStartCompound,
+        takeMaterials,
+        returnMaterials,
         createCompoundTask, // Expose this if you need to manually create compound tasks
         checkAndCreateCompoundTasks, // Expose this if you want to manually trigger inventory checks
         takeStock,

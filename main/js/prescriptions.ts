@@ -25,7 +25,7 @@ function createCompoundForFill(fill: Task, product: Product): Task {
         prescriptionId: fill.prescriptionId,
         productId: product.id,
         productName: product.name,
-        totalTime: product.productionTime,
+        totalTime: window.production.compoundTime(product, fill.quantityNeeded ?? 1),
         progress: 0,
         roleNeeded: 'Lab Technician',
         status: 'pending',
@@ -56,7 +56,7 @@ function registerRefillIfEligible(prescription: Prescription, customer: Customer
     const eligibleAfterTime = window.gameState.currentDate.getTime() + cooldownDays * 24 * 60 * 60 * 1000;
 
     const record: RefillRecord = {
-        id: `refill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: window.nextId('refill'),
         customerFirstName: customer.firstName,
         customerLastName: customer.lastName,
         insurancePlanName: customer.insurance.planName,
@@ -113,7 +113,7 @@ window.prescriptions = {
         console.log(`[prescriptions.js] Selected product: ${product.name} (${productId})`);
 
         const newPrescription: Prescription = {
-            id: `pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: window.nextId('pres'),
             customerId: customerId,
             productId: productId,
             productName: product.name,
@@ -151,7 +151,7 @@ window.prescriptions = {
         }
 
         const newPrescription: Prescription = {
-            id: `pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            id: window.nextId('pres'),
             customerId: customerId,
             productId: record.productId,
             productName: record.productName,
