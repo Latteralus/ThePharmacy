@@ -172,7 +172,7 @@ describe('customer patience on the game clock', () => {
 
     loseReputation = jest.fn();
     window.brandReputation = { loseReputation, gainReputation: jest.fn() };
-    window.taskManager = { tasks: [] };
+    window.taskManager = { tasks: [], getTasksForCustomer: () => [], cancelTask: jest.fn() };
     window.taskAssignment = { unassignTask: jest.fn() };
     window.prescriptions = { removePrescriptionsByCustomer: jest.fn() };
     window.ui = { updateCustomers: jest.fn() };
@@ -209,6 +209,8 @@ describe('customer patience on the game clock', () => {
 
     advanceMinutes(2);
     expect(window.customers.activeCustomers).toHaveLength(0);
+    // Once: it used to cost 1.5 and then another 1 for leaving unserved.
+    expect(loseReputation).toHaveBeenCalledTimes(1);
     expect(loseReputation).toHaveBeenCalledWith(1.5);
   });
 

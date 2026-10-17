@@ -161,35 +161,40 @@ window.production = (function (): ProductionApi {
 
                 decayEquipmentDurability(product.equipmentNeeded);
                 refreshInventoryUI();
-
-                // Check if this compound task was for a prescription
-                if (task.prescriptionId) {
-                    console.log(
-                        `[production.js] Compound task ${task.id} was for prescription ${task.prescriptionId}. Creating fill task.`,
-                    );
-                    const prescription = window.prescriptions.getPrescription(task.prescriptionId);
-                    if (prescription) {
-                        window.prescriptions.createFillTaskForPrescription(prescription);
-                    } else {
-                        console.error(
-                            `[production.js] Prescription ${task.prescriptionId} not found for compound task ${task.id}`,
-                        );
-                    }
-                }
+                // A prescription's fill waiting on this compound is released
+                // by taskManager (releaseDependents), which runs next.
             }
         } else if (task.type === 'fillPrescription') {
+            // The stock left inventory when the fill took it (takeStock).
             const product = window.productsData.find((p) => p.id === task.productId);
             if (product) {
-                // Decrease product inventory as it's used to fill prescriptions
-                product.inventory -= task.quantityNeeded!;
-                console.log(
-                    `[production.js] ${task.quantityNeeded} units of ${product.name} used to fill prescription. Inventory updated.`,
-                );
-
                 decayEquipmentDurability(product.equipmentNeeded);
-                refreshInventoryUI();
             }
         }
+    }
+
+    function takeStock(fill: Task): boolean {
+        if (fill.stockTaken) return true;
+
+        const product = window.productsData.find((p) => p.id === fill.productId);
+        const quantity = fill.quantityNeeded ?? 1;
+        if (!product || product.inventory < quantity) return false;
+
+        product.inventory -= quantity;
+        fill.stockTaken = true;
+        refreshInventoryUI();
+        return true;
+    }
+
+    function returnStock(fill: Task): void {
+        if (fill.type !== 'fillPrescription' || !fill.stockTaken) return;
+
+        const product = window.productsData.find((p) => p.id === fill.productId);
+        if (product) {
+            product.inventory += fill.quantityNeeded ?? 1;
+            refreshInventoryUI();
+        }
+        fill.stockTaken = false;
     }
 
     // Initialize the production module
@@ -205,6 +210,8 @@ window.production = (function (): ProductionApi {
         canCompound,
         createCompoundTask, // Expose this if you need to manually create compound tasks
         checkAndCreateCompoundTasks, // Expose this if you want to manually trigger inventory checks
+        takeStock,
+        returnStock,
         handleTaskCompletion,
         init,
     };

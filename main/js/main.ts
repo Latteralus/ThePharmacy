@@ -153,6 +153,10 @@ function updateGameTime(msElapsed: number): void {
         // integrity checks, autosave, staggered arrivals). Not run once the
         // day has ended, so nothing fires during the end-of-day summary.
         window.clock.tick();
+
+        // One assignment round for everything this step changed (new
+        // tasks, freed employees), instead of a real-time timer per change.
+        window.taskAssignment?.assignIfRequested();
     }
 }
 

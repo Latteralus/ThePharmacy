@@ -96,12 +96,15 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(2);
+  expect(saved.version).toBe(3);
   expect(saved.products.find((p) => p.id === 'pd001')).toMatchObject({ price: 123.45 });
   expect(saved.products[0].name).toBeUndefined();
   expect(saved.productsData).toBeUndefined();
   expect(saved.customers.map((c) => c.id)).toContain(customerId);
-  expect(saved.tasks.some((t) => t.customerId === customerId)).toBe(true);
+  // One fill per prescription (H1), and the check-in task says what it is (A4)
+  const savedCustomerTasks = saved.tasks.filter((t) => t.customerId === customerId);
+  expect(savedCustomerTasks.filter((t) => t.type === 'fillPrescription')).toHaveLength(1);
+  expect(savedCustomerTasks.find((t) => t.type === 'customerInteraction').interaction).toBe('checkIn');
   expect(saved.settings.gameSpeed).toBe(2);
 
   // --- Second launch: load it from the main menu ---
@@ -127,6 +130,7 @@ test('saving writes a real save file, and loading it restores game state', async
     (id) => ({
       time: window.gameState.currentDate.getTime(),
       customerRestored: window.customers.activeCustomers.some((c) => c.id === id),
+      fills: window.taskManager.tasks.filter((t) => t.customerId === id && t.type === 'fillPrescription').length,
       price: window.productsData.find((p) => p.id === 'pd001').price,
       productName: window.productsData.find((p) => p.id === 'pd001').name,
       speed: window.getGameSpeed(),
@@ -134,6 +138,7 @@ test('saving writes a real save file, and loading it restores game state', async
     customerId,
   );
   expect(afterLoad.customerRestored).toBe(true);
+  expect(afterLoad.fills).toBe(1);
   // Custom prices used to be reset to suggested on every load (C5)
   expect(afterLoad.price).toBe(123.45);
   expect(typeof afterLoad.productName).toBe('string');

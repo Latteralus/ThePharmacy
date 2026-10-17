@@ -50,6 +50,7 @@ function loadModules() {
   window.customers = {
     activeCustomers: [],
     getInsuranceByPlanName: (name) => window.insuranceData.find((p) => p.planName === name),
+    reconcileTasks: jest.fn(() => 0),
   };
   window.prescriptions = { activePrescriptions: [], refillRegistry: [] };
 }
@@ -320,6 +321,36 @@ describe('migrating v1 saves', () => {
     expect(window.brandReputation.reputationScore).toBe(21);
     expect(typeof window.equipmentData[0].isUnlocked).toBe('function');
     expect(window.gameState.lastSimulationTime).toBe(0);
+  });
+
+  test('a v2 save loses its duplicate fill tasks and labels check-in and checkout', () => {
+    playABit();
+    const v2 = throughDisk(window.saveFile.serialize());
+    v2.version = 2;
+    const task = (id, type, customerId) => ({ id, type, customerId, status: 'pending', progress: 0, totalTime: 3 });
+    v2.tasks = [
+      task('checkin-cust-1', 'customerInteraction', 'cust-1'),
+      task('checkout-cust-2-1700000000000', 'customerInteraction', 'cust-2'),
+      { ...task('fill-pres-1', 'fillPrescription', 'cust-1'), status: 'inProgress', assignedTo: 'emp1' },
+      task('fill-pres-1', 'fillPrescription', 'cust-1'), // the H1 duplicate
+    ];
+
+    const save = window.saveFile.migrate(v2);
+    expect(save.version).toBe(window.saveFile.version);
+    expect(save.tasks.map((t) => [t.id, t.interaction])).toEqual([
+      ['checkin-cust-1', 'checkIn'],
+      ['checkout-cust-2-1700000000000', 'checkout'],
+      ['fill-pres-1', undefined],
+    ]);
+    expect(save.tasks[2].status).toBe('inProgress');
+  });
+
+  test('loading gives customers whatever tasks their status needs', () => {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.customers.reconcileTasks).toHaveBeenCalledTimes(1);
   });
 
   test('rejects something that is not a save, or a save from a newer game', () => {

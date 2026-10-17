@@ -305,7 +305,7 @@ window.ui = (function (): UiApi {
             customerStatus.style.marginTop = '0.25rem';
             customerStatus.style.fontSize = '1.1em';
             customerStatus.textContent = `Status: ${customer.status}`;
-            if (customer.status === 'awaitingConsultation') {
+            if (customer.status === 'waitingForConsultation') {
                 customerStatus.style.color = 'orange';
             } else if (customer.status === 'readyForCheckout') {
                 customerStatus.style.color = 'blue';

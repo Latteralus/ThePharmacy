@@ -1,59 +1,48 @@
 // prescriptions.js
 
-// Shared by generatePrescription and generateRefillPrescription: creates
-// either a compound+dependent-fill task pair (out of stock) or a single
-// fill task (in stock) for a prescription that's already been pushed onto
-// activePrescriptions.
-function buildTasksForPrescription(prescription: Prescription, product: Product): void {
-    if (product.inventory <= 0) {
-        console.log(`[prescriptions.js] Product ${product.name} is out of stock. Creating compound task first.`);
+// A prescription has exactly one fill task, `fill-<prescriptionId>`. It
+// holds its product from the moment it can be assigned, so two fills can't
+// both count on the last unit (M8). If there isn't enough stock it waits
+// (pending-dependent) on one compound task, `compound-<prescriptionId>`,
+// that makes exactly its quantity; when the compound finishes,
+// taskManager.releaseDependents calls supplyFill again and the fill takes
+// what was just made.
 
-        // Create a compound task to make the product first
-        const compoundTask: Task = {
-            id: `compound-${prescription.id}`,
-            type: 'compound',
-            prescriptionId: prescription.id,
-            productId: product.id,
-            productName: product.name,
-            totalTime: product.productionTime,
-            progress: 0,
-            roleNeeded: 'Lab Technician',
-            status: 'pending',
-            assignedTo: null,
-            quantityToMake: Math.max(1, prescription.dosage),
-            fillTaskDependency: true,
-            customerId: prescription.customerId, // Link directly to customer
-        };
-        window.taskManager.addTask(compoundTask);
-        console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
+function findFill(prescriptionId: string): Task | undefined {
+    return window.taskManager.tasks.find((t) => t.type === 'fillPrescription' && t.prescriptionId === prescriptionId);
+}
 
-        // Create fill task, but mark it as dependent (won't be assigned until compound completes)
-        const fillTask: Task = {
-            id: `fill-${prescription.id}`,
-            type: 'fillPrescription',
-            prescriptionId: prescription.id,
-            productId: product.id,
-            productName: product.name,
-            totalTime: 8, // Slightly faster than normal fill time
-            progress: 0,
-            roleNeeded: 'Lab Technician',
-            status: 'pending-dependent', // Special status marking dependency
-            assignedTo: null,
-            requiredEquipment: product.equipmentNeeded,
-            quantityNeeded: Math.max(1, prescription.dosage),
-            customerId: prescription.customerId,
-            dependencyTaskId: compoundTask.id,
-        };
-        window.taskManager.addTask(fillTask);
-        console.log(`[prescriptions.js] Created dependent fillPrescription task: ${fillTask.id}`);
-    } else {
-        console.log(
-            `[prescriptions.js] Product ${product.name} is in stock (inventory: ${product.inventory}). Creating fill task directly.`,
-        );
+function findPrescriptionCompound(prescriptionId: string): Task | undefined {
+    return window.taskManager.tasks.find(
+        (t) => t.type === 'compound' && t.prescriptionId === prescriptionId && t.status !== 'completed',
+    );
+}
 
-        // Create fill task directly if in stock
-        window.prescriptions.createFillTaskForPrescription(prescription);
-    }
+function createCompoundForFill(fill: Task, product: Product): Task {
+    const compoundTask: Task = {
+        id: `compound-${fill.prescriptionId}`,
+        type: 'compound',
+        prescriptionId: fill.prescriptionId,
+        productId: product.id,
+        productName: product.name,
+        totalTime: product.productionTime,
+        progress: 0,
+        roleNeeded: 'Lab Technician',
+        status: 'pending',
+        assignedTo: null,
+        quantityToMake: fill.quantityNeeded,
+        fillTaskDependency: true,
+        customerId: fill.customerId, // Link directly to customer
+    };
+    window.taskManager.addTask(compoundTask);
+    console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
+    return compoundTask;
+}
+
+// Shared by generatePrescription and generateRefillPrescription, for a
+// prescription that's already been pushed onto activePrescriptions.
+function buildTasksForPrescription(prescription: Prescription): void {
+    window.prescriptions.ensureFill(prescription);
 }
 
 // Registers a pending refill opportunity if the just-filled prescription
@@ -141,10 +130,7 @@ window.prescriptions = {
 
         console.log(`[prescriptions.js] Created prescription: ${newPrescription.id} for customer: ${customerId}`);
 
-        buildTasksForPrescription(newPrescription, product);
-
-        // Auto-assign tasks
-        window.taskAssignment.autoAssignTasks();
+        buildTasksForPrescription(newPrescription);
 
         return newPrescription.id;
     },
@@ -185,23 +171,28 @@ window.prescriptions = {
             `[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`,
         );
 
-        buildTasksForPrescription(newPrescription, product);
-
-        // Auto-assign tasks
-        window.taskAssignment.autoAssignTasks();
+        buildTasksForPrescription(newPrescription);
 
         return newPrescription.id;
     },
 
-    createFillTaskForPrescription(prescription) {
-        const product = window.productsData.find((p) => p.id === prescription.productId);
-        if (!product) {
-            console.error(
-                `[prescriptions.js] No product found for createFillTaskForPrescription: ${prescription.productId}`,
-            );
-            return null;
+    ensureFill(prescription) {
+        const existing = findFill(prescription.id);
+        if (existing) {
+            if (existing.stockTaken) return false;
+            const compound = existing.dependencyTaskId && window.taskManager.getTaskById(existing.dependencyTaskId);
+            if (existing.status === 'pending-dependent' && compound) return false; // waiting on its compound
+            this.supplyFill(existing);
+            return true;
         }
 
+        const product = window.productsData.find((p) => p.id === prescription.productId);
+        if (!product) {
+            console.error(`[prescriptions.js] No product found for ensureFill: ${prescription.productId}`);
+            return false;
+        }
+
+        // Starts out waiting; supplyFill makes it ready if the stock is there.
         const fillTask: Task = {
             id: `fill-${prescription.id}`,
             type: 'fillPrescription',
@@ -211,7 +202,7 @@ window.prescriptions = {
             totalTime: 10, // Base time
             progress: 0,
             roleNeeded: 'Lab Technician',
-            status: 'pending',
+            status: 'pending-dependent',
             assignedTo: null,
             requiredEquipment: product.equipmentNeeded,
             quantityNeeded: Math.max(1, prescription.dosage),
@@ -219,8 +210,30 @@ window.prescriptions = {
         };
         window.taskManager.addTask(fillTask);
         console.log(`[prescriptions.js] Created fillPrescription task: ${fillTask.id}`);
+        this.supplyFill(fillTask);
+        return true;
+    },
 
-        return fillTask.id;
+    supplyFill(fill) {
+        if (window.production.takeStock(fill)) {
+            fill.dependencyTaskId = undefined;
+            if (fill.status === 'pending-dependent') window.taskManager.setStatus(fill, 'pending');
+            return;
+        }
+
+        const product = window.productsData.find((p) => p.id === fill.productId);
+        if (!product) {
+            console.error(`[prescriptions.js] No product found for fill ${fill.id}: ${fill.productId}`);
+            return;
+        }
+        console.log(`[prescriptions.js] Not enough ${product.name} for ${fill.id}. It waits on a compound task.`);
+
+        // Only an older save's fill can be mid-way without its stock.
+        if (fill.status === 'inProgress') window.taskAssignment.unassignTask(fill.id);
+        if (fill.status === 'pending') window.taskManager.setStatus(fill, 'pending-dependent');
+
+        const compound = findPrescriptionCompound(fill.prescriptionId!) ?? createCompoundForFill(fill, product);
+        fill.dependencyTaskId = compound.id;
     },
 
     updatePrescriptionStatus(prescriptionId, newStatus) {
@@ -254,25 +267,9 @@ window.prescriptions = {
             registerRefillIfEligible(prescription, customer);
         }
 
-        // Mark them ready for checkout
-        window.customers.updateCustomerStatus(customerId, 'readyForCheckout');
-
-        // Create a checkout interaction for the Cashier with high priority
-        const checkoutTask: Task = {
-            id: `checkout-${customerId}-${Date.now()}`, // Unique ID with timestamp
-            type: 'customerInteraction',
-            customerId: customerId,
-            totalTime: 3, // Short checkout time
-            progress: 0,
-            roleNeeded: 'Cashier',
-            status: 'pending',
-            assignedTo: null,
-        };
-        window.taskManager.addTask(checkoutTask);
-        console.log(`[prescriptions.js] Created checkout task: ${checkoutTask.id}`);
-
-        // Auto-assign tasks immediately
-        window.taskAssignment.autoAssignTasks();
+        // Moves them to checkout if they've already had their consultation;
+        // otherwise they get there when the consultation finishes.
+        window.customers.advance(customerId, 'filled');
     },
 
     // Creates a consultation task for Pharmacist after check-in
@@ -280,7 +277,7 @@ window.prescriptions = {
         console.log(`[prescriptions.js] Creating consultation task for customer: ${customerId}`);
 
         const consultationTask: Task = {
-            id: `consult-${customerId}-${Date.now()}`, // Unique ID with timestamp
+            id: `consult-${customerId}`, // one consultation per visit
             type: 'consultation',
             customerId: customerId,
             totalTime: 5, // 5 minutes consultation time
@@ -291,9 +288,6 @@ window.prescriptions = {
         };
         window.taskManager.addTask(consultationTask);
         console.log(`[prescriptions.js] Created consultation task: ${consultationTask.id}`);
-
-        // Auto-assign tasks immediately
-        window.taskAssignment.autoAssignTasks();
     },
 
     getPrescription(prescriptionId) {

@@ -7,6 +7,16 @@ window.taskManager = (function (): TaskManagerApi {
     // Main task storage - the source of truth for task state
     const tasks: Task[] = [];
 
+    // Every status change goes through setStatus, which allows only these.
+    // pending -> pending-dependent: a fill that turns out to lack stock
+    // waits on a compound (prescriptions.supplyFill).
+    const TASK_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+        'pending-dependent': ['pending'],
+        pending: ['inProgress', 'pending-dependent'],
+        inProgress: ['pending', 'completed'],
+        completed: [],
+    };
+
     // Event system for task state changes
     const taskEvents = {
         listeners: {} as Record<string, TaskEventListener[]>,
@@ -121,8 +131,8 @@ window.taskManager = (function (): TaskManagerApi {
             task.progress = 0;
         }
 
-        // Set initial status if not specified
-        if (!task.status) {
+        // A task starts out waiting, never part-way through.
+        if (task.status !== 'pending-dependent') {
             task.status = 'pending';
         }
 
@@ -150,15 +160,62 @@ window.taskManager = (function (): TaskManagerApi {
         // Emit task added event
         taskEvents.emit('taskAdded', task);
 
-        // Auto-assign tasks when a new one is added (with a small delay to batch multiple adds)
-        if (window.taskAssignment && typeof window.taskAssignment.autoAssignTasks === 'function') {
-            clearTimeout(window._taskAssignTimeout);
-            window._taskAssignTimeout = setTimeout(() => {
-                window.taskAssignment.autoAssignTasks();
-            }, 100);
+        if (task.status === 'pending') {
+            window.taskAssignment?.requestAutoAssign();
         }
 
         return task;
+    }
+
+    function setStatus(task: Task, to: TaskStatus): boolean {
+        const from = task.status;
+        if (from === to) return true;
+        if (!TASK_TRANSITIONS[from]?.includes(to)) {
+            console.warn(`[taskManager.js] Refused task ${task.id} (${task.type}) status change ${from} -> ${to}`);
+            return false;
+        }
+
+        task.status = to;
+        taskEvents.emit('taskStatusChanged', { task, previousStatus: from, newStatus: to });
+        if (to === 'pending') {
+            window.taskAssignment?.requestAutoAssign();
+        }
+        return true;
+    }
+
+    function removeTask(task: Task): void {
+        const index = tasks.indexOf(task);
+        if (index > -1) tasks.splice(index, 1);
+        progressVerification.clearTask(task.id);
+    }
+
+    function cancelTask(taskId: string): void {
+        const task = getTaskById(taskId);
+        if (!task) return;
+
+        if (task.assignedTo) {
+            const employee = window.employeesData?.find((emp) => emp.id === task.assignedTo);
+            if (employee && employee.currentTaskId === task.id) {
+                employee.currentTaskId = null;
+                window.taskAssignment?.requestAutoAssign();
+            }
+            task.assignedTo = null;
+        }
+        window.production?.returnStock(task);
+        removeTask(task);
+        console.log(`[taskManager.js] Task cancelled: ${task.type} - ${task.id}`);
+        taskEvents.emit('taskCancelled', task);
+
+        // A fill waiting on this compound would never start.
+        tasks.filter((t) => t.dependencyTaskId === task.id).forEach((dependent) => cancelTask(dependent.id));
+    }
+
+    // A compound finished: the fills waiting on it take their stock (it
+    // made exactly what they need) and become ready.
+    function releaseDependents(task: Task): void {
+        tasks
+            .filter((t) => t.dependencyTaskId === task.id && t.status === 'pending-dependent')
+            .forEach((dependent) => window.prescriptions.supplyFill(dependent));
     }
 
     // Get a task by ID - optimized with caching
@@ -203,68 +260,26 @@ window.taskManager = (function (): TaskManagerApi {
                 // Verify the assigned employee still has this task
                 const employee = window.employeesData?.find((emp) => emp.id === task.assignedTo);
 
-                if (!employee) {
+                if (!employee || employee.currentTaskId !== task.id) {
                     console.warn(
-                        `[taskManager.js] Employee ${task.assignedTo} not found for task ${task.id}; unassigning.`,
+                        `[taskManager.js] Employee ${task.assignedTo} is missing or not working on task ${task.id}; unassigning.`,
                     );
-                    task.status = 'pending';
-                    task.assignedTo = null;
+                    window.taskAssignment.unassignTask(task.id);
                     continue;
                 }
 
-                if (employee.currentTaskId !== task.id) {
-                    console.warn(
-                        `[taskManager.js] Employee ${employee.id} (${employee.firstName} ${employee.lastName}) has currentTaskId ${employee.currentTaskId}, not ${task.id}; unassigning.`,
-                    );
-                    task.status = 'pending';
-                    task.assignedTo = null;
-                    continue;
-                }
-
-                // For prescription tasks, check product inventory
-                if (task.type === 'fillPrescription') {
-                    // fillPrescription tasks are always created with a
-                    // prescriptionId (prescriptions.ts) — asserted rather
-                    // than guarded to match this branch's pre-existing shape.
-                    if (
-                        window.taskAssignment &&
-                        typeof window.taskAssignment.canFillPrescription === 'function' &&
-                        !window.taskAssignment.canFillPrescription(task.prescriptionId!)
-                    ) {
-                        console.warn(
-                            `[taskManager.js] Insufficient ${task.productName} in inventory for fillPrescription task; unassigning employee.`,
-                        );
-                        if (typeof window.taskAssignment.unassignTask === 'function') {
-                            window.taskAssignment.unassignTask(task.id);
-                        } else {
-                            task.status = 'pending';
-                            task.assignedTo = null;
-                            employee.currentTaskId = null;
-                        }
-                        continue;
-                    }
-                }
-                // For compound tasks, check material availability
-                else if (task.type === 'compound') {
+                // Fills need no stock check here: they hold their stock
+                // from before they can be assigned (prescriptions.supplyFill).
+                if (task.type === 'compound') {
                     const product = window.productsData?.find((p) => p.id === task.productId);
                     // canCompound already defensively handles a missing
                     // product at runtime (returns false); the assertion
                     // just satisfies its required-Product signature.
-                    if (
-                        window.production &&
-                        typeof window.production.canCompound === 'function' &&
-                        !window.production.canCompound(product!)
-                    ) {
+                    if (!window.production.canCompound(product!)) {
                         console.warn(
                             `[taskManager.js] Insufficient materials to compound ${product ? product.name : task.productId}; unassigning employee.`,
                         );
-                        if (window.taskAssignment && typeof window.taskAssignment.unassignTask === 'function') {
-                            window.taskAssignment.unassignTask(task.id);
-                        } else {
-                            task.status = 'pending';
-                            task.assignedTo = null;
-                            employee.currentTaskId = null;
-                        }
+                        window.taskAssignment.unassignTask(task.id);
                         continue;
                     }
                 }
@@ -303,66 +318,18 @@ window.taskManager = (function (): TaskManagerApi {
                 // Check if the task is now complete
                 if (task.progress >= task.totalTime) {
                     console.log(`[taskManager.js] Task ${task.id} (${task.type}) is now complete!`);
-                    task.status = 'completed';
-                    taskEvents.emit('taskStatusChanged', {
-                        task: task,
-                        previousStatus: 'inProgress',
-                        newStatus: 'completed',
-                    });
+                    setStatus(task, 'completed');
 
                     // Add to finalization list rather than finalizing here
                     // to avoid modifying the tasks array during iteration
                     tasksToFinalize.push(task);
                 }
             }
-            // Check for tasks with "pending-dependent" status that might need to be activated
-            else if (task.status === 'pending-dependent' && task.dependencyTaskId) {
-                const dependency = tasks.find((t) => t.id === task.dependencyTaskId);
-                if (!dependency || dependency.status === 'completed') {
-                    console.log(
-                        `[taskManager.js] Dependency task ${task.dependencyTaskId} is complete. Activating task ${task.id}.`,
-                    );
-                    task.status = 'pending'; // Change to regular pending so it can be assigned
-
-                    taskEvents.emit('taskStatusChanged', {
-                        task: task,
-                        previousStatus: 'pending-dependent',
-                        newStatus: 'pending',
-                    });
-
-                    // Schedule auto-assignment
-                    clearTimeout(window._taskAssignTimeout);
-                    window._taskAssignTimeout = setTimeout(() => {
-                        if (window.taskAssignment && typeof window.taskAssignment.autoAssignTasks === 'function') {
-                            window.taskAssignment.autoAssignTasks();
-                        }
-                    }, 100);
-                }
-            }
+            // pending-dependent tasks are released by the task they wait on
+            // (finalizeTask -> releaseDependents), not polled here.
         }
 
-        // Now, finalize all completed tasks - use safe method to avoid errors
-        if (tasksToFinalize.length > 0) {
-            try {
-                for (let i = 0; i < tasksToFinalize.length; i++) {
-                    const task = tasksToFinalize[i];
-                    if (task) {
-                        finalizeTask(task);
-                    }
-                }
-            } catch (error) {
-                console.error(`[taskManager.js] Error finalizing tasks: ${(error as Error).message}`);
-            }
-        }
-
-        // Trigger auto-assignment if we completed any tasks
-        if (
-            tasksToFinalize.length > 0 &&
-            window.taskAssignment &&
-            typeof window.taskAssignment.autoAssignTasks === 'function'
-        ) {
-            setTimeout(() => window.taskAssignment.autoAssignTasks(), 200);
-        }
+        tasksToFinalize.forEach(finalizeTask);
     }
 
     // Finalize a completed task (called after updateTasks)
@@ -394,6 +361,7 @@ window.taskManager = (function (): TaskManagerApi {
 
                     // Free the employee by clearing their currentTaskId
                     employee.currentTaskId = null;
+                    window.taskAssignment?.requestAutoAssign();
                     console.log(`[finalizeTask] Employee ${employee.firstName} ${employee.lastName} is now free.`);
                 } else {
                     console.error(`[finalizeTask] Employee with ID ${task.assignedTo} not found!`);
@@ -414,152 +382,23 @@ window.taskManager = (function (): TaskManagerApi {
                 }
             }
 
-            // Handle specific task type completions
-            if (task.type === 'fillPrescription') {
-                if (task.customerId && task.prescriptionId) {
-                    if (window.prescriptions && typeof window.prescriptions.prescriptionFilled === 'function') {
-                        try {
-                            window.prescriptions.prescriptionFilled(task.prescriptionId, task.customerId);
-                            console.log(
-                                `[finalizeTask] Prescription ${task.prescriptionId} filled for customer ${task.customerId}`,
-                            );
-                        } catch (error) {
-                            console.error(
-                                `[finalizeTask] Error in prescriptions.prescriptionFilled: ${(error as Error).message}`,
-                            );
-                        }
-                    } else {
-                        console.error(`[finalizeTask] prescriptions.prescriptionFilled is not available!`);
-                    }
-                }
-            } else if (task.type === 'customerInteraction') {
-                if (task.customerId) {
-                    const customer =
-                        window.customers && typeof window.customers.getCustomerById === 'function'
-                            ? window.customers.getCustomerById(task.customerId)
-                            : null;
-
-                    if (customer) {
-                        console.log(`[finalizeTask] customerInteraction - Customer status before: ${customer.status}`);
-
-                        if (customer.status === 'waitingForCheckIn') {
-                            if (window.customers && typeof window.customers.updateCustomerStatus === 'function') {
-                                try {
-                                    window.customers.updateCustomerStatus(task.customerId, 'waitingForConsultation');
-                                    console.log(
-                                        `[finalizeTask] Customer ${task.customerId} checked in, now waiting for consultation`,
-                                    );
-                                } catch (error) {
-                                    console.error(
-                                        `[finalizeTask] Error updating customer status: ${(error as Error).message}`,
-                                    );
-                                }
-                            }
-                        } else if (customer.status === 'readyForCheckout') {
-                            // Process payment
-                            if (window.finances && typeof window.finances.completePrescription === 'function') {
-                                try {
-                                    // A customer only reaches readyForCheckout after a
-                                    // prescription has already been assigned to them
-                                    // (see customers.ts's generateCustomer), so
-                                    // prescriptionId is always set here at runtime.
-                                    window.finances.completePrescription(task.customerId, customer.prescriptionId!);
-                                } catch (error) {
-                                    console.error(
-                                        `[finalizeTask] Error in finances.completePrescription: ${(error as Error).message}`,
-                                    );
-                                }
-                            }
-
-                            // Mark customer as complete and have them leave
-                            if (window.customers) {
-                                if (typeof window.customers.updateCustomerStatus === 'function') {
-                                    try {
-                                        window.customers.updateCustomerStatus(task.customerId, 'completed');
-                                    } catch (error) {
-                                        console.error(
-                                            `[finalizeTask] Error updating customer status to completed: ${(error as Error).message}`,
-                                        );
-                                    }
-                                }
-                                if (typeof window.customers.customerLeaves === 'function') {
-                                    try {
-                                        window.customers.customerLeaves(task.customerId);
-                                    } catch (error) {
-                                        console.error(
-                                            `[finalizeTask] Error in customers.customerLeaves: ${(error as Error).message}`,
-                                        );
-                                    }
-                                }
-                            }
-
-                            console.log(`[finalizeTask] Customer ${task.customerId} checked out and has left`);
-                        } else {
-                            console.warn(
-                                `[finalizeTask] Customer interaction completed but customer status is unexpected: ${customer.status}`,
-                            );
-                        }
-                    } else {
-                        console.warn(`[finalizeTask] Customer ${task.customerId} not found for completed interaction`);
-                    }
-                }
-            } else if (task.type === 'consultation') {
-                if (
-                    task.customerId &&
-                    window.customers &&
-                    typeof window.customers.updateCustomerStatus === 'function'
-                ) {
-                    try {
-                        window.customers.updateCustomerStatus(task.customerId, 'waitingForFill');
-                        console.log(
-                            `[finalizeTask] Consultation completed, customer ${task.customerId} now waiting for prescription fill`,
-                        );
-                    } catch (error) {
-                        console.error(
-                            `[finalizeTask] Error updating customer status after consultation: ${(error as Error).message}`,
-                        );
-                    }
-                }
+            // What finishing this task means for its customer. The customer
+            // state machine refuses an event their status doesn't allow.
+            if (task.type === 'fillPrescription' && task.customerId && task.prescriptionId) {
+                window.prescriptions.prescriptionFilled(task.prescriptionId, task.customerId);
+            } else if (task.type === 'customerInteraction' && task.customerId) {
+                window.customers.advance(task.customerId, task.interaction === 'checkout' ? 'paid' : 'checkedIn');
+            } else if (task.type === 'consultation' && task.customerId) {
+                window.customers.advance(task.customerId, 'consulted');
             } else if (task.type === 'compound') {
-                // If this was a compound task with dependents, activate them
-                const dependentTasks = tasks.filter(
-                    (t) => t.dependencyTaskId === task.id && t.status === 'pending-dependent',
-                );
-
-                if (dependentTasks.length > 0) {
-                    console.log(`[finalizeTask] Found ${dependentTasks.length} dependent tasks to activate.`);
-                    dependentTasks.forEach((depTask) => {
-                        if (depTask) {
-                            depTask.status = 'pending'; // Make them available for assignment
-                            console.log(`[finalizeTask] Dependent task ${depTask.id} activated`);
-
-                            taskEvents.emit('taskStatusChanged', {
-                                task: depTask,
-                                previousStatus: 'pending-dependent',
-                                newStatus: 'pending',
-                            });
-                        }
-                    });
-                }
+                releaseDependents(task);
             }
 
             // Emit task completed event
             taskEvents.emit('taskCompleted', task);
 
-            // Remove the completed task from the tasks array
-            const taskIndex = tasks.findIndex((t) => t && t.id === task.id);
-            if (taskIndex > -1) {
-                tasks.splice(taskIndex, 1);
-                console.log(`[finalizeTask] Task ${task.id} removed from task list.`);
-            }
-
-            // Trigger auto-assignment of tasks
-            if (window.taskAssignment && typeof window.taskAssignment.autoAssignTasks === 'function') {
-                clearTimeout(window._taskAssignTimeout);
-                window._taskAssignTimeout = setTimeout(() => {
-                    window.taskAssignment.autoAssignTasks();
-                }, 100);
-            }
+            removeTask(task);
+            console.log(`[finalizeTask] Task ${task.id} removed from task list.`);
         } catch (error) {
             console.error(`[finalizeTask] Uncaught error finalizing task ${task.id}: ${(error as Error).message}`);
         }
@@ -632,27 +471,6 @@ window.taskManager = (function (): TaskManagerApi {
         console.log('========================');
     }
 
-    // Manually force completion of a task (e.g., for debug)
-    function forceCompleteTask(taskId: string): boolean {
-        const task = tasks.find((t) => t && t.id === taskId);
-        if (!task) {
-            console.error(`[taskManager.js] Task ${taskId} not found for force completion.`);
-            return false;
-        }
-
-        console.log(`[taskManager.js] Forcing completion of task ${taskId} (${task.type})`);
-        task.progress = task.totalTime;
-        task.status = 'completed';
-
-        try {
-            finalizeTask(task);
-            return true;
-        } catch (error) {
-            console.error(`[taskManager.js] Error forcing task completion: ${(error as Error).message}`);
-            return false;
-        }
-    }
-
     // Add an event listener for task events
     function addEventListener(event: string, callback: TaskEventListener): void {
         if (typeof callback !== 'function') {
@@ -704,8 +522,9 @@ window.taskManager = (function (): TaskManagerApi {
         getTasksForEmployee,
         getTasksForCustomer,
         updateTasks,
+        setStatus,
+        cancelTask,
         debugTaskStatus,
-        forceCompleteTask,
         addEventListener,
         removeEventListener,
         resetProgressVerification,
@@ -772,9 +591,7 @@ window.taskManager = (function (): TaskManagerApi {
             // 2. Verify all in-progress tasks have valid employee assignments
             let fixedTaskCount = 0;
 
-            window.taskManager.tasks.forEach((task) => {
-                if (!task) return; // Skip null/undefined tasks
-
+            [...window.taskManager.tasks].forEach((task) => {
                 if (task.status === 'inProgress' && task.assignedTo) {
                     const employee = window.employeesData?.find((e) => e && e.id === task.assignedTo);
 
@@ -783,10 +600,7 @@ window.taskManager = (function (): TaskManagerApi {
                         console.warn(
                             `Task integrity error: Task ${task.id} (${task.type}) is assigned to employee ${task.assignedTo} but employee doesn't exist or isn't assigned to this task.`,
                         );
-
-                        // Fix the task state - set back to pending
-                        task.status = 'pending';
-                        task.assignedTo = null;
+                        window.taskAssignment.unassignTask(task.id);
                         fixedTaskCount++;
                     }
                 }
@@ -796,65 +610,15 @@ window.taskManager = (function (): TaskManagerApi {
                 console.log(`[taskManager.js] Fixed ${fixedTaskCount} tasks with invalid employee assignments`);
             }
 
-            // 3. Check for tasks that might be stuck (in progress for too
-            // long). Game time, so pausing can't make a task look stuck.
-            const now = window.clock.now();
-            const stuckTaskThreshold = 10 * 60 * 60 * 1000; // 10 game hours
-
-            window.taskManager.tasks.forEach((task) => {
-                if (!task) return; // Skip null/undefined tasks
-
-                if (task.status === 'inProgress' && task.lastProgressTime) {
-                    const timeSinceUpdate = now - task.lastProgressTime;
-
-                    if (timeSinceUpdate > stuckTaskThreshold) {
-                        console.warn(
-                            `Task may be stuck: ${task.id} (${task.type}) - Last updated ${Math.round(timeSinceUpdate / 60000)} game minutes ago`,
-                        );
-
-                        // Option: force completion if severely stuck
-                        if (timeSinceUpdate > 30 * 60 * 60 * 1000) {
-                            // 30 game hours
-                            console.error(
-                                `Task severely stuck for over 30 game hours: ${task.id} - forcing completion`,
-                            );
-                            try {
-                                window.taskManager.forceCompleteTask(task.id);
-                            } catch (error) {
-                                console.error(`Error force-completing stuck task: ${(error as Error).message}`);
-                            }
-                        }
-                    }
-                }
-            });
-
-            // 4. Check for customers who have been waiting too long. This is
-            // the one place stuck-customer detection runs (timeEvents used to
-            // also run it on its own 2-minute timer, which was redundant).
-            const customerWaitThreshold = 15 * 60 * 60 * 1000; // 15 game hours
-
-            if (window.customers && window.customers.activeCustomers) {
-                window.customers.activeCustomers.forEach((customer) => {
-                    if (!customer || !customer.lastStateChange) return;
-
-                    const waitTime = now - customer.lastStateChange;
-                    if (waitTime > customerWaitThreshold) {
-                        console.warn(
-                            `Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has been in state "${customer.status}" for ${Math.round(waitTime / 60000)} game minutes`,
-                        );
-                    }
-                });
+            // 3. Every customer has the tasks their status needs. With the
+            // state machines this should find nothing; it's here for loads
+            // of older saves and the Settings resets.
+            const repaired = window.customers.reconcileTasks();
+            if (repaired > 0) {
+                console.warn(`[taskManager.js] Integrity check repaired ${repaired} missing customer tasks`);
             }
 
-            if (window.customers && typeof window.customers.detectAndFixStuckCustomers === 'function') {
-                try {
-                    window.customers.detectAndFixStuckCustomers();
-                } catch (error) {
-                    console.error(`Error detecting and fixing stuck customers: ${(error as Error).message}`);
-                }
-            }
-
-            // 5. Check for progress anomalies
+            // 4. Check for progress anomalies
             const progressAnomalies = window.taskManager.getProgressAnomalies();
             if (progressAnomalies && progressAnomalies.length > 0) {
                 console.warn(
@@ -870,14 +634,9 @@ window.taskManager = (function (): TaskManagerApi {
                 }
             }
 
-            // 6. Run auto-assignment again to pick up any fixed tasks
-            if (
-                window.taskAssignment &&
-                typeof window.taskAssignment.autoAssignTasks === 'function' &&
-                (fixedEmployeeCount > 0 || fixedTaskCount > 0)
-            ) {
-                console.log('[taskManager.js] Running auto-assignment after integrity fixes');
-                setTimeout(() => window.taskAssignment.autoAssignTasks(), 100);
+            // 5. Freed employees can pick up work at the end of this step
+            if (fixedEmployeeCount > 0) {
+                window.taskAssignment.requestAutoAssign();
             }
 
             console.log('[taskManager.js] Task system integrity check completed');

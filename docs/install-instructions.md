@@ -1,93 +1,41 @@
-# PharmaSim Installation Guide
+# The Pharmacy: Installation Guide
 
-## Prerequisites
+The Pharmacy runs on Windows only.
 
-Before installing PharmaSim, ensure your system meets these requirements:
+## Requirements
 
-- Windows 10/11, macOS 10.15+, or Linux (Ubuntu 20.04+)
-- 4 GB RAM
-- 200 MB free disk space
-- Internet connection for initial setup (optional)
+- Windows 10 or 11, 64-bit
+- About 400 MB of free disk space
+- An internet connection only for downloading the installer and for update checks. The game itself plays offline.
 
-## Windows Installation
+## Installing
 
-1. Download the Windows installer (.exe)
-2. Double-click the downloaded file
-3. Follow the on-screen installation wizard
-4. Choose installation directory
-5. Click "Install"
-6. Launch PharmaSim from the Start Menu or Desktop shortcut
-
-## macOS Installation
-
-1. Download the macOS disk image (.dmg)
-2. Open the .dmg file
-3. Drag the PharmaSim application to the Applications folder
-4. Open Applications and launch PharmaSim
-5. If prompted, allow security exceptions
-
-## Linux Installation
-
-### Ubuntu/Debian
-
-1. Download the .deb package
-2. Open terminal
-3. Navigate to download directory
-4. Run: `sudo dpkg -i pharmasim_1.0.0_amd64.deb`
-5. Run: `sudo apt-get install -f` (resolves dependencies)
-6. Launch from applications menu or run `pharmasim` in terminal
-
-### Other Distributions
-
-1. Download the AppImage
-2. Make executable: `chmod +x PharmaSim-1.0.0.AppImage`
-3. Run the AppImage directly
-
-## First-Time Setup
-
-- First launch may require accepting security permissions
-- Optional: Create user profile
-- Configure initial game settings
+1. Download `ThePharmacy Setup <version>.exe` from the [GitHub releases page](https://github.com/Latteralus/ThePharmacy/releases).
+2. Double-click the downloaded file.
+3. If Windows SmartScreen warns that the app is unrecognized, click **More info**, then **Run anyway**. The installer isn't code-signed yet.
+4. Choose whether to install for just you or for everyone on the PC, then choose the install folder.
+5. Click **Install**.
+6. Launch The Pharmacy from the Start menu or the desktop shortcut.
 
 ## Updating
 
-- Future versions will include auto-update functionality
-- Manual updates available through official website
+When the game starts, it checks GitHub for a newer release. If it finds one, it downloads it in the background and shows a Windows notification; the update installs the next time you close the game. You can also download and run a newer installer yourself. Your saves are kept either way.
+
+## Where your files are
+
+Everything the game writes is in `%APPDATA%\ThePharmacy\` (paste that into File Explorer's address bar):
+
+- `saves\pharmacy_save.json`: your save
+- `saves\pharmacy_save.json.bak`: the save before your most recent one
+- `logs\main.log`: the game's log
 
 ## Troubleshooting
 
-### Installation Issues
+- **The game won't start or crashes:** check `logs\main.log` for errors, and include it if you report the problem.
+- **A save won't load:** close the game, then rename `pharmacy_save.json.bak` to `pharmacy_save.json` to go back to the previous save.
+- **Report a problem:** use the [GitHub issues page](https://github.com/Latteralus/ThePharmacy/issues).
 
-- Ensure sufficient disk space
-- Check system compatibility
-- Disable antivirus temporarily during installation
+## Uninstalling
 
-### Runtime Issues
-
-- Update graphics drivers
-- Verify system meets minimum requirements
-- Check game logs in:
-  - Windows: `%APPDATA%\PharmaSim\logs`
-  - macOS: `~/Library/Application Support/PharmaSim/logs`
-  - Linux: `~/.config/pharmasim/logs`
-
-## Uninstallation
-
-### Windows
-
-- Use Control Panel's "Uninstall a Program"
-- Or run the uninstaller from the Start Menu
-
-### macOS
-
-- Drag PharmaSim from Applications to Trash
-- Optional: Remove config files from `~/Library/Application Support/PharmaSim`
-
-### Linux
-
-- Ubuntu/Debian: `sudo apt-get remove pharmasim`
-- Other: Delete the AppImage and config directory
-
-## Support
-
-For additional help, visit our support website or GitHub issues page.
+- Open **Settings > Apps > Installed apps**, find **ThePharmacy**, and choose **Uninstall**.
+- The uninstaller leaves your saves. To remove them too, delete `%APPDATA%\ThePharmacy\`.

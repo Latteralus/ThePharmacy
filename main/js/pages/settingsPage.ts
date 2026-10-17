@@ -631,6 +631,7 @@ function addRandomEmployee(role: string): boolean {
 
     // Add the employee to the data
     window.employeesData.push(newEmployee);
+    window.taskAssignment.requestAutoAssign();
 
     // Update UI if available
     if (window.updateUI) {
@@ -699,20 +700,13 @@ function resetAllTasks(): boolean {
         return false;
     }
 
-    // Clear the tasks array
-    window.taskManager.tasks.length = 0;
+    // Cancel every task (frees employees, puts held stock back)
+    [...window.taskManager.tasks].forEach((task) => window.taskManager.cancelTask(task.id));
 
-    // Clear employee task assignments
-    if (window.employeesData) {
-        window.employeesData.forEach((employee) => {
-            employee.currentTaskId = null;
-        });
-    }
-
-    // Re-initialize production tasks if available
-    if (window.production && window.production.checkAndCreateCompoundTasks) {
-        window.production.checkAndCreateCompoundTasks();
-    }
+    // Fresh restock tasks, and fresh tasks for the customers still waiting
+    // (they used to be left with nothing to wait on).
+    window.production.checkAndCreateCompoundTasks();
+    window.customers.reconcileTasks();
 
     // Update UI if available
     if (window.updateUI) {
@@ -730,13 +724,9 @@ function resetAllCustomers(): boolean {
         return false;
     }
 
-    // Clear active customers
-    window.customers.activeCustomers.length = 0;
-
-    // Clear related prescriptions
-    if (window.prescriptions) {
-        window.prescriptions.activePrescriptions.length = 0;
-    }
+    // Each leaves properly: their tasks and prescriptions go with them, and
+    // a debug reset costs no reputation.
+    [...window.customers.activeCustomers].forEach((customer) => window.customers.customerLeaves(customer.id, 'reset'));
 
     // Update UI if available
     if (window.updateUI) {
@@ -764,11 +754,9 @@ function resetGameState(): boolean {
         window.gameState.simulationAccumulator = 0;
     }
 
-    // Reset tasks
-    resetAllTasks();
-
-    // Reset customers
+    // Customers first, so resetAllTasks doesn't rebuild tasks for them
     resetAllCustomers();
+    resetAllTasks();
 
     // Reset finances
     if (window.financesData) {

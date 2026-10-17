@@ -438,10 +438,27 @@ interface CustomerTypeDef {
     baseBoost: number;
 }
 
+// A customer's visit, in order. customers.advance moves between them; see
+// CUSTOMER_TRANSITIONS in customers.ts. The prescription's fill runs
+// alongside check-in and consultation, so "filled" can arrive in any of the
+// first three states, but only waitingForFill moves on because of it.
+type CustomerStatus =
+    'waitingForCheckIn' | 'waitingForConsultation' | 'waitingForFill' | 'readyForCheckout' | 'completed';
+
+// What finishing a customer's task means for them.
+type CustomerEvent = 'checkedIn' | 'consulted' | 'filled' | 'paid';
+
+// Why a customer left, which decides the reputation change.
+//   served: paid and left (mood-based)
+//   impatient: ran out of patience
+//   closing: still in the store at 22:00
+//   reset: removed by a Settings debug control (no change)
+type DepartureReason = 'served' | 'impatient' | 'closing' | 'reset';
+
 interface Customer {
     id: string;
     type: string;
-    status: string;
+    status: CustomerStatus;
     arrivedAt: number;
     insurance: InsurancePlan;
     prescriptionId: string | null;
@@ -464,31 +481,44 @@ interface CustomersApi {
     // (customers.ts) — timeEvents.ts's spawnCustomersForHour calls this with
     // no argument at all, which has always worked for that reason. Optional
     // here to match, not a behavior change.
-    generateCustomer: (hour?: number) => Customer;
-    assignPrescription: (customerId: string, prescriptionId: string | null) => void;
-    updateCustomerStatus: (customerId: string, newStatus: string) => void;
+    // null when no prescription could be written (the customer doesn't
+    // come in).
+    generateCustomer: (hour?: number) => Customer | null;
+    // Applies an event if the customer's current status allows it (logs and
+    // returns false otherwise). The only thing that changes Customer.status.
+    advance: (customerId: string, event: CustomerEvent) => boolean;
     updateCustomerMood: (customerId: string, moodChange: number) => void;
     extendPatience: (customerId: string, minutesToAdd: number) => void;
     adjustPatienceDecayRate: (customer: Customer) => number;
-    customerLeaves: (customerId: string) => void;
+    customerLeaves: (customerId: string, reason: DepartureReason) => void;
     updatePatience: () => void;
     sendRemainingCustomersHome: () => void;
-    updateReputationOnDeparture: (customer: Customer) => void;
+    updateReputationOnDeparture: (customer: Customer, reason: DepartureReason) => void;
     getRandomCustomerType: () => string;
     getRandomInsurance: () => InsurancePlan;
     getInsuranceByPlanName: (planName: string) => InsurancePlan;
     getCustomerById: (customerId: string) => Customer | undefined;
-    detectAndFixStuckCustomers: () => void;
+    // Creates any task a customer's status or prescription needs but lacks
+    // (after a load, a debug reset, or a bug). Returns how many it repaired.
+    reconcileTasks: () => number;
 }
 
 // Now the real, full shape (taskManager.ts owns it). The index signature is
 // kept even though every field a converted creator (customers.ts,
 // prescriptions.ts, production.ts) attaches is now named — cheap insurance
 // against the still-plain-JS page files reading/writing ad hoc fields later.
+// A task's lifecycle; see TASK_TRANSITIONS in taskManager.ts.
+//   pending-dependent: waiting on another task (a fill on its compound)
+//   pending: ready for an employee
+//   inProgress: an employee is working on it
+//   completed: done; finalizeTask removes it straight away
+// A cancelled task is removed (taskManager.cancelTask), with no status.
+type TaskStatus = 'pending-dependent' | 'pending' | 'inProgress' | 'completed';
+
 interface Task {
     id: string;
     type: string;
-    status: string;
+    status: TaskStatus;
     progress: number;
     totalTime: number;
     customerId?: string;
@@ -501,6 +531,11 @@ interface Task {
     quantityNeeded?: number;
     dependencyTaskId?: string;
     fillTaskDependency?: boolean;
+    // customerInteraction tasks only: which end of the visit this is.
+    interaction?: 'checkIn' | 'checkout';
+    // fillPrescription tasks only: true once the task holds its product
+    // (taken from inventory, returned if the task is cancelled).
+    stockTaken?: boolean;
     // Game time (ms), from clock.now().
     createdAt?: number;
     lastUpdateTime?: number;
@@ -526,8 +561,13 @@ interface TaskManagerApi {
     getTasksForEmployee: (employeeId: string) => Task[];
     getTasksForCustomer: (customerId: string) => Task[];
     updateTasks: (minutes: number) => void;
+    // The only thing that changes Task.status. Refuses (logs, returns
+    // false) a move TASK_TRANSITIONS doesn't allow.
+    setStatus: (task: Task, to: TaskStatus) => boolean;
+    // Removes a task that won't be finished: frees its employee, returns a
+    // fill's stock, and cancels anything waiting on it.
+    cancelTask: (taskId: string) => void;
     debugTaskStatus: () => void;
-    forceCompleteTask: (taskId: string) => boolean;
     addEventListener: (event: string, callback: (data: unknown) => void) => void;
     removeEventListener: (event: string, callback: (data: unknown) => void) => void;
     resetProgressVerification: (taskId?: string | null) => void;
@@ -545,11 +585,18 @@ interface TaskAssignmentApi {
     assignTaskToEmployee: (taskId: string, employeeId: string) => boolean;
     unassignTask: (taskId: string) => void;
     autoAssignTasks: () => void;
-    canFillPrescription: (prescriptionId: string) => boolean;
+    // Asks for an autoAssignTasks run at the end of the current simulation
+    // step (main.ts calls assignIfRequested), so a burst of task changes
+    // is assigned once, in game time.
+    requestAutoAssign: () => void;
+    assignIfRequested: () => void;
     normalizeEmployeeRoles: () => void;
     logTaskAssignmentState: () => void;
     forceTaskReassignment: () => void;
 }
+
+// pending until its fill task finishes, filled until the customer pays.
+type PrescriptionStatus = 'pending' | 'filled' | 'completed';
 
 interface Prescription {
     id: string;
@@ -559,7 +606,7 @@ interface Prescription {
     dosage: number;
     dosageForm: string;
     frequency: string;
-    status: string;
+    status: PrescriptionStatus;
     doctorName: string;
     refillsAllowed: number;
     assignedEmployeeId: string | null;
@@ -594,8 +641,14 @@ interface PrescriptionsApi {
     refillRegistry: RefillRecord[];
     generatePrescription: (customerId: string) => string | null;
     generateRefillPrescription: (customerId: string, record: RefillRecord) => string | null;
-    createFillTaskForPrescription: (prescription: Prescription) => string | null;
-    updatePrescriptionStatus: (prescriptionId: string, newStatus: string) => void;
+    // Makes sure a pending prescription has a fill task that either holds
+    // its stock or waits on a compound task. Returns true if it had to
+    // create or repair anything.
+    ensureFill: (prescription: Prescription) => boolean;
+    // Gives a fill task its stock if there's enough, otherwise puts it
+    // behind a compound task that makes it.
+    supplyFill: (fill: Task) => void;
+    updatePrescriptionStatus: (prescriptionId: string, newStatus: PrescriptionStatus) => void;
     prescriptionFilled: (prescriptionId: string, customerId: string) => void;
     createConsultationTask: (customerId: string) => void;
     getPrescription: (prescriptionId: string) => Prescription | undefined;
@@ -612,6 +665,11 @@ interface ProductionApi {
     canCompound: (product: Product) => boolean;
     createCompoundTask: (product: Product, quantity: number) => Task;
     checkAndCreateCompoundTasks: () => void;
+    // Fill tasks: takes the task's quantity out of inventory (true), or
+    // returns false if there isn't enough. True if it already holds it.
+    takeStock: (fill: Task) => boolean;
+    // Fill tasks: puts held stock back (the fill was cancelled).
+    returnStock: (fill: Task) => void;
     handleTaskCompletion: (task: Task) => void;
     init: () => void;
 }
@@ -826,9 +884,6 @@ interface Window {
     // Debug-only global set by timeEvents.ts (console-driven time skip), no
     // callers elsewhere in the codebase.
     forceTimeForward?: (minutes?: number) => boolean;
-    // taskManager.ts's debounce handle for batching auto-assignment after
-    // rapid-fire task adds/completions.
-    _taskAssignTimeout?: ReturnType<typeof setTimeout>;
     ui: UiApi;
     taskManager: TaskManagerApi;
     taskAssignment: TaskAssignmentApi;

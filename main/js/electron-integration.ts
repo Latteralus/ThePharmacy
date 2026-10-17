@@ -23,7 +23,7 @@
             return;
         }
 
-        console.log('Initializing Electron integration for The Pharmacy Sim');
+        console.log('Initializing Electron integration for The Pharmacy');
 
         // Initialize save/load functionality
         initSaveLoadSystem();

@@ -236,6 +236,7 @@ window.employees = {
     // Add an employee to the employeesData array
     hireSelectedEmployee(employeeData) {
         window.employeesData.push(employeeData);
+        window.taskAssignment.requestAutoAssign();
         window.updateUI('employees');
         alert(
             `Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`,
@@ -246,6 +247,9 @@ window.employees = {
     fireEmployee(employeeId) {
         const employeeIndex = window.employeesData.findIndex((emp) => emp.id === employeeId);
         if (employeeIndex > -1) {
+            // Their task goes back in the queue for someone else
+            const taskId = window.employeesData[employeeIndex].currentTaskId;
+            if (taskId) window.taskAssignment.unassignTask(taskId);
             window.employeesData.splice(employeeIndex, 1);
             window.updateUI('employees');
             console.log(`Employee with ID ${employeeId} has been fired.`);

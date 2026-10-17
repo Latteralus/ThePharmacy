@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 2;
+    const SAVE_VERSION = 3;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -94,7 +94,7 @@ window.saveFile = (function (): SaveFileApi {
     }
 
     // Upgrades a save of version N to N + 1.
-    const migrations: Record<number, (save: SaveFileV1) => SaveFile> = {
+    const migrations: { 1: (save: SaveFileV1) => SaveFile; 2: (save: SaveFile) => SaveFile } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
         1(save) {
@@ -137,6 +137,32 @@ window.saveFile = (function (): SaveFileApi {
                 },
             };
         },
+
+        // v2 predates the task and customer state machines.
+        2(save) {
+            // The duplicate fill-<id> tasks (H1) shared an id. Keep the first,
+            // which is the one an employee's currentTaskId points at.
+            const seen = new Set<string>();
+            const tasks = save.tasks.filter((task) => {
+                if (seen.has(task.id)) return false;
+                seen.add(task.id);
+                return true;
+            });
+
+            // Check-in and checkout were told apart by the customer's
+            // status. Their ids say which they are.
+            tasks.forEach((task) => {
+                if (task.type === 'customerInteraction') {
+                    task.interaction = task.id.startsWith('checkout') ? 'checkout' : 'checkIn';
+                }
+            });
+
+            // v2 fills took their stock when they finished, so none hold any
+            // yet; customers.reconcileTasks gives them stock (or a compound)
+            // after the load. Customers v2 left waiting for a fill that was
+            // already done are moved on there too.
+            return { ...save, version: 3, tasks };
+        },
     };
 
     function migrate(raw: unknown): SaveFile {
@@ -149,7 +175,7 @@ window.saveFile = (function (): SaveFileApi {
             throw new Error(`Save version ${version} is newer than this game (${SAVE_VERSION})`);
         }
         while (version < SAVE_VERSION) {
-            save = migrations[version](save as unknown as SaveFileV1);
+            save = (migrations[version as keyof typeof migrations] as (s: unknown) => SaveFile)(save);
             version = save.version;
         }
         return save;
@@ -231,6 +257,10 @@ window.saveFile = (function (): SaveFileApi {
         window.operatingCostMultiplier = settings.operatingCostMultiplier;
         window.originalOverhead = settings.baseOverhead ?? undefined;
         window.globalMarkup = settings.globalMarkup;
+
+        // Gives every loaded customer the tasks their status needs (and
+        // v2 fills their stock). A current save needs nothing.
+        window.customers.reconcileTasks();
     }
 
     return { version: SAVE_VERSION, serialize, migrate, apply };

@@ -1,6 +1,19 @@
 // taskAssignment.js
 
 window.taskAssignment = (function (): TaskAssignmentApi {
+    let assignRequested = false;
+
+    function requestAutoAssign(): void {
+        assignRequested = true;
+    }
+
+    // Called by main.ts at the end of every simulation step.
+    function assignIfRequested(): void {
+        if (!assignRequested) return;
+        assignRequested = false;
+        autoAssignTasks();
+    }
+
     /**
      * Keeps Prescription.assignedEmployeeId in sync with a fillPrescription
      * task's own assignedTo - Task remains the source of truth, this just
@@ -30,36 +43,28 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             return false;
         }
 
-        // Check if the task is already assigned
-        if (task.assignedTo) {
-            console.warn(
-                `[assignTaskToEmployee] Task ${task.id} already assigned to ${task.assignedTo}. Unassigning first.`,
-            );
-            // Unassign from the previous employee
-            const prevEmployee = window.employeesData.find((emp) => emp.id === task.assignedTo);
-            if (prevEmployee && prevEmployee.currentTaskId === task.id) {
-                prevEmployee.currentTaskId = null;
-            }
+        // Only a waiting task can be picked up. Taking a task from someone
+        // else mid-way is what made duplicate tasks ping-pong (H1).
+        if (task.status !== 'pending' || task.assignedTo) {
+            console.warn(`[assignTaskToEmployee] Task ${task.id} is ${task.status}, not waiting for an employee.`);
+            return false;
         }
 
         // Check if employee already has a task
         if (employee.currentTaskId) {
             console.warn(
-                `[assignTaskToEmployee] Employee ${employee.id} already has task ${employee.currentTaskId}. Clearing it first.`,
+                `[assignTaskToEmployee] Employee ${employee.id} already has task ${employee.currentTaskId}. Unassigning it first.`,
             );
-            // Remove the employee's assignment from the previous task
             const prevTask = window.taskManager.tasks.find((t) => t.id === employee.currentTaskId);
             if (prevTask && prevTask.assignedTo === employee.id) {
-                prevTask.assignedTo = null;
-                prevTask.status = 'pending';
-                syncPrescriptionAssignedEmployee(prevTask, null);
+                unassignTask(prevTask.id);
             }
             employee.currentTaskId = null;
         }
 
         // Now make the new assignment
         task.assignedTo = employeeId;
-        task.status = 'inProgress';
+        window.taskManager.setStatus(task, 'inProgress');
         employee.currentTaskId = taskId;
         syncPrescriptionAssignedEmployee(task, employeeId);
 
@@ -96,47 +101,38 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             }
         }
 
-        // Reset the task
+        // Reset the task (setStatus requests a new assignment round)
         task.assignedTo = null;
-        task.status = 'pending';
+        window.taskManager.setStatus(task, 'pending');
         syncPrescriptionAssignedEmployee(task, null);
         console.log(`[unassignTask] Task ${taskId} (${task.type}) is now unassigned and pending.`);
-
-        // Schedule auto-assignment to find a new employee
-        setTimeout(autoAssignTasks, 100);
     }
 
     /**
      * Sorts tasks by priority with more specific criteria:
-     * 1) Customer checkout (customerInteraction for readyForCheckout customers) - highest priority
-     * 2) Customer check-in (customerInteraction for waitingForCheckIn customers)
+     * 1) Customer checkout - highest priority
+     * 2) Customer check-in
      * 3) Consultation
      * 4) fillPrescription
-     * 5) compound
-     * 6) production
+     * 5) compound for a waiting customer's prescription
+     * 6) restock compound
+     * 7) production
      */
     function sortTasksByPriority(unassignedTasks: Task[]): Task[] {
         return unassignedTasks.sort((a, b) => {
             // Define more specific priority based on both task type and context
             function getPriority(task: Task): number {
-                // Special case: Checkout has highest priority
-                if (task.type === 'customerInteraction' && task.customerId) {
-                    const customer = window.customers?.getCustomerById(task.customerId);
-                    if (customer && customer.status === 'readyForCheckout') {
-                        return 0; // Highest priority
-                    }
-                    if (customer && customer.status === 'waitingForCheckIn') {
-                        return 1; // Second highest priority
-                    }
-                }
+                if (task.interaction === 'checkout') return 0;
+                if (task.interaction === 'checkIn') return 1;
+                // A customer is waiting on this one; restocking can wait
+                if (task.type === 'compound' && task.prescriptionId) return 4;
 
                 // Standard priority order
                 const priorityOrder: Record<string, number> = {
                     consultation: 2,
                     fillPrescription: 3,
-                    compound: 4,
-                    production: 5,
-                    customerInteraction: 6, // Default for other customerInteractions
+                    compound: 5,
+                    production: 6,
                 };
 
                 // Return the priority, or a low priority if not found
@@ -147,10 +143,11 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             const priorityA = getPriority(a);
             const priorityB = getPriority(b);
 
-            // If priority is the same, prioritize older tasks
+            // If priority is the same, the older task first. (Sorting by id
+            // put every restock compound, compound-pd..., ahead of every
+            // customer's compound, compound-pres....)
             if (priorityA === priorityB) {
-                // Use task ID as a proxy for age (assuming IDs are timestamp-based)
-                return a.id.localeCompare(b.id);
+                return (a.createdAt ?? 0) - (b.createdAt ?? 0) || a.id.localeCompare(b.id);
             }
 
             return priorityA - priorityB;
@@ -187,9 +184,11 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                 return window.production?.canCompound(product) ?? false;
             }
 
-            // For fillPrescription tasks, check if we can fill the prescription
-            if (task.type === 'fillPrescription' && task.prescriptionId) {
-                return canFillPrescription(task.prescriptionId);
+            // A pending fill already holds its stock (prescriptions.supplyFill).
+            // takeStock covers one that somehow doesn't: it takes the stock
+            // now if there's enough, and the fill waits if not.
+            if (task.type === 'fillPrescription') {
+                return window.production?.takeStock(task) ?? false;
             }
 
             // All other tasks are eligible
@@ -211,14 +210,7 @@ window.taskAssignment = (function (): TaskAssignmentApi {
 
         // If we have cashiers, first try to assign them to checkout tasks (highest priority)
         if (cashiers.length > 0) {
-            const checkoutTasks = unassignedTasks.filter((t) => {
-                if (t.type !== 'customerInteraction') return false;
-                // customerInteraction tasks are always created with a
-                // customerId (see customers.ts) — asserted rather than
-                // guarded, matching this filter's pre-existing shape.
-                const customer = window.customers?.getCustomerById(t.customerId!);
-                return customer && customer.status === 'readyForCheckout';
-            });
+            const checkoutTasks = unassignedTasks.filter((t) => t.interaction === 'checkout');
 
             if (checkoutTasks.length > 0) {
                 console.log(
@@ -235,8 +227,8 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             }
         }
 
-        // Get updated list of unassigned tasks after checkout assignments
-        const remainingTasks = window.taskManager.tasks.filter((t) => !t.assignedTo && t.status === 'pending');
+        // Eligible tasks the checkout pass didn't take
+        const remainingTasks = unassignedTasks.filter((t) => !t.assignedTo && t.status === 'pending');
 
         if (remainingTasks.length === 0 || availableEmployees.length === 0) {
             return; // Exit if no more tasks or employees
@@ -244,9 +236,6 @@ window.taskAssignment = (function (): TaskAssignmentApi {
 
         // Sort tasks by priority
         const prioritizedTasks = sortTasksByPriority(remainingTasks);
-
-        // Process each prioritized task
-        let assignmentsMade = false;
 
         for (const task of prioritizedTasks) {
             // Try to find the best employee for this task
@@ -264,19 +253,11 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                     availableEmployees.splice(index, 1);
                 }
 
-                assignmentsMade = true;
-
                 // Stop if we run out of employees
                 if (availableEmployees.length === 0) {
                     break;
                 }
             }
-        }
-
-        // If we made assignments, we'll run auto-assign again on the next loop
-        if (assignmentsMade) {
-            console.log('[autoAssignTasks] Assignments made, scheduling another round of assignment checks.');
-            setTimeout(autoAssignTasks, 100); // Run again after a short delay
         }
     }
 
@@ -330,27 +311,6 @@ window.taskAssignment = (function (): TaskAssignmentApi {
     }
 
     /**
-     * Checks if we have enough product inventory to fill a prescription.
-     */
-    function canFillPrescription(prescriptionId: string): boolean {
-        const prescription = window.prescriptions?.getPrescription(prescriptionId);
-        if (!prescription) {
-            console.error(`[canFillPrescription] Prescription ${prescriptionId} not found.`);
-            return false;
-        }
-
-        const product = window.productsData?.find((p) => p.id === prescription.productId);
-        if (!product) {
-            console.error(`[canFillPrescription] Product ${prescription.productId} not found.`);
-            return false;
-        }
-
-        // Check if there's enough product inventory (assuming dosage=1 if not specified).
-        const requiredAmount = prescription.dosage || 1;
-        return product.inventory >= requiredAmount;
-    }
-
-    /**
      * Finds the best employee for a given task based on role and skills.
      * With improved logic for role matching and skill prioritization.
      */
@@ -364,34 +324,14 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             production: ['Lab Technician', 'Pharmacist'],
         };
 
-        // Special handling for customer interactions
-        if (task.type === 'customerInteraction' && task.customerId) {
-            const customer = window.customers?.getCustomerById(task.customerId);
-
-            // For checkout, prefer a Cashier but allow others if none available
-            if (customer && customer.status === 'readyForCheckout') {
-                const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
-                if (cashiers.length > 0) {
-                    // Find the cashier with best customer service skills
-                    return cashiers.sort(
-                        (a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0),
-                    )[0];
-                }
-                // If no cashiers, anyone can help with checkout
-                return availableEmployees[0];
+        // Check-in and checkout: the Cashier with the best customer service,
+        // or anyone if no Cashier is free
+        if (task.interaction) {
+            const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
+            if (cashiers.length > 0) {
+                return cashiers.sort((a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0))[0];
             }
-
-            // For check-in, prefer a Cashier but allow others if none available
-            if (customer && customer.status === 'waitingForCheckIn') {
-                const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
-                if (cashiers.length > 0) {
-                    return cashiers.sort(
-                        (a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0),
-                    )[0];
-                }
-                // If no cashiers, anyone can help with check-in
-                return availableEmployees[0];
-            }
+            return availableEmployees[0] ?? null;
         }
 
         // Get the appropriate roles for this task type
@@ -568,15 +508,10 @@ window.taskAssignment = (function (): TaskAssignmentApi {
 
         // Reset all in-progress tasks to pending
         window.taskManager.tasks.forEach((task) => {
-            if (task.status === 'inProgress') {
-                task.status = 'pending';
-                task.assignedTo = null;
-                syncPrescriptionAssignedEmployee(task, null);
-            }
+            if (task.status === 'inProgress') unassignTask(task.id);
         });
 
-        // Run auto-assignment
-        setTimeout(autoAssignTasks, 100);
+        autoAssignTasks();
     }
 
     // Expose the public interface
@@ -584,7 +519,8 @@ window.taskAssignment = (function (): TaskAssignmentApi {
         assignTaskToEmployee,
         unassignTask,
         autoAssignTasks,
-        canFillPrescription,
+        requestAutoAssign,
+        assignIfRequested,
         normalizeEmployeeRoles,
         logTaskAssignmentState,
         forceTaskReassignment,

@@ -1,66 +1,61 @@
-# PharmaSim: Pharmacy Management Simulation Game
+# The Pharmacy
 
 ## Overview
 
-PharmaSim is a comprehensive pharmacy management simulation game where you run your own pharmacy, manage employees, handle customers, process prescriptions, and grow your business.
+The Pharmacy is a pharmacy management game for Windows. You run a compounding pharmacy: hire staff, serve customers, fill and compound prescriptions, keep stock on the shelves, deal with insurance, and try to stay profitable.
 
 ## Features
 
-- Realistic pharmacy operations simulation
-- Employee management and skill development
-- Prescription and inventory management
-- Financial tracking and optimization
-- Dynamic customer interactions
-- Research and development progression
-- Detailed financial reporting and analytics
+- A working day from 07:00 to 22:00, with customers arriving each hour between 08:00 and 21:00. Pause it or run it at 0.5x, 1x, 2x or 5x.
+- Customers check in, see a pharmacist for a consultation, get their prescription filled, and pay at checkout. Each one has limited patience.
+- Pharmacists, lab technicians and cashiers pick up work on their own.
+- Products are compounded from raw materials. Buy materials in the Marketplace and set them to reorder automatically.
+- Equipment you can buy, with automatic repurchasing.
+- Insurance plans with copays and formularies. Claims are paid out over time.
+- A finances page with revenue, expenses, profit and charts.
+- Research levels that unlock new products and equipment over several in-game days.
+- Reputation, which rises with satisfied customers and falls when they leave unserved.
+- Returning customers who come back for refills.
 
-## System Requirements
+Some sidebar pages (Customers, Orders, Marketing, Statistics) are placeholders for now.
 
-- Operating System: Windows 10/11, macOS 10.15+, Linux (Ubuntu 20.04+)
-- Processor: Intel Core i3 or equivalent
-- RAM: 4 GB
-- Storage: 200 MB available space
-- Graphics: Integrated graphics card
+## System requirements
+
+- Windows 10 or 11, 64-bit
+- About 400 MB of free disk space
 
 ## Installation
 
-1. Download the latest release for your operating system
-2. Run the installer
-3. Launch PharmaSim from your applications or start menu
+1. Download `ThePharmacy Setup <version>.exe` from the [GitHub releases page](https://github.com/Latteralus/ThePharmacy/releases).
+2. Run it and follow the installer. You can choose the install folder.
+3. Launch The Pharmacy from the Start menu or the desktop shortcut.
 
-## Gameplay Mechanics
+See [install-instructions.md](install-instructions.md) for details.
 
-- Manage daily pharmacy operations
-- Hire and train employees
-- Process prescriptions
-- Handle customer interactions
-- Manage inventory and finances
-- Research new products and technologies
+## Playing
 
-## Controls
-
-- Navigate through different sections using sidebar
-- Use mouse and keyboard for interactions
-- Adjust game speed and pause functionality in settings
+- **New game:** choose a pharmacy name, difficulty, starting capital and location.
+- **Navigation:** use the sidebar to move between pages. Operations shows customers, tasks and staff.
+- **Speed and pause:** on the Settings page.
+- **Saving:** the Save button in the top bar, or Ctrl+S. The game also autosaves every 5 minutes of play at 1x speed. There is one save slot.
+- **Loading:** Load Game on the main menu, or Ctrl+L in game.
+- **End of day:** at 22:00 the store closes, wages and overhead are charged, and a summary of the day appears.
 
 ## Troubleshooting
 
-- Ensure your system meets minimum requirements
-- Update graphics drivers
-- Check for game updates regularly
-
-## Contributing
-
-Interested in contributing? Check out our GitHub repository!
-
-## License
-
-MIT License - See LICENSE file for details
+- Saves and logs are in `%APPDATA%\ThePharmacy\`:
+  - `saves\pharmacy_save.json` is your save. `pharmacy_save.json.bak` is the save before it.
+  - `logs\main.log` is the game's log. Attach it when you report a problem.
+- If a save won't load, rename `pharmacy_save.json.bak` to `pharmacy_save.json` to go back one save.
 
 ## Support
 
-For support, visit our GitHub issues page or contact support@pharmasim.com
+Report problems on the [GitHub issues page](https://github.com/Latteralus/ThePharmacy/issues).
+
+## License
+
+MIT License. The license text is in [main/LICENSE](../main/LICENSE).
 
 ## Version
 
-Current Version: 1.0.0
+1.0.0

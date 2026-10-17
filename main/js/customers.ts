@@ -1,5 +1,78 @@
 // customers.js
 
+// The customer state machine. A visit goes
+//   waitingForCheckIn -> waitingForConsultation -> waitingForFill -> readyForCheckout -> completed
+// and only customers.advance changes a status, using this table: for each
+// event, the statuses it's allowed in and where it moves the customer.
+// The fill runs alongside check-in and consultation, so "filled" is
+// accepted in the first two states without moving the customer (the
+// prescription records it, and entering waitingForFill checks it).
+const CUSTOMER_TRANSITIONS: Record<CustomerEvent, Partial<Record<CustomerStatus, CustomerStatus>>> = {
+    checkedIn: { waitingForCheckIn: 'waitingForConsultation' },
+    consulted: { waitingForConsultation: 'waitingForFill' },
+    filled: {
+        waitingForCheckIn: 'waitingForCheckIn',
+        waitingForConsultation: 'waitingForConsultation',
+        waitingForFill: 'readyForCheckout',
+    },
+    paid: { readyForCheckout: 'completed' },
+};
+
+// Reputation lost when a customer leaves without being served.
+const DEPARTURE_PENALTY: Record<Exclude<DepartureReason, 'served'>, number> = {
+    impatient: 1.5,
+    closing: 1,
+    reset: 0,
+};
+
+function createInteractionTask(customerId: string, interaction: 'checkIn' | 'checkout'): void {
+    const task: Task = {
+        id: `${interaction === 'checkIn' ? 'checkin' : 'checkout'}-${customerId}`, // one of each per visit
+        type: 'customerInteraction',
+        interaction,
+        customerId,
+        totalTime: 3, // 3 minutes
+        progress: 0,
+        roleNeeded: 'Cashier',
+        status: 'pending',
+        assignedTo: null,
+    };
+    window.taskManager.addTask(task);
+    console.log(`[customers.js] Created ${interaction} task: ${task.id}`);
+}
+
+// The task a customer in this status is waiting on, if any: its id and how
+// to create it. Used on entering the status and by reconcileTasks.
+function taskForStatus(customer: Customer): { id: string; create: () => void } | null {
+    const id = customer.id;
+    switch (customer.status) {
+        case 'waitingForCheckIn':
+            return { id: `checkin-${id}`, create: () => createInteractionTask(id, 'checkIn') };
+        case 'waitingForConsultation':
+            return { id: `consult-${id}`, create: () => window.prescriptions.createConsultationTask(id) };
+        case 'readyForCheckout':
+            return { id: `checkout-${id}`, create: () => createInteractionTask(id, 'checkout') };
+        default:
+            return null;
+    }
+}
+
+// What happens on arriving in a status.
+function enterStatus(customer: Customer): void {
+    taskForStatus(customer)?.create();
+
+    const prescription = customer.prescriptionId
+        ? window.prescriptions.getPrescription(customer.prescriptionId)
+        : undefined;
+    if (customer.status === 'waitingForFill' && prescription?.status === 'filled') {
+        // Filled while they were still being checked in or consulted.
+        window.customers.advance(customer.id, 'filled');
+    } else if (customer.status === 'completed') {
+        window.finances.completePrescription(customer.id, customer.prescriptionId!);
+        window.customers.customerLeaves(customer.id, 'served');
+    }
+}
+
 window.customers = {
     activeCustomers: [],
 
@@ -57,9 +130,6 @@ window.customers = {
         };
 
         this.activeCustomers.push(newCustomer);
-        console.log(
-            `[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`,
-        );
 
         // Generate and assign a prescription - a returning customer gets a
         // refill of their previous product instead of a random pick.
@@ -70,21 +140,20 @@ window.customers = {
                       window.prescriptions.consumeRefillRecord(refillRecord.id)!,
                   )
                 : window.prescriptions.generatePrescription(newCustomer.id);
-        this.assignPrescription(newCustomer.id, prescriptionId);
 
-        // Create a "customerInteraction" task (Cashier) to check in
-        const checkInTask: Task = {
-            id: `checkin-${newCustomer.id}`,
-            type: 'customerInteraction',
-            customerId: newCustomer.id,
-            totalTime: 3, // 3 minutes to check in
-            progress: 0,
-            roleNeeded: 'Cashier',
-            status: 'pending',
-            assignedTo: null,
-        };
-        window.taskManager.addTask(checkInTask);
-        console.log(`[customers.js] Created check-in task: ${checkInTask.id}`);
+        if (!prescriptionId) {
+            // Nothing we could fill for them (an unlocked product with no
+            // definition, H8), so they don't come in.
+            console.warn(`[customers.js] No prescription could be written for ${newCustomer.id}; they don't come in.`);
+            this.activeCustomers.splice(this.activeCustomers.indexOf(newCustomer), 1);
+            return null;
+        }
+        newCustomer.prescriptionId = prescriptionId;
+
+        console.log(
+            `[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`,
+        );
+        enterStatus(newCustomer);
 
         // Only update UI if on operations page
         if (window.currentPage === 'operations') {
@@ -94,44 +163,35 @@ window.customers = {
         return newCustomer;
     },
 
-    // Assign a prescription to the customer
-    assignPrescription(customerId, prescriptionId) {
-        const customer = this.activeCustomers.find((c) => c.id === customerId);
-        if (customer) {
-            customer.prescriptionId = prescriptionId;
-            console.log(`[customers.js] Assigned prescription ${prescriptionId} to customer ${customerId}`);
-        } else {
-            console.error(`[customers.js] Cannot assign prescription: customer ${customerId} not found`);
+    advance(customerId, event) {
+        const customer = this.getCustomerById(customerId);
+        if (!customer) {
+            // Normal when a task finishes for someone who has just left.
+            console.log(`[customers.js] ${event} for customer ${customerId}, who is no longer here`);
+            return false;
         }
-    },
 
-    updateCustomerStatus(customerId, newStatus) {
-        const customer = this.activeCustomers.find((c) => c.id === customerId);
-        if (customer) {
-            const oldStatus = customer.status;
-            customer.status = newStatus;
-            customer.lastStateChange = window.clock.now();
-
-            console.log(
-                `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) status changed: ${oldStatus} -> ${newStatus}`,
-            );
-
-            // If they've moved to waitingForConsultation, create that task
-            if (newStatus === 'waitingForConsultation') {
-                window.prescriptions.createConsultationTask(customerId);
-            }
-
-            // Extend patience when making progress
-            this.extendPatience(customerId, 30); // Add 30 minutes of patience when status changes
-
-            // Give a mood boost when customer's status changes positively
-            this.updateCustomerMood(customerId, 1);
-
-            // Update UI
-            window.ui.updateCustomers();
-        } else {
-            console.error(`[customers.js] Cannot update status: customer ${customerId} not found`);
+        const from = customer.status;
+        const to = CUSTOMER_TRANSITIONS[event][from];
+        if (!to) {
+            console.warn(`[customers.js] Refused ${event} for customer ${customerId} in status ${from}`);
+            return false;
         }
+        if (to === from) return true;
+
+        customer.status = to;
+        customer.lastStateChange = window.clock.now();
+        console.log(
+            `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) status changed: ${from} -> ${to}`,
+        );
+
+        // Progress buys patience and lifts their mood
+        this.extendPatience(customerId, 30);
+        this.updateCustomerMood(customerId, 1);
+
+        enterStatus(customer);
+        window.ui.updateCustomers();
+        return true;
     },
 
     updateCustomerMood(customerId, moodChange) {
@@ -181,42 +241,29 @@ window.customers = {
         return decayRate;
     },
 
-    customerLeaves(customerId) {
+    customerLeaves(customerId, reason) {
         const customerIndex = this.activeCustomers.findIndex((c) => c.id === customerId);
         if (customerIndex > -1) {
             const customer = this.activeCustomers[customerIndex];
             console.log(
-                `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) is leaving, status: ${customer.status}`,
+                `[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) is leaving (${reason}), status: ${customer.status}`,
             );
 
             // Remove customer from active list
             this.activeCustomers.splice(customerIndex, 1);
 
-            // Check for and cancel any pending tasks for this customer
-            const customerTasks = window.taskManager.tasks.filter(
-                (t) => t.customerId === customerId && t.status !== 'completed',
-            );
-
+            // Cancel their unfinished tasks. That frees whoever was working
+            // on them and puts a fill's product back on the shelf.
+            const customerTasks = window.taskManager.getTasksForCustomer(customerId);
             if (customerTasks.length > 0) {
                 console.log(`[customers.js] Cancelling ${customerTasks.length} pending tasks for departed customer`);
-                customerTasks.forEach((task) => {
-                    if (task.assignedTo) {
-                        // Unassign any employee working on this customer's tasks
-                        window.taskAssignment.unassignTask(task.id);
-                    }
-                    // Remove the task
-                    const taskIndex = window.taskManager.tasks.indexOf(task);
-                    if (taskIndex > -1) {
-                        window.taskManager.tasks.splice(taskIndex, 1);
-                    }
-                });
+                customerTasks.forEach((task) => window.taskManager.cancelTask(task.id));
             }
 
             // Remove any associated prescriptions
             window.prescriptions.removePrescriptionsByCustomer(customerId);
 
-            // Update reputation based on customer mood and status
-            this.updateReputationOnDeparture(customer);
+            this.updateReputationOnDeparture(customer, reason);
 
             // UI update
             window.ui.updateCustomers();
@@ -247,28 +294,24 @@ window.customers = {
                 console.log(
                     `[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has run out of patience and is leaving`,
                 );
-
-                // Negatively impact reputation when a customer leaves unhappy
-                window.brandReputation.loseReputation(1.5);
-
-                this.customerLeaves(customer.id);
+                this.customerLeaves(customer.id, 'impatient');
             }
         });
     },
 
     // Closing time: everyone still in the store leaves. They count as
-    // unserved (customerLeaves applies the usual reputation hit), but not as
-    // having run out of patience.
+    // unserved, but not as having run out of patience.
     sendRemainingCustomersHome() {
         if (this.activeCustomers.length === 0) return;
         console.log(`[customers.js] Closing time - sending ${this.activeCustomers.length} remaining customers home`);
-        [...this.activeCustomers].forEach((customer) => this.customerLeaves(customer.id));
+        [...this.activeCustomers].forEach((customer) => this.customerLeaves(customer.id, 'closing'));
     },
 
-    // Determines effect on reputation when a customer leaves
-    updateReputationOnDeparture(customer) {
-        // Only affect reputation if customer left after being served
-        if (customer.status === 'completed') {
+    // Determines effect on reputation when a customer leaves. Applied once
+    // per departure (running out of patience used to cost 1.5 here and
+    // another 1 as "left without service").
+    updateReputationOnDeparture(customer, reason) {
+        if (reason === 'served') {
             // Base reputation gain/loss on mood (1-10 scale)
             let reputationChange = 0;
 
@@ -296,10 +339,11 @@ window.customers = {
             } else if (reputationChange < 0) {
                 window.brandReputation.loseReputation(Math.abs(reputationChange));
             }
-        } else {
-            // If customer left without being served, lose some reputation
-            window.brandReputation.loseReputation(1);
-            console.log(`[customers.js] Customer left without service - reputation -1`);
+        } else if (DEPARTURE_PENALTY[reason] > 0) {
+            window.brandReputation.loseReputation(DEPARTURE_PENALTY[reason]);
+            console.log(
+                `[customers.js] Customer left without service (${reason}) - reputation -${DEPARTURE_PENALTY[reason]}`,
+            );
         }
     },
 
@@ -342,98 +386,42 @@ window.customers = {
         return this.activeCustomers.find((c) => c.id === customerId);
     },
 
-    // Check for stuck customers and fix their state
-    detectAndFixStuckCustomers() {
-        console.log(`[customers.js] Checking for stuck customers...`);
+    // Run by taskManager.js's integrity check, after a load, and after the
+    // Settings resets. With the state machine this should find nothing.
+    reconcileTasks() {
+        let repaired = 0;
 
-        const now = window.clock.now();
-        // 5 game hours (the old threshold was 5 real minutes, the same at 1x)
-        const stuckThresholdMs = 5 * 60 * 60 * 1000;
+        [...this.activeCustomers].forEach((customer) => {
+            const prescription = customer.prescriptionId
+                ? window.prescriptions.getPrescription(customer.prescriptionId)
+                : undefined;
+            if (!prescription) {
+                console.warn(`[customers.js] Customer ${customer.id} has no prescription; sending them home.`);
+                this.customerLeaves(customer.id, 'reset');
+                repaired++;
+                return;
+            }
 
-        this.activeCustomers.forEach((customer) => {
-            // How long has the customer been in their current state?
-            const timeInCurrentState = now - customer.lastStateChange;
+            const needed = taskForStatus(customer);
+            if (needed && !window.taskManager.getTaskById(needed.id)) {
+                console.warn(`[customers.js] Customer ${customer.id} (${customer.status}) had no ${needed.id} task`);
+                needed.create();
+                repaired++;
+            }
 
-            // If stuck in a state for over 5 minutes, take action
-            if (timeInCurrentState > stuckThresholdMs) {
-                console.warn(
-                    `[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) appears stuck in state "${customer.status}" for ${Math.floor(timeInCurrentState / 60000)} minutes`,
-                );
+            if (prescription.status === 'pending' && window.prescriptions.ensureFill(prescription)) {
+                repaired++;
+            }
 
-                // Check if the customer has tasks
-                const customerTasks = window.taskManager.tasks.filter(
-                    (t) => t.customerId === customer.id && t.status !== 'completed',
-                );
-
-                if (customerTasks.length === 0) {
-                    console.warn(
-                        `[customers.js] Customer ${customer.id} has no active tasks! Creating recovery task...`,
-                    );
-
-                    // Create appropriate recovery task based on state
-                    if (customer.status === 'waitingForCheckIn') {
-                        // Create a new check-in task with highest priority
-                        const checkInTask: Task = {
-                            id: `checkin-recovery-${customer.id}-${Date.now()}`,
-                            type: 'customerInteraction',
-                            customerId: customer.id,
-                            totalTime: 2, // Fast recovery task
-                            progress: 0,
-                            roleNeeded: 'Cashier',
-                            status: 'pending',
-                            assignedTo: null,
-                        };
-                        window.taskManager.addTask(checkInTask);
-                        console.log(`[customers.js] Created recovery check-in task: ${checkInTask.id}`);
-                    } else if (customer.status === 'waitingForConsultation') {
-                        // Create a consultation task with highest priority
-                        window.prescriptions.createConsultationTask(customer.id);
-                    } else if (customer.status === 'waitingForFill' && customer.prescriptionId) {
-                        // Reactivate prescription fill
-                        const prescription = window.prescriptions.getPrescription(customer.prescriptionId);
-                        if (prescription) {
-                            window.prescriptions.createFillTaskForPrescription(prescription);
-                        }
-                    } else if (customer.status === 'readyForCheckout') {
-                        // Create a checkout task with highest priority
-                        const checkoutTask: Task = {
-                            id: `checkout-recovery-${customer.id}-${Date.now()}`,
-                            type: 'customerInteraction',
-                            customerId: customer.id,
-                            totalTime: 2, // Fast recovery task
-                            progress: 0,
-                            roleNeeded: 'Cashier',
-                            status: 'pending',
-                            assignedTo: null,
-                        };
-                        window.taskManager.addTask(checkoutTask);
-                        console.log(`[customers.js] Created recovery checkout task: ${checkoutTask.id}`);
-                    }
-                } else {
-                    // Has tasks but they're not being completed
-                    console.log(
-                        `[customers.js] Customer ${customer.id} has ${customerTasks.length} pending tasks but seems stuck. Reassigning...`,
-                    );
-
-                    // Force reassignment of tasks
-                    customerTasks.forEach((task) => {
-                        if (task.assignedTo) {
-                            window.taskAssignment.unassignTask(task.id);
-                        }
-                    });
-                }
-
-                // Extend the customer's patience to give more time to fix
-                this.extendPatience(customer.id, 60);
-
-                // Update last state change time to prevent continuous recovery attempts
-                customer.lastStateChange = now;
+            // Filled while being consulted, but never moved on
+            if (customer.status === 'waitingForFill' && prescription.status === 'filled') {
+                this.advance(customer.id, 'filled');
+                repaired++;
             }
         });
+
+        return repaired;
     },
 };
-
-// Stuck-customer detection runs as part of taskManager.js's single
-// integrity-check job, not on its own interval here.
 
 window.clock.every(1, () => window.customers.updatePatience());

@@ -23,7 +23,7 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
 
     const titleElem = document.createElement('h1');
     titleElem.className = 'game-title';
-    titleElem.textContent = 'PharmaSim';
+    titleElem.textContent = 'The Pharmacy';
     titleContainer.appendChild(titleElem);
 
     leftSection.appendChild(titleContainer);
@@ -282,7 +282,7 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
         };
 
         setTimeout(() => {
-            window.notifications!.add('Welcome to PharmaSim!', 'success');
+            window.notifications!.add('Welcome to The Pharmacy!', 'success');
         }, 2000);
     }
 
