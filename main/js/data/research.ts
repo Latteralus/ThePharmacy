@@ -157,16 +157,21 @@ window.research = {
         const nextLevel = window.researchData.currentLevel + 1;
         if (nextLevel < window.researchData.levels.length) {
             const levelData = window.researchData.levels[nextLevel];
-            if (window.financesData.cash >= levelData.cost) {
-                window.financesData.cash -= levelData.cost;
+            const paid = window.finances.transact({
+                type: 'expense',
+                category: 'research',
+                amount: levelData.cost,
+                description: `Research: level ${nextLevel}`,
+                requireFunds: true,
+            });
+            if (paid) {
                 window.researchData.inProgress = {
                     targetLevel: nextLevel,
                     startDayIndex: window.gameState.dayIndex,
                     daysRequired: levelData.researchTime,
                 };
 
-                // Update UI to reflect the cash deduction and the new "in progress" state
-                window.updateUI('finances');
+                // Show the new "in progress" state
                 window.updateUI('research');
 
                 console.log(`Started researching level ${nextLevel} (${levelData.researchTime} days).`);

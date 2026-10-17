@@ -10,11 +10,20 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
     summaryTitle.textContent = 'Daily Summary';
     modal.appendChild(summaryTitle);
 
-    const summaryText = document.createElement('p');
-    const netIncome = window.financesData.dailyIncome;
-    const cashNow = window.financesData.cash.toFixed(2);
-    summaryText.textContent = `Net Income Today: $${netIncome.toFixed(2)}. Current Cash: $${cashNow}.`;
-    modal.appendChild(summaryText);
+    // Shown after end of day has charged wages and overhead, before the
+    // "today" totals roll over.
+    const { revenue, expenses, profit, cash } = window.financesData;
+    const lines = [
+        `Revenue Today: $${revenue.today.toFixed(2)}`,
+        `Costs Today: $${expenses.today.toFixed(2)}`,
+        `Net Today: $${profit.today.toFixed(2)}`,
+        `Current Cash: $${cash.toFixed(2)}`,
+    ];
+    lines.forEach((line) => {
+        const summaryText = document.createElement('p');
+        summaryText.textContent = line;
+        modal.appendChild(summaryText);
+    });
 
     // "Start Next Day" button
     const nextDayBtn = document.createElement('button');

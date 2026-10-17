@@ -1,5 +1,43 @@
 // improved-insuranceClaims.js
 
+// financesData tracks money owed by insurers in two fields (the top bar
+// reads pendingInsuranceIncome, the Finances page insuranceReimbursements).
+// Keep them equal to the sum of pendingClaims' amountDue.
+function adjustPending(amount: number): void {
+    window.financesData.pendingInsuranceIncome += amount;
+    window.financesData.insuranceReimbursements.pending += amount;
+}
+
+// Pays or rejects one claim. A paid claim is the only point insurance money
+// counts as revenue. A rejection moves no cash, so it isn't a transaction.
+// Returns true if paid.
+function settleClaim(claim: InsuranceClaim, rejected: boolean): boolean {
+    claim.processedDate = new Date(window.gameState.currentDate);
+    adjustPending(-claim.amountDue);
+
+    if (rejected) {
+        claim.rejected = true;
+        claim.status = 'rejected';
+        window.financesData.insuranceReimbursements.rejected += claim.amountDue;
+        console.log(`[insuranceClaims.js] Claim ${claim.id} rejected`);
+        return false;
+    }
+
+    claim.paid = true;
+    claim.status = 'paid';
+    window.financesData.insuranceReimbursements.received += claim.amountDue;
+    window.finances.transact({
+        type: 'income',
+        category: 'insurance',
+        amount: claim.amountDue,
+        description: `Insurance payment for prescription ${claim.prescriptionId}`,
+        customerId: claim.customerId,
+        prescriptionId: claim.prescriptionId,
+    });
+    console.log(`[insuranceClaims.js] Claim ${claim.id} paid: ${claim.amountDue.toFixed(2)}`);
+    return true;
+}
+
 window.insuranceClaims = {
     pendingClaims: [], // Array to store pending claims
     processedClaims: [], // History of processed claims
@@ -32,6 +70,7 @@ window.insuranceClaims = {
         };
 
         this.pendingClaims.push(claim);
+        adjustPending(claim.amountDue);
         console.log(
             `[insuranceClaims.js] New claim added: ${claim.id} for ${insurancePlan.planName}, amount: $${claim.amountDue.toFixed(2)}`,
         );
@@ -86,63 +125,11 @@ window.insuranceClaims = {
         console.log(`[insuranceClaims.js] Found ${claimsToProcess.length} claims ready for processing`);
 
         claimsToProcess.forEach((claim) => {
-            // Determine if claim is rejected (small random chance)
-            const isRejected = Math.random() < this.rejectionRate;
-
-            if (isRejected) {
-                claim.rejected = true;
-                claim.status = 'rejected';
-                claim.processedDate = new Date(window.gameState.currentDate);
-
-                // Update rejection stats
-                if (window.financesData.insuranceReimbursements) {
-                    window.financesData.insuranceReimbursements.rejected += claim.amountDue;
-                    window.financesData.insuranceReimbursements.pending -= claim.amountDue;
-                }
-
-                // Create a transaction record for the rejected claim
-                window.finances.addTransaction({
-                    date: new Date(window.gameState.currentDate),
-                    type: 'expense',
-                    category: 'insurance-rejected',
-                    amount: claim.amountDue,
-                    description: `Rejected insurance claim for prescription ${claim.prescriptionId}`,
-                    customerId: claim.customerId,
-                    prescriptionId: claim.prescriptionId,
-                });
-
-                rejectionCount++;
-                console.log(`[insuranceClaims.js] Claim ${claim.id} rejected`);
-            } else {
-                claim.paid = true;
-                claim.status = 'paid';
-                claim.processedDate = new Date(window.gameState.currentDate);
-
-                // Add the claim amount to the pharmacy's cash
-                window.financesData.cash += claim.amountDue;
-
-                // Update insurance stats
-                if (window.financesData.insuranceReimbursements) {
-                    window.financesData.insuranceReimbursements.received += claim.amountDue;
-                    window.financesData.insuranceReimbursements.pending -= claim.amountDue;
-                }
-
-                // Create a transaction record for the paid claim
-                window.finances.addTransaction({
-                    date: new Date(window.gameState.currentDate),
-                    type: 'income',
-                    category: 'insurance',
-                    amount: claim.amountDue,
-                    description: `Insurance payment for prescription ${claim.prescriptionId}`,
-                    customerId: claim.customerId,
-                    prescriptionId: claim.prescriptionId,
-                });
-
+            if (settleClaim(claim, Math.random() < this.rejectionRate)) {
                 totalPaid += claim.amountDue;
-                console.log(`[insuranceClaims.js] Claim ${claim.id} paid: ${claim.amountDue.toFixed(2)}`);
+            } else {
+                rejectionCount++;
             }
-
-            // Move to processed claims history
             this.processedClaims.push(claim);
         });
 
@@ -158,74 +145,13 @@ window.insuranceClaims = {
         return totalPaid;
     },
 
-    // Function to process claims for a specific insurance company
-    processClaims(insuranceName) {
-        const claimsToProcess = this.pendingClaims.filter(
-            (claim) => claim.insurancePlan === insuranceName && !claim.paid,
-        );
-
-        let totalPaid = 0;
-        let rejectionCount = 0;
-
-        claimsToProcess.forEach((claim) => {
-            // Determine if claim is rejected (small random chance)
-            const isRejected = Math.random() < this.rejectionRate;
-
-            if (isRejected) {
-                claim.rejected = true;
-                claim.status = 'rejected';
-                claim.processedDate = new Date(window.gameState.currentDate);
-
-                // Update rejection stats
-                if (window.financesData.insuranceReimbursements) {
-                    window.financesData.insuranceReimbursements.rejected += claim.amountDue;
-                    window.financesData.insuranceReimbursements.pending -= claim.amountDue;
-                }
-
-                rejectionCount++;
-            } else {
-                claim.paid = true;
-                claim.status = 'paid';
-                claim.processedDate = new Date(window.gameState.currentDate);
-
-                // Add the claim amount to the pharmacy's cash
-                window.financesData.cash += claim.amountDue;
-
-                // Update insurance stats
-                if (window.financesData.insuranceReimbursements) {
-                    window.financesData.insuranceReimbursements.received += claim.amountDue;
-                    window.financesData.insuranceReimbursements.pending -= claim.amountDue;
-                }
-
-                totalPaid += claim.amountDue;
-            }
-
-            // Move to processed claims history
-            this.processedClaims.push(claim);
-        });
-
-        // Remove processed claims from pending list
-        this.pendingClaims = this.pendingClaims.filter(
-            (claim) => !claimsToProcess.some((processed) => processed.id === claim.id),
-        );
-
-        console.log(
-            `[insuranceClaims.js] Processed ${claimsToProcess.length} claims for ${insuranceName}. Paid: ${totalPaid.toFixed(2)}, Rejected: ${rejectionCount}`,
-        );
-
-        return totalPaid;
-    },
-
     // Function to remove a claim (e.g., if a prescription is canceled)
     removeClaim(prescriptionId) {
         const index = this.pendingClaims.findIndex((claim) => claim.prescriptionId === prescriptionId);
         if (index !== -1) {
             const claim = this.pendingClaims[index];
 
-            // Update pending insurance amount
-            if (window.financesData.insuranceReimbursements) {
-                window.financesData.insuranceReimbursements.pending -= claim.amountDue;
-            }
+            adjustPending(-claim.amountDue);
 
             // Remove from pending
             this.pendingClaims.splice(index, 1);
@@ -234,6 +160,14 @@ window.insuranceClaims = {
             return true;
         }
         return false;
+    },
+
+    // Resets both pending totals to what pendingClaims actually owes. Run on
+    // load: older saves dropped their claims but kept the totals.
+    syncPendingTotals() {
+        const owed = this.pendingClaims.reduce((sum, claim) => sum + claim.amountDue, 0);
+        window.financesData.pendingInsuranceIncome = owed;
+        window.financesData.insuranceReimbursements.pending = owed;
     },
 
     // Get statistics about claims

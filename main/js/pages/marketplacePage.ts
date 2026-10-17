@@ -204,13 +204,17 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
     // -------------------------------------------------------------------------
     function confirmPurchase(): void {
         const totalCost = calculateTotalCost();
-        if (window.financesData.cash < totalCost) {
+        const paid = window.finances.transact({
+            type: 'expense',
+            category: 'materials',
+            amount: totalCost,
+            description: 'Marketplace material purchase',
+            requireFunds: true,
+        });
+        if (!paid) {
             alert('Not enough cash to buy these materials!');
             return;
         }
-
-        // Subtract cost, add inventory
-        window.financesData.cash -= totalCost;
 
         // Update each material's inventory
         materialCards.forEach((entry) => {

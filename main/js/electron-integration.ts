@@ -55,33 +55,9 @@
             // Add save game function to window
             window.saveGame = async function (options = {}) {
                 try {
-                    // Get the current game state
-                    // window.brandReputation carries live methods (calcCustomers,
-                    // gainReputation, loseReputation), and every equipmentData
-                    // item carries an isUnlocked() method - none of that can
-                    // cross IPC's structured-clone boundary, so only send plain
-                    // data fields.
-                    // Frame-loop bookkeeping (performance.now() timestamps)
-                    // is only meaningful in this session - leave it out.
-                    const { lastFrameTime, lastSimulationTime, simulationAccumulator, renderInfo, ...gameState } =
-                        window.gameState;
-                    const gameData = {
-                        gameState,
-                        financesData: window.financesData,
-                        employeesData: window.employeesData,
-                        productsData: window.productsData,
-                        materialsData: window.materialsData,
-                        equipmentData: (window.equipmentData || []).map(({ isUnlocked, ...rest }) => rest),
-                        brandReputation: {
-                            reputationScore: window.brandReputation.reputationScore,
-                        },
-                        researchData: window.researchData,
-                        activePrescriptions: window.prescriptions ? window.prescriptions.activePrescriptions : [],
-                        refillRegistry: window.prescriptions ? window.prescriptions.refillRegistry : [],
-                        timestamp: Date.now(),
-                    };
-
-                    const result = await window.gameAPI!.saveGame!(gameData);
+                    // Plain data only (see saveFile.ts), so it crosses IPC's
+                    // structured-clone boundary.
+                    const result = await window.gameAPI!.saveGame!(window.saveFile.serialize());
 
                     if (result && result.success) {
                         console.log('Game saved successfully');

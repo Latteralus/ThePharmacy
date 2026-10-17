@@ -9,7 +9,9 @@ window.brandReputation = {
         if (hour >= 12 && hour < 14) base += 2; // Lunch
         if (hour >= 17 && hour < 20) base += 3; // After work
         const repFactor = 1 + this.reputationScore / 100;
-        return Math.floor(base * repFactor);
+        // Settings' "Customer Frequency" (saved with the game)
+        const frequency = window.customerFrequencyMultiplier ?? 1;
+        return Math.floor(base * repFactor * frequency);
     },
 
     gainReputation(amount) {

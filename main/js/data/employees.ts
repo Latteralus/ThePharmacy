@@ -176,16 +176,14 @@ window.employees = {
     // Hire an employee
     hireEmployee(role, skillLevel) {
         const hiringFee = 500;
-        if (window.financesData.cash >= hiringFee) {
-            window.financesData.cash -= hiringFee;
-            window.finances.addTransaction({
-                date: new Date(window.gameState.currentDate),
-                type: 'expense',
-                category: 'hiring',
-                amount: hiringFee,
-                description: `Hiring fee for new ${skillLevel} ${role}`,
-            });
-
+        const paid = window.finances.transact({
+            type: 'expense',
+            category: 'hiring',
+            amount: hiringFee,
+            description: `Hiring fee for new ${skillLevel} ${role}`,
+            requireFunds: true,
+        });
+        if (paid) {
             // Generate candidates
             const candidates: Employee[] = [];
             for (let i = 0; i < 5; i++) {

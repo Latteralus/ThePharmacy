@@ -52,13 +52,17 @@ window.helpers = {
         const materialsNeeded = this.calculateMaterialsNeeded(productId, quantity);
         const totalCost = this.calculateOrderCost(materialsNeeded);
 
-        if (totalCost > window.financesData.cash) {
+        const paid = window.finances.transact({
+            type: 'expense',
+            category: 'materials',
+            amount: totalCost,
+            description: `Ordered materials for ${quantity} x ${productId}`,
+            requireFunds: true,
+        });
+        if (!paid) {
             alert('Not enough cash to complete the order.');
             return;
         }
-
-        // Deduct cost from cash
-        window.financesData.cash -= totalCost;
 
         // Update material inventory
         for (const materialId in materialsNeeded) {
@@ -68,18 +72,8 @@ window.helpers = {
             }
         }
 
-        // Add transaction record
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
-            type: 'expense',
-            category: 'materials',
-            amount: totalCost,
-            description: `Ordered materials for ${quantity} x ${productId}`,
-        });
-
         // Update UI
         window.updateUI('inventory');
-        window.updateUI('finances');
 
         // Display success message
         const successMessage = document.createElement('div');

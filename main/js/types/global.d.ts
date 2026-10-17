@@ -122,7 +122,6 @@ interface ExpenseCategories {
 }
 
 interface RevenueCategories {
-    prescriptions: number;
     copays: number;
     insurance: number;
     other: number;
@@ -137,7 +136,25 @@ interface TransactionInput {
     description: string;
     customerId?: string;
     prescriptionId?: string;
+    // v1 saves only: insurance "income" logged at sale time, before any cash
+    // arrived. The v1 migration drops these.
     pending?: boolean;
+}
+
+// One movement of money through finances.transact(). `amount` is positive;
+// `type` gives the direction. `category` is the transaction's category and,
+// when it names one, the expense/revenue bucket it counts toward (otherwise
+// 'other').
+interface LedgerEntry {
+    type: 'income' | 'expense';
+    amount: number;
+    category: string;
+    description: string;
+    customerId?: string;
+    prescriptionId?: string;
+    // Expenses only: refuse (transact returns false) if cash < amount.
+    // Leave unset for costs that are owed regardless, like wages.
+    requireFunds?: boolean;
 }
 
 // addTransaction always assigns an id if missing, so every transaction that
@@ -202,11 +219,16 @@ interface FinancialSummary {
 }
 
 interface FinancesApi {
+    // The only way to change cash. Returns false if refused.
+    transact: (entry: LedgerEntry) => boolean;
     applyDailyCosts: () => void;
     completePrescription: (customerId: string, prescriptionId: string) => { copay: number; price: number } | undefined;
     processInsuranceClaims: () => void;
     addIncome: (amount: number, category?: string, description?: string) => void;
     addExpense: (amount: number, category?: string, description?: string) => boolean;
+    setCash: (amount: number) => void;
+    startNewDay: (previousDate: Date, newDate: Date) => void;
+    // Appends to the log only, without moving money. Use transact().
     addTransaction: (transaction: TransactionInput) => void;
     updateProductPrice: (productId: string, newPrice: number) => void;
     setToSuggestedPrices: () => void;
@@ -272,23 +294,65 @@ interface NewGameOptions {
     startingCapital?: string;
 }
 
-// The shape handed back by gameAPI.loadGame() — a JSON/IPC round-trip of
-// whatever game-integration.js (still plain JS, main process) wrote out.
-// Loosely typed: Date fields actually arrive as strings at this point
-// (gameInitializer.ts revives currentDate/dateCreated immediately after —
-// `new Date(x)` accepts a string just as well as a Date, so typing this as
-// the "revived" shapes doesn't break that call).
-interface SavedGameData {
+// saveFile.ts - the save file format. A save holds only player state;
+// static definitions come from the data files and saved state is merged
+// onto them on load.
+type SavedItemState<T, K extends keyof T> = { id: string } & Partial<Pick<T, K>>;
+
+interface SaveSettings {
+    gameSpeed: number;
+    customerFrequencyMultiplier: number;
+    operatingCostMultiplier: number;
+    // Overhead before the operating-cost multiplier. null until the player
+    // first changes the multiplier.
+    baseOverhead: number | null;
+    globalMarkup: number;
+}
+
+// Date fields are Dates when written and ISO strings when read back;
+// saveFile.ts revives them.
+interface SaveFile {
+    version: number;
+    timestamp: number;
+    gameState: GameState;
+    financesData: FinancesData;
+    employeesData: Employee[];
+    brandReputation: { reputationScore: number };
+    products: SavedItemState<Product, 'price' | 'inventory' | 'maxInventory'>[];
+    materials: SavedItemState<Material, 'inventory' | 'autoOrderThreshold' | 'autoOrderAmount'>[];
+    equipment: SavedItemState<EquipmentItem, 'owned' | 'durability' | 'autoPurchaseThreshold' | 'autoPurchaseAmount'>[];
+    research: { currentLevel: number; inProgress: ResearchInProgress | null };
+    tasks: Task[];
+    customers: Customer[];
+    activePrescriptions: Prescription[];
+    refillRegistry: RefillRecord[];
+    insuranceClaims: { pending: InsuranceClaim[]; processed: InsuranceClaim[] };
+    settings: SaveSettings;
+}
+
+// Saves written before the format was versioned: whole live objects.
+interface SaveFileV1 {
+    timestamp?: number;
     gameState?: GameState;
     financesData?: FinancesData;
     employeesData?: Employee[];
     productsData?: Product[];
     materialsData?: Material[];
     equipmentData?: EquipmentItem[];
-    brandReputation?: Partial<BrandReputationApi>;
-    researchData?: ResearchData;
+    brandReputation?: { reputationScore?: number };
+    researchData?: Partial<ResearchData>;
     activePrescriptions?: Prescription[];
     refillRegistry?: RefillRecord[];
+}
+
+interface SaveFileApi {
+    version: number;
+    serialize: () => SaveFile;
+    // Upgrades any older save to the current version. Throws on something
+    // that isn't a save, or one from a newer game.
+    migrate: (raw: unknown) => SaveFile;
+    // Restores a save (any version) into the live globals.
+    apply: (raw: unknown) => void;
 }
 
 interface HelpersApi {
@@ -345,13 +409,11 @@ interface BrandReputationApi {
 }
 
 // Partial — preload.js (not yet converted) owns the real, larger shape.
-// saveGame's payload is intentionally untyped: it's not quite SavedGameData
-// (equipmentData has isUnlocked() stripped out before it crosses IPC, since
-// functions can't survive structured clone — see electron-integration.ts).
+// loadGame returns whatever JSON is on disk (any save version) or null.
 interface GameApi {
     getNewGameOptions?: () => Promise<unknown>;
-    loadGame?: () => Promise<SavedGameData | null>;
-    saveGame?: (gameData: unknown) => Promise<{ success: boolean } | undefined>;
+    loadGame?: () => Promise<unknown>;
+    saveGame?: (gameData: SaveFile) => Promise<{ success: boolean } | undefined>;
 }
 
 // Partial — preload.js (not yet converted) owns the real, larger shape.
@@ -638,8 +700,8 @@ interface InsuranceClaimsApi {
     ) => InsuranceClaim | false;
     calculateProcessingTime: (insuranceName: string) => number;
     processAllClaims: () => number;
-    processClaims: (insuranceName: string) => number;
     removeClaim: (prescriptionId: string) => boolean;
+    syncPendingTotals: () => void;
     getClaimStats: () => ClaimStats;
     getClaimsForCustomer: (customerId: string) => { pending: InsuranceClaim[]; processed: InsuranceClaim[] };
     init: () => void;
@@ -805,13 +867,14 @@ interface Window {
     toggleGamePause: () => void;
     initializeNewGame: (gameOptions: NewGameOptions) => boolean;
     loadSavedGame: () => Promise<boolean>;
-    applySavedGame: (gameData: SavedGameData) => void;
+    applySavedGame: (gameData: unknown) => void;
+    saveFile: SaveFileApi;
     runFallbackInitialization: () => boolean;
     bootstrapGame: BootstrapApi;
-    // Set by settingsPage.ts's setCustomerFrequency the first time the
-    // frequency dropdown changes.
+    // Settings-page multipliers, saved with the game (SaveSettings).
+    // brandReputation.calcCustomers reads customerFrequencyMultiplier.
     customerFrequencyMultiplier?: number;
-    _originalCalcCustomers?: (hour: number) => number;
+    operatingCostMultiplier?: number;
     // Set by settingsPage.ts's setOperatingCosts the first time it runs, to
     // remember the pre-multiplier overhead value.
     originalOverhead?: number;

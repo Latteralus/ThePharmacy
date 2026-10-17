@@ -66,8 +66,10 @@ test('saving writes a real save file, and loading it restores game state', async
   await page1.waitForSelector('.top-bar', { timeout: 20_000 });
   await page1.waitForSelector('.save-button', { timeout: 20_000 });
 
-  // Make sure the save has at least one transaction (C2 only shows up then).
-  await page1.evaluate(() => {
+  // Make sure the save has at least one transaction (C2 only shows up then),
+  // plus state older saves dropped or reset (C5): a customer in the store,
+  // a custom price, and the game speed.
+  const customerId = await page1.evaluate(() => {
     window.finances.addTransaction({
       date: new Date(window.gameState.currentDate),
       type: 'expense',
@@ -75,6 +77,9 @@ test('saving writes a real save file, and loading it restores game state', async
       amount: 1,
       description: 'e2e test transaction',
     });
+    window.productsData.find((p) => p.id === 'pd001').price = 123.45;
+    window.setGameSpeed(2);
+    return window.customers.generateCustomer().id;
   });
 
   await page1.click('.save-button');
@@ -90,6 +95,14 @@ test('saving writes a real save file, and loading it restores game state', async
   expect(saved.financesData.transactions.length).toBeGreaterThan(0);
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
+  // Only player state for static data (A2)
+  expect(saved.version).toBe(2);
+  expect(saved.products.find((p) => p.id === 'pd001')).toMatchObject({ price: 123.45 });
+  expect(saved.products[0].name).toBeUndefined();
+  expect(saved.productsData).toBeUndefined();
+  expect(saved.customers.map((c) => c.id)).toContain(customerId);
+  expect(saved.tasks.some((t) => t.customerId === customerId)).toBe(true);
+  expect(saved.settings.gameSpeed).toBe(2);
 
   // --- Second launch: load it from the main menu ---
   const app2 = await electron.launch(launchOptions());
@@ -110,7 +123,22 @@ test('saving writes a real save file, and loading it restores game state', async
   await page2.waitForURL(/mode=load/);
   await page2.waitForSelector('.top-bar', { timeout: 20_000 });
 
-  const timeAfterLoad = await page2.evaluate(() => window.gameState.currentDate.getTime());
+  const afterLoad = await page2.evaluate(
+    (id) => ({
+      time: window.gameState.currentDate.getTime(),
+      customerRestored: window.customers.activeCustomers.some((c) => c.id === id),
+      price: window.productsData.find((p) => p.id === 'pd001').price,
+      productName: window.productsData.find((p) => p.id === 'pd001').name,
+      speed: window.getGameSpeed(),
+    }),
+    customerId,
+  );
+  expect(afterLoad.customerRestored).toBe(true);
+  // Custom prices used to be reset to suggested on every load (C5)
+  expect(afterLoad.price).toBe(123.45);
+  expect(typeof afterLoad.productName).toBe('string');
+  expect(afterLoad.speed).toBe(2);
+  const timeAfterLoad = afterLoad.time;
   await page2.waitForTimeout(1500);
 
   const loaded = await page2.evaluate(

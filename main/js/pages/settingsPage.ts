@@ -83,13 +83,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
         optElement.value = String(option.value);
         optElement.textContent = option.label;
 
-        // Set currently selected option
-        if (option.value === window.getGameSpeed()) {
-            optElement.selected = true;
-        } else if (option.value === 1.0) {
-            // Default to normal speed if config not available
-            optElement.selected = true;
-        }
+        optElement.selected = option.value === window.getGameSpeed();
 
         speedSelect.appendChild(optElement);
     });
@@ -155,10 +149,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
         optElement.value = String(option.value);
         optElement.textContent = option.label;
 
-        // Set default selection
-        if (option.value === 1.0) {
-            optElement.selected = true;
-        }
+        optElement.selected = option.value === (window.customerFrequencyMultiplier ?? 1);
 
         customerFreqSelect.appendChild(optElement);
     });
@@ -211,10 +202,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
         optElement.value = String(option.value);
         optElement.textContent = option.label;
 
-        // Set default selection
-        if (option.value === 1.0) {
-            optElement.selected = true;
-        }
+        optElement.selected = option.value === (window.operatingCostMultiplier ?? 1);
 
         costsSelect.appendChild(optElement);
     });
@@ -574,32 +562,9 @@ function skipToNextDay(): boolean {
     return true;
 }
 
-// Set customer frequency multiplier
+// Set customer frequency multiplier (brandReputation.calcCustomers reads it)
 function setCustomerFrequency(multiplier: number): boolean {
-    if (!window.brandReputation) {
-        console.error('Brand reputation module not found');
-        return false;
-    }
-
-    // Store the multiplier in a global variable
     window.customerFrequencyMultiplier = multiplier;
-
-    // Capture the true, unpatched calcCustomers exactly once. Re-wrapping
-    // window.brandReputation.calcCustomers directly (as this used to do)
-    // would wrap whatever the *current* patched version already was,
-    // stacking multipliers every time the dropdown changed instead of
-    // replacing the previous one.
-    if (!window._originalCalcCustomers) {
-        window._originalCalcCustomers = window.brandReputation.calcCustomers;
-    }
-
-    window.brandReputation.calcCustomers = function (hour: number): number {
-        // Both guaranteed set by the two statements immediately above,
-        // every time this replacement runs.
-        const baseCount = window._originalCalcCustomers!.call(this, hour);
-        return Math.floor(baseCount * window.customerFrequencyMultiplier!);
-    };
-
     console.log(`Customer frequency multiplier set to ${multiplier}x`);
     return true;
 }
@@ -611,12 +576,7 @@ function setGameCash(amount: number): boolean {
         return false;
     }
 
-    window.financesData.cash = amount;
-
-    // Update UI if available
-    if (window.updateUI) {
-        window.updateUI('finances');
-    }
+    window.finances.setCash(amount);
 
     console.log(`Cash set to $${amount.toFixed(2)}`);
     return true;
@@ -635,6 +595,7 @@ function setOperatingCosts(multiplier: number): boolean {
     }
 
     // Apply multiplier to original overhead
+    window.operatingCostMultiplier = multiplier;
     window.financesData.overhead = window.originalOverhead * multiplier;
 
     console.log(

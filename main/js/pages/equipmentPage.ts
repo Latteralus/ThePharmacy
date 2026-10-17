@@ -187,12 +187,17 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
     // Function to confirm the purchase
     function confirmPurchase(): void {
         const totalCost = calculateTotalCost();
-        if (window.financesData.cash < totalCost) {
+        const paid = window.finances.transact({
+            type: 'expense',
+            category: 'equipment',
+            amount: totalCost,
+            description: 'Equipment purchase',
+            requireFunds: true,
+        });
+        if (!paid) {
             alert('Insufficient funds to complete the purchase.');
             return;
         }
-
-        window.financesData.cash -= totalCost;
 
         equipmentCards.forEach((entry) => {
             const qty = parseInt(entry.buyQtyInput.value, 10) || 0;

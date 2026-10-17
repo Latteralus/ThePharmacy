@@ -29,6 +29,29 @@ export default tseslint.config(
     },
   },
 
+  // Cash only changes through finances.transact(), which also keeps the
+  // ledger, period totals and categories in step.
+  {
+    files: ['main/**/*.ts'],
+    ignores: ['main/js/data/finances.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          // window.financesData.cash = / += / -=, or a local financesData.cash
+          selector:
+            "AssignmentExpression[left.property.name='cash']:matches([left.object.property.name='financesData'], [left.object.name='financesData'])",
+          message: 'Change cash with window.finances.transact(), not by assigning it.',
+        },
+        {
+          selector:
+            "UpdateExpression[argument.property.name='cash']:matches([argument.object.property.name='financesData'], [argument.object.name='financesData'])",
+          message: 'Change cash with window.finances.transact(), not by assigning it.',
+        },
+      ],
+    },
+  },
+
   // Electron main/preload, configs, and tests: CommonJS on Node.
   {
     files: ['**/*.js'],

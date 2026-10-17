@@ -105,7 +105,6 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
                 other: 0,
             },
             revenueCategories: {
-                prescriptions: 0,
                 copays: 0,
                 insurance: 0,
                 other: 0,
@@ -159,7 +158,11 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             console.log('[gameInitializer] Suburban location: using standard overhead');
         }
 
-        // 5. Make sure game element modules are properly initialized
+        // 5. Starting prices. New games only: a loaded save keeps the
+        // player's prices.
+        window.finances.setToSuggestedPrices();
+
+        // 6. Make sure game element modules are properly initialized
         console.log('[gameInitializer] Ensuring game systems are initialized');
         ensureGameSystemsInitialized();
 
@@ -172,72 +175,11 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
     }
 };
 
-// Restores a save into the live globals. The single load implementation,
-// shared by the main-menu load (loadSavedGame below) and the in-game Ctrl+L
-// load (electron-integration.ts).
-window.applySavedGame = function (gameData: SavedGameData): void {
-    window.gameState = gameData.gameState!;
-    window.financesData = gameData.financesData!;
-    window.employeesData = gameData.employeesData!;
-    window.productsData = gameData.productsData!;
-    window.materialsData = gameData.materialsData!;
-    window.equipmentData = gameData.equipmentData!;
-
-    // researchData (currentLevel + any in-progress research timer) and the
-    // prescription/refill state weren't part of older saves - fall back to
-    // safe defaults rather than leaving these undefined.
-    if (gameData.researchData) {
-        window.researchData = gameData.researchData;
-    }
-    if (window.prescriptions) {
-        window.prescriptions.activePrescriptions = gameData.activePrescriptions || [];
-        window.prescriptions.refillRegistry = gameData.refillRegistry || [];
-    }
-
-    // The save file round-trips through JSON, so Date fields come back as
-    // plain strings - revive every one of them. A transaction date left as a
-    // string makes addTransaction's sort throw, which softlocks end of day.
-    window.gameState.currentDate = new Date(window.gameState.currentDate);
-    if (window.gameState.dateCreated) {
-        window.gameState.dateCreated = new Date(window.gameState.dateCreated);
-    }
-    if (window.financesData && Array.isArray(window.financesData.transactions)) {
-        window.financesData.transactions.forEach((t) => {
-            t.date = new Date(t.date);
-        });
-    }
-    if (Array.isArray(window.employeesData)) {
-        window.employeesData.forEach((emp) => {
-            if (emp.hireDate) emp.hireDate = new Date(emp.hireDate);
-        });
-    }
-
-    // Frame-loop bookkeeping holds performance.now() timestamps from the
-    // session that wrote the save, which mean nothing in this one (a stale
-    // lastSimulationTime freezes or fast-forwards the clock). Zero them so
-    // gameLoop treats its next frame as the first.
-    window.gameState.lastFrameTime = 0;
-    window.gameState.lastSimulationTime = 0;
-    window.gameState.simulationAccumulator = 0;
-    window.gameState.renderInfo = { fps: 0, frameCount: 0, lastFpsUpdate: 0 };
-
-    // equipmentData items normally carry an isUnlocked() method that can't
-    // survive JSON/IPC - re-attach it so equipmentPage's eq.isUnlocked()
-    // calls keep working.
-    if (Array.isArray(window.equipmentData)) {
-        window.equipmentData.forEach((item) => {
-            item.isUnlocked = function (this: EquipmentItem) {
-                return window.researchData.currentLevel >= this.researchLevelRequired;
-            };
-        });
-    }
-
-    // Merge into the existing brandReputation module instead of replacing it,
-    // so its methods (calcCustomers, gainReputation, loseReputation) survive
-    // the load.
-    if (window.brandReputation && gameData.brandReputation) {
-        Object.assign(window.brandReputation, gameData.brandReputation);
-    }
+// Restores a save into the live globals. The single load path, shared by
+// the main-menu load (loadSavedGame below) and the in-game Ctrl+L load
+// (electron-integration.ts). The format itself lives in saveFile.ts.
+window.applySavedGame = function (gameData: unknown): void {
+    window.saveFile.apply(gameData);
 };
 
 window.loadSavedGame = async function (): Promise<boolean> {
@@ -316,15 +258,6 @@ function ensureGameSystemsInitialized(): void {
     if (typeof window.equipmentData === 'undefined') {
         console.error('[gameInitializer] equipmentData is missing!');
         window.equipmentData = [];
-    }
-
-    // Set suggested prices for products
-    if (window.finances && window.finances.setToSuggestedPrices) {
-        console.log('[gameInitializer] Setting suggested product prices');
-        window.finances.setToSuggestedPrices();
-        console.log('[gameInitializer] Product prices initialized');
-    } else {
-        console.warn('[gameInitializer] finances.setToSuggestedPrices not available');
     }
 
     // Initialize insurance claims system
@@ -508,7 +441,7 @@ window.runFallbackInitialization = function (): boolean {
                 profit: { today: 0, thisWeek: 0, thisMonth: 0, lastMonth: 0, total: 0 },
                 insuranceReimbursements: { pending: 0, received: 0, rejected: 0 },
                 expenseCategories: { wages: 0, materials: 0, overhead: 0, equipment: 0, research: 0, other: 0 },
-                revenueCategories: { prescriptions: 0, copays: 0, insurance: 0, other: 0 },
+                revenueCategories: { copays: 0, insurance: 0, other: 0 },
                 targetDailyRevenue: 1000,
                 targetMonthlyRevenue: 30000,
             };

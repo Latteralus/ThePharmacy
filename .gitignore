@@ -75,6 +75,7 @@ main/js/taskManager.js
 main/js/taskAssignment.js
 main/js/timeEvents.js
 main/js/clock.js
+main/js/saveFile.js
 main/js/pages/dashboardPage.js
 main/js/pages/ordersPage.js
 main/js/pages/customersPage.js

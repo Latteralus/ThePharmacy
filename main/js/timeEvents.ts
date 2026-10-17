@@ -84,15 +84,18 @@ window.timeEvents = (function (): TimeEventsApi {
         console.log('[timeEvents] Starting new day');
 
         // Move to next day
+        const previousDate = new Date(gameState.currentDate);
         const day = gameState.currentDate.getDate();
         gameState.currentDate.setDate(day + 1);
         gameState.currentDate.setHours(CONFIG.OPENING_HOUR, 0, 0, 0);
         gameState.dayIndex++;
         gameState.isDayActive = true;
 
-        // Reset some daily counters
+        // Roll over today / this week / this month, and the daily counters
+        if (window.finances && window.finances.startNewDay) {
+            window.finances.startNewDay(previousDate, gameState.currentDate);
+        }
         if (window.financesData) {
-            window.financesData.dailyIncome = 0;
             window.financesData.pendingOrders = 0;
             window.financesData.completedOrders = 0;
         }
@@ -253,23 +256,17 @@ window.timeEvents = (function (): TimeEventsApi {
                         ? window.calculateMaterialCost(mat.id, mat.autoOrderAmount)
                         : mat.cost * mat.autoOrderAmount;
 
-                    if (window.financesData.cash >= cost) {
-                        // Subtract cost & add to inventory
-                        window.financesData.cash -= cost;
+                    const paid = window.finances.transact({
+                        type: 'expense',
+                        category: 'materials',
+                        amount: cost,
+                        description: `Auto-ordered ${mat.autoOrderAmount} units of ${mat.name}`,
+                        requireFunds: true,
+                    });
+                    if (paid) {
                         mat.inventory += mat.autoOrderAmount;
                         totalOrderCost += cost;
                         ordersPlaced++;
-
-                        // Add a transaction record
-                        if (window.finances && window.finances.addTransaction) {
-                            window.finances.addTransaction({
-                                date: new Date(window.gameState.currentDate),
-                                type: 'expense',
-                                category: 'auto-order',
-                                amount: cost,
-                                description: `Auto-ordered ${mat.autoOrderAmount} units of ${mat.name}`,
-                            });
-                        }
 
                         console.log(
                             `[autoOrderCheck] Auto-ordered ${mat.autoOrderAmount} units of ${mat.name} for $${cost.toFixed(2)}`,
@@ -284,15 +281,8 @@ window.timeEvents = (function (): TimeEventsApi {
         });
 
         if (ordersPlaced > 0) {
-            // Update UI to reflect changes
-            window.financesData.dailyIncome -= totalOrderCost;
-
-            if (window.updateUI) {
-                window.updateUI('finances');
-
-                if (window.currentPage === 'inventory' || window.currentPage === 'marketplace') {
-                    window.showPage(window.currentPage); // Refresh the current inventory-related page
-                }
+            if (window.currentPage === 'inventory' || window.currentPage === 'marketplace') {
+                window.showPage(window.currentPage); // Refresh the current inventory-related page
             }
 
             // Emit event for auto-orders
@@ -322,21 +312,17 @@ window.timeEvents = (function (): TimeEventsApi {
             if (eq.autoPurchaseThreshold > 0 && eq.autoPurchaseAmount > 0 && eq.owned < eq.autoPurchaseThreshold) {
                 const cost = eq.cost * eq.autoPurchaseAmount;
 
-                if (window.financesData.cash >= cost) {
-                    window.financesData.cash -= cost;
+                const paid = window.finances.transact({
+                    type: 'expense',
+                    category: 'equipment',
+                    amount: cost,
+                    description: `Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name}`,
+                    requireFunds: true,
+                });
+                if (paid) {
                     eq.owned += eq.autoPurchaseAmount;
                     totalPurchaseCost += cost;
                     purchasesPlaced++;
-
-                    if (window.finances && window.finances.addTransaction) {
-                        window.finances.addTransaction({
-                            date: new Date(window.gameState.currentDate),
-                            type: 'expense',
-                            category: 'auto-purchase-equipment',
-                            amount: cost,
-                            description: `Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name}`,
-                        });
-                    }
 
                     console.log(
                         `[autoPurchaseEquipmentCheck] Auto-purchased ${eq.autoPurchaseAmount} unit(s) of ${eq.name} for $${cost.toFixed(2)}`,
@@ -350,14 +336,8 @@ window.timeEvents = (function (): TimeEventsApi {
         });
 
         if (purchasesPlaced > 0) {
-            window.financesData.dailyIncome -= totalPurchaseCost;
-
-            if (window.updateUI) {
-                window.updateUI('finances');
-
-                if (window.currentPage === 'equipment') {
-                    window.showPage(window.currentPage); // Refresh the equipment page
-                }
+            if (window.currentPage === 'equipment') {
+                window.showPage(window.currentPage); // Refresh the equipment page
             }
 
             events.emit('autoEquipmentPurchased', {

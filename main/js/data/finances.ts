@@ -46,7 +46,6 @@ window.financesData = {
         other: 0,
     },
     revenueCategories: {
-        prescriptions: 0,
         copays: 0,
         insurance: 0,
         other: 0,
@@ -55,20 +54,70 @@ window.financesData = {
     targetMonthlyRevenue: 30000, // Default target
 };
 
+// The ledger. transact() is the only function that changes cash. It also
+// updates the period totals, the category buckets and the transaction list,
+// so they can't drift apart. An ESLint rule flags `cash` writes anywhere
+// else. Amounts are always positive; `type` says which way the money moves.
+function bucketFor<T extends object>(buckets: T, category: string): keyof T {
+    return (category in buckets ? category : 'other') as keyof T;
+}
+
+function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
+    periods.today += amount;
+    periods.thisWeek += amount;
+    periods.thisMonth += amount;
+    periods.total += amount;
+}
+
 window.finances = {
-    // Apply daily costs (called at end of day)
+    transact(entry) {
+        const data = window.financesData;
+        const amount = Number(entry.amount);
+        if (!Number.isFinite(amount) || amount < 0) {
+            console.error(`[finances.js] Invalid transaction amount: ${entry.amount}`);
+            return false;
+        }
+        if (entry.type === 'expense' && entry.requireFunds && data.cash < amount) {
+            console.warn(`[finances.js] Insufficient funds for ${entry.description}: $${amount.toFixed(2)}`);
+            return false;
+        }
+        if (amount === 0) return true;
+
+        if (entry.type === 'income') {
+            data.cash += amount;
+            data.dailyIncome += amount;
+            addToPeriods(data.revenue, amount);
+            data.revenueCategories[bucketFor(data.revenueCategories, entry.category)] += amount;
+        } else {
+            data.cash -= amount;
+            addToPeriods(data.expenses, amount);
+            data.expenseCategories[bucketFor(data.expenseCategories, entry.category)] += amount;
+        }
+
+        this.addTransaction({
+            date: new Date(window.gameState.currentDate),
+            type: entry.type,
+            category: entry.category,
+            amount,
+            description: entry.description,
+            customerId: entry.customerId,
+            prescriptionId: entry.prescriptionId,
+        });
+        this.updateProfitMetrics();
+        window.updateUI('finances');
+        return true;
+    },
+
+    // Apply daily costs (called at end of day). Wages and overhead are owed
+    // whether or not there's cash for them, so they can take cash negative.
     applyDailyCosts() {
         console.log('[finances.js] Applying daily costs...');
 
-        // 1) Sum employee daily wages
         let totalWages = 0;
         window.employeesData.forEach((emp) => {
             const dailyPay = emp.salary / 365;
             totalWages += dailyPay;
-
-            // Add wage transaction
-            window.finances.addTransaction({
-                date: new Date(window.gameState.currentDate),
+            this.transact({
                 type: 'expense',
                 category: 'wages',
                 amount: dailyPay,
@@ -76,42 +125,16 @@ window.finances = {
             });
         });
 
-        // Update expense category
-        window.financesData.expenseCategories.wages += totalWages;
-
-        // 2) Overhead
         const overheadCost = window.financesData.overhead;
-
-        // Update expense category
-        window.financesData.expenseCategories.overhead += overheadCost;
-
-        // Add overhead transaction
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
+        this.transact({
             type: 'expense',
             category: 'overhead',
             amount: overheadCost,
             description: 'Daily overhead costs',
         });
 
-        // 3) Subtract from cash
-        const totalCost = totalWages + overheadCost;
-        window.financesData.cash -= totalCost;
-
-        // 4) Update expense tracking
-        window.financesData.expenses.today += totalCost;
-        window.financesData.expenses.thisWeek += totalCost;
-        window.financesData.expenses.thisMonth += totalCost;
-        window.financesData.expenses.total += totalCost;
-
-        // 5) Process insurance claims at the end of the day
+        // Pay out claims that finished processing since the last hourly check
         this.processInsuranceClaims();
-
-        // 6) Calculate profit metrics
-        this.updateProfitMetrics();
-
-        // 7) Update UI
-        window.updateUI('finances');
 
         console.log(
             `[finances.js] Daily costs applied: Wages $${totalWages.toFixed(2)}, Overhead $${overheadCost.toFixed(2)}`,
@@ -145,25 +168,9 @@ window.finances = {
         const copayPercentage = isCovered ? customer.insurance.copayPercentage : 100;
         const copay = price * (copayPercentage / 100);
 
-        // Deduct copay from customer
-        window.financesData.cash += copay;
-        window.financesData.dailyIncome += copay;
-
-        // Update revenue categories
-        window.financesData.revenueCategories.copays += copay;
-        window.financesData.revenueCategories.prescriptions += price;
-
-        // Update revenue metrics
-        window.financesData.revenue.today += copay;
-        window.financesData.revenue.thisWeek += copay;
-        window.financesData.revenue.thisMonth += copay;
-        window.financesData.revenue.total += copay;
-
-        // Add copay transaction
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
+        this.transact({
             type: 'income',
-            category: 'copay',
+            category: 'copays',
             amount: copay,
             description: isCovered
                 ? `Copay for ${prescription.productName} (Prescription ID: ${prescription.id})`
@@ -172,28 +179,12 @@ window.finances = {
             prescriptionId: prescription.id,
         });
 
-        // If the product isn't on the customer's formulary, they've already
-        // paid the full price above as "copay" - there's nothing left for
-        // the insurer to owe, so skip filing a claim entirely.
-        if (isCovered) {
-            // Add insurance claim
+        // The insurer owes the rest. It isn't income until the claim is paid
+        // (insuranceClaims.processAllClaims); until then it only counts
+        // toward the pending totals. Self-pay and off-formulary sales owe
+        // nothing, so they file no claim.
+        if (price - copay > 0) {
             window.insuranceClaims.addClaim(customerId, prescriptionId, price, copay);
-
-            // Update pending insurance income
-            window.financesData.pendingInsuranceIncome += price - copay;
-            window.financesData.insuranceReimbursements.pending += price - copay;
-
-            // Add insurance income transaction (pending)
-            window.finances.addTransaction({
-                date: new Date(window.gameState.currentDate),
-                type: 'income',
-                category: 'insurance',
-                amount: price - copay,
-                description: `Pending insurance claim for ${prescription.productName} (Prescription ID: ${prescription.id})`,
-                customerId: customerId,
-                prescriptionId: prescription.id,
-                pending: true,
-            });
         }
 
         // Update prescription status to completed
@@ -205,121 +196,46 @@ window.finances = {
             `[finances.js] Order completed for customer ${customerId}. Copay: $${copay.toFixed(2)}, Price: $${price.toFixed(2)}`,
         );
 
-        // Update UI
-        window.updateUI('finances');
-
-        // Calculate new profit metrics
-        this.updateProfitMetrics();
-
         return { copay, price };
     },
 
-    // Process insurance claims and update finances
+    // Pay out insurance claims that have finished processing. The payments
+    // go through transact() inside processAllClaims.
     processInsuranceClaims() {
-        const totalClaimAmount = window.insuranceClaims.processAllClaims();
-
-        // When claims are processed, update revenue metrics
-        if (totalClaimAmount > 0) {
-            window.financesData.revenue.today += totalClaimAmount;
-            window.financesData.revenue.thisWeek += totalClaimAmount;
-            window.financesData.revenue.thisMonth += totalClaimAmount;
-            window.financesData.revenue.total += totalClaimAmount;
-
-            // Update insurance categories
-            window.financesData.revenueCategories.insurance += totalClaimAmount;
-            window.financesData.insuranceReimbursements.received += totalClaimAmount;
-            window.financesData.insuranceReimbursements.pending -= totalClaimAmount;
-
-            console.log(`[finances.js] Processed insurance claims: $${totalClaimAmount.toFixed(2)}`);
-        }
-
-        // Update pendingInsuranceIncome (all claims have been processed)
-        window.financesData.pendingInsuranceIncome = 0;
-
-        // Update UI
-        window.updateUI('finances');
+        window.insuranceClaims.processAllClaims();
     },
 
-    // Add generic income (e.g., from a cash sale without insurance)
     addIncome(amount, category = 'other', description = 'Other income') {
-        window.financesData.cash += amount;
-        window.financesData.dailyIncome += amount;
-
-        // Update revenue metrics
-        window.financesData.revenue.today += amount;
-        window.financesData.revenue.thisWeek += amount;
-        window.financesData.revenue.thisMonth += amount;
-        window.financesData.revenue.total += amount;
-
-        // Update revenue category
-        const revenueKey = category as keyof RevenueCategories;
-        if (window.financesData.revenueCategories[revenueKey] !== undefined) {
-            window.financesData.revenueCategories[revenueKey] += amount;
-        } else {
-            window.financesData.revenueCategories.other += amount;
-        }
-
-        // Add income transaction
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
-            type: 'income',
-            category: category,
-            amount: amount,
-            description: description,
-        });
-
-        // Update profit metrics
-        this.updateProfitMetrics();
-
-        // Update UI
-        window.updateUI('finances');
-
-        console.log(`[finances.js] Added income: $${amount.toFixed(2)} (${category})`);
+        this.transact({ type: 'income', amount, category, description });
     },
 
-    // Add an expense
+    // Refuses (returns false) if there isn't enough cash.
     addExpense(amount, category = 'other', description = 'Other expense') {
-        if (window.financesData.cash < amount) {
-            console.error(`[finances.js] Insufficient funds for expense: $${amount.toFixed(2)}`);
-            return false;
-        }
-
-        window.financesData.cash -= amount;
-
-        // Update expense metrics
-        window.financesData.expenses.today += amount;
-        window.financesData.expenses.thisWeek += amount;
-        window.financesData.expenses.thisMonth += amount;
-        window.financesData.expenses.total += amount;
-
-        // Update expense category
-        const expenseKey = category as keyof ExpenseCategories;
-        if (window.financesData.expenseCategories[expenseKey] !== undefined) {
-            window.financesData.expenseCategories[expenseKey] += amount;
-        } else {
-            window.financesData.expenseCategories.other += amount;
-        }
-
-        // Add expense transaction
-        window.finances.addTransaction({
-            date: new Date(window.gameState.currentDate),
-            type: 'expense',
-            category: category,
-            amount: amount,
-            description: description,
-        });
-
-        // Update profit metrics
-        this.updateProfitMetrics();
-
-        // Update UI
-        window.updateUI('finances');
-
-        console.log(`[finances.js] Added expense: $${amount.toFixed(2)} (${category})`);
-        return true;
+        return this.transact({ type: 'expense', amount, category, description, requireFunds: true });
     },
 
-    // Add a new transaction to the transactions array
+    // Debug "Set Cash": books the difference as an adjustment.
+    setCash(amount) {
+        const delta = amount - window.financesData.cash;
+        this.transact({
+            type: delta >= 0 ? 'income' : 'expense',
+            category: 'other',
+            amount: Math.abs(delta),
+            description: `Cash adjusted to $${amount.toFixed(2)}`,
+        });
+    },
+
+    // Rolls the period totals over when a new day starts: "today" every day,
+    // "this week" on Sundays, "this month" on the 1st.
+    startNewDay(previousDate, newDate) {
+        this.resetDailyStats();
+        if (newDate.getDay() === 0) this.startNewWeek();
+        if (newDate.getMonth() !== previousDate.getMonth() || newDate.getFullYear() !== previousDate.getFullYear()) {
+            this.startNewMonth();
+        }
+    },
+
+    // Appends to the transaction log only. Use transact() to move money.
     addTransaction(transaction) {
         // Make sure the transaction has a unique ID
         if (!transaction.id) {
