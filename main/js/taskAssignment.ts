@@ -60,8 +60,8 @@ window.taskAssignment = (function(): TaskAssignmentApi {
         employee.currentTaskId = taskId;
         syncPrescriptionAssignedEmployee(task, employeeId);
 
-        // Set a timestamp for when the task was assigned
-        task.assignedAt = Date.now();
+        // Set a timestamp (game time) for when the task was assigned
+        task.assignedAt = window.clock.now();
 
         console.log(`[assignTaskToEmployee] Successfully assigned task ${taskId} (${task.type}) to ${employee.firstName} ${employee.lastName} (${employee.role})`);
         return true;
@@ -574,17 +574,5 @@ window.taskAssignment = (function(): TaskAssignmentApi {
     };
 })();
 
-// Set up periodic checking for role normalization
-// This ensures that even if employees are added dynamically, their roles will be normalized
-setInterval(() => {
-    if (window.taskAssignment && window.taskAssignment.normalizeEmployeeRoles) {
-        window.taskAssignment.normalizeEmployeeRoles();
-    }
-}, 60000); // Check every minute
-
-// Normalize roles on initial load
-setTimeout(() => {
-    if (window.taskAssignment && window.taskAssignment.normalizeEmployeeRoles) {
-        window.taskAssignment.normalizeEmployeeRoles();
-    }
-}, 1000);
+// Roles are normalized at the start of every autoAssignTasks call, so newly
+// hired or loaded employees are covered without a separate timer.

@@ -7,21 +7,12 @@ window.timeEvents = (function(): TimeEventsApi {
     // Configuration settings
     const CONFIG: TimeEventsConfig = {
         OPENING_HOUR: 7,               // Day starts at 7 AM
-        CLOSING_HOUR: 22,              // Day ends at 10 PM
-        TASK_UPDATE_INTERVAL: 1,       // Update tasks every minute of game time
-        CUSTOMER_SPAWN_CHECK_INTERVAL: 60000, // Check for new customers every minute
-        AUTO_TASK_ASSIGN_INTERVAL: 300000, // Auto-assign tasks every 5 minutes
-        INVENTORY_CHECK_INTERVAL: 900000 // Check inventory every 15 minutes
+        CLOSING_HOUR: 22               // Day ends at 10 PM
     };
 
-    // Tracking variables for various timers
-    const timers: Record<string, ReturnType<typeof setInterval> | null> = {
-        customerSpawn: null,
-        taskAssign: null,
-        inventoryCheck: null,
-        customerCheck: null,
-        insuranceProcessing: null
-    };
+    // Game minutes between the customers of one hourly batch (was 500 ms of
+    // real time, which is half a game minute at 1x).
+    const CUSTOMER_ARRIVAL_SPACING_MINUTES = 0.5;
 
     // Event system for time-related events
     const events = {
@@ -60,10 +51,11 @@ window.timeEvents = (function(): TimeEventsApi {
     function endOfDay(gameState: GameState): void {
         console.log("[timeEvents] End of day triggered");
 
-        // Clear all interval timers
-        Object.values(timers).forEach(timer => {
-            if (timer) clearInterval(timer);
-        });
+        // The store is closed: anyone still waiting goes home now rather
+        // than sitting in the store overnight.
+        if (window.customers && window.customers.sendRemainingCustomersHome) {
+            window.customers.sendRemainingCustomersHome();
+        }
 
         // Emit the end-of-day event
         events.emit('endOfDay', { gameState });
@@ -117,7 +109,8 @@ window.timeEvents = (function(): TimeEventsApi {
     }
 
     // ---------------------------------------------------------
-    // Start day systems - everything that runs on intervals
+    // Start-of-day work. Recurring work runs from hourlyCheck or the game
+    // clock, which only advance while the day is active.
     // ---------------------------------------------------------
     function startDaySystems(gameState: GameState): void {
         // Auto-assign any pending tasks right at the start of day
@@ -137,21 +130,6 @@ window.timeEvents = (function(): TimeEventsApi {
         if (window.research && window.research.checkResearchCompletion) {
             window.research.checkResearchCompletion(gameState);
         }
-
-        // Start the customer spawn timer
-        startCustomerSpawnTimer(gameState);
-
-        // Start auto task assignment timer
-        startTaskAssignmentTimer();
-
-        // Start inventory check timer
-        startInventoryCheckTimer();
-
-        // Start customer patience check timer
-        startCustomerCheckTimer();
-
-        // Start insurance processing timer
-        startInsuranceProcessingTimer();
     }
 
     // ---------------------------------------------------------
@@ -176,138 +154,34 @@ window.timeEvents = (function(): TimeEventsApi {
     function hourlyCheck(gameState: GameState, hour: number): void {
         console.log(`[timeEvents] Hourly check for hour ${hour}`);
 
-        try {
-            // Check for auto-ordering materials
-            autoOrderCheck();
-
-            // Check for auto-purchasing equipment
-            autoPurchaseEquipmentCheck();
-
-            // Every 3 hours, do inventory check and create production tasks
-            if (hour % 3 === 0) {
-                if (window.production && window.production.checkAndCreateCompoundTasks) {
-                    window.production.checkAndCreateCompoundTasks();
-                }
-            }
-
-            // Emit the hourly event
-            events.emit('hourlyCheck', { gameState, hour });
-        } catch (error) {
-            console.error("[timeEvents] Error in hourlyCheck:", error);
-        }
-    }
-
-    // ---------------------------------------------------------
-    // Timer function for spawning customers
-    // ---------------------------------------------------------
-    function startCustomerSpawnTimer(gameState: GameState): void {
-        // Clear any existing timer
-        if (timers.customerSpawn) {
-            clearInterval(timers.customerSpawn);
-        }
-
-        // Start a new timer
-        timers.customerSpawn = setInterval(() => {
+        // Each step is isolated, so one failing (say, auto-ordering) doesn't
+        // also cancel this hour's customers.
+        function step(name: string, fn: () => void): void {
             try {
-                // Skip if the day isn't active
-                if (!gameState.isDayActive) return;
-
-                // Get current hour
-                const hour = gameState.currentDate.getHours();
-
-                // Skip if outside business hours
-                if (hour < CONFIG.OPENING_HOUR || hour >= CONFIG.CLOSING_HOUR) return;
-
-                // Generate customers based on current hour
-                spawnCustomersForHour(hour);
+                fn();
             } catch (error) {
-                console.error("[timeEvents] Error in customer spawn timer:", error);
+                console.error(`[timeEvents] Error in hourlyCheck (${name}):`, error);
             }
-        }, CONFIG.CUSTOMER_SPAWN_CHECK_INTERVAL);
-    }
-
-    // ---------------------------------------------------------
-    // Timer function for auto task assignment
-    // ---------------------------------------------------------
-    function startTaskAssignmentTimer(): void {
-        // Clear any existing timer
-        if (timers.taskAssign) {
-            clearInterval(timers.taskAssign);
         }
 
-        // Start a new timer
-        timers.taskAssign = setInterval(() => {
-            try {
-                if (window.taskAssignment && window.taskAssignment.autoAssignTasks) {
-                    window.taskAssignment.autoAssignTasks();
-                }
-            } catch (error) {
-                console.error("[timeEvents] Error in task assignment timer:", error);
-            }
-        }, CONFIG.AUTO_TASK_ASSIGN_INTERVAL);
-    }
+        step('auto-order', autoOrderCheck);
+        step('auto-purchase equipment', autoPurchaseEquipmentCheck);
 
-    // ---------------------------------------------------------
-    // Timer function for inventory checks
-    // ---------------------------------------------------------
-    function startInventoryCheckTimer(): void {
-        // Clear any existing timer
-        if (timers.inventoryCheck) {
-            clearInterval(timers.inventoryCheck);
+        // Restock anything below its max inventory
+        step('restock', () => window.production?.checkAndCreateCompoundTasks?.());
+
+        // Pay out insurance claims that have finished processing
+        step('insurance', () => window.insuranceClaims?.processAllClaims?.());
+
+        // This hour's customers
+        if (hour >= CONFIG.OPENING_HOUR && hour < CONFIG.CLOSING_HOUR) {
+            step('customers', () => spawnCustomersForHour(hour));
         }
 
-        // Start a new timer
-        timers.inventoryCheck = setInterval(() => {
-            try {
-                if (window.production && window.production.checkAndCreateCompoundTasks) {
-                    window.production.checkAndCreateCompoundTasks();
-                }
-            } catch (error) {
-                console.error("[timeEvents] Error in inventory check timer:", error);
-            }
-        }, CONFIG.INVENTORY_CHECK_INTERVAL);
-    }
+        // Safety net for anything event-driven assignment missed
+        step('auto-assign', () => window.taskAssignment?.autoAssignTasks?.());
 
-    // ---------------------------------------------------------
-    // Timer function for checking customers (patience, etc)
-    // ---------------------------------------------------------
-    function startCustomerCheckTimer(): void {
-        // Clear any existing timer
-        if (timers.customerCheck) {
-            clearInterval(timers.customerCheck);
-        }
-
-        // Start a new timer
-        timers.customerCheck = setInterval(() => {
-            try {
-                if (window.customers && window.customers.detectAndFixStuckCustomers) {
-                    window.customers.detectAndFixStuckCustomers();
-                }
-            } catch (error) {
-                console.error("[timeEvents] Error in customer check timer:", error);
-            }
-        }, 2 * 60 * 1000); // Every 2 minutes
-    }
-
-    // ---------------------------------------------------------
-    // Timer function for processing insurance claims
-    // ---------------------------------------------------------
-    function startInsuranceProcessingTimer(): void {
-        // Clear any existing timer
-        if (timers.insuranceProcessing) {
-            clearInterval(timers.insuranceProcessing);
-        }
-
-        // Start a new timer
-        timers.insuranceProcessing = setInterval(() => {
-            try {
-                if (window.insuranceClaims && window.insuranceClaims.processAllClaims) {
-                    window.insuranceClaims.processAllClaims();
-                }
-            } catch (error) {
-                console.error("[timeEvents] Error in insurance processing timer:", error);
-            }
-        }, 30 * 60 * 1000); // Every 30 minutes
+        events.emit('hourlyCheck', { gameState, hour });
     }
 
     // ---------------------------------------------------------
@@ -327,11 +201,10 @@ window.timeEvents = (function(): TimeEventsApi {
         console.log(`[timeEvents] Spawning ${count} customers for hour ${hour}`);
 
         for (let i = 0; i < count; i++) {
-            // Add a small random delay between customer spawns
-            // to prevent all customers arriving at exactly the same time
-            setTimeout(() => {
+            // Space the arrivals out so they don't all walk in at once
+            window.clock.after(i * CUSTOMER_ARRIVAL_SPACING_MINUTES, () => {
                 window.customers.generateCustomer();
-            }, i * 500); // 500ms between each customer
+            });
         }
     }
 

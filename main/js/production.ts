@@ -172,11 +172,9 @@ window.production = (function(): ProductionApi {
 
     // Initialize the production module
     function init(): void {
-        // Perform an initial check and creation of compound tasks when the game starts
+        // Perform an initial check and creation of compound tasks when the game starts.
+        // After that, timeEvents' hourlyCheck re-checks every game hour.
         checkAndCreateCompoundTasks();
-
-        // Set an interval to periodically check and create compound tasks
-        setInterval(checkAndCreateCompoundTasks, 60000); // Check every minute, for example
 
         console.log("[production.js] Production system initialized with 50% reduced compounding times");
     }

@@ -3,6 +3,7 @@
 window.customers = {
     activeCustomers: [],
 
+    // Patience is in game minutes (at 1x, 1 real second = 1 game minute).
     customerTypes: {
         "Normal": {
             patience: 180,  // Increased patience
@@ -46,11 +47,10 @@ window.customers = {
             insurance: insurance,
             prescriptionId: null,
             patience: this.customerTypes[customerType].patience,
-            timer: null,
             firstName: isReturning && refillRecord ? refillRecord.customerFirstName : window.getRandomFirstName(),
             lastName: isReturning && refillRecord ? refillRecord.customerLastName : window.getRandomLastName(),
             mood: baseMood,
-            lastStateChange: Date.now(), // Track when state last changed
+            lastStateChange: window.clock.now(), // Track when state last changed
             isReturning: isReturning
         };
 
@@ -63,9 +63,6 @@ window.customers = {
             ? window.prescriptions.generateRefillPrescription(newCustomer.id, window.prescriptions.consumeRefillRecord(refillRecord.id)!)
             : window.prescriptions.generatePrescription(newCustomer.id);
         this.assignPrescription(newCustomer.id, prescriptionId);
-
-        // Start the customer's patience timer
-        this.startCustomerTimer(newCustomer.id);
 
         // Create a "customerInteraction" task (Cashier) to check in
         const checkInTask: Task = {
@@ -105,7 +102,7 @@ window.customers = {
         if (customer) {
             const oldStatus = customer.status;
             customer.status = newStatus;
-            customer.lastStateChange = Date.now();
+            customer.lastStateChange = window.clock.now();
 
             console.log(`[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) status changed: ${oldStatus} -> ${newStatus}`);
 
@@ -115,7 +112,7 @@ window.customers = {
             }
 
             // Extend patience when making progress
-            this.extendPatience(customerId, 30); // Add 30 seconds of patience when status changes
+            this.extendPatience(customerId, 30); // Add 30 minutes of patience when status changes
 
             // Give a mood boost when customer's status changes positively
             this.updateCustomerMood(customerId, 1);
@@ -136,17 +133,17 @@ window.customers = {
     },
 
     // Add time to the customer's patience
-    extendPatience(customerId, secondsToAdd) {
+    extendPatience(customerId, minutesToAdd) {
         const customer = this.activeCustomers.find(c => c.id === customerId);
         if (customer) {
-            customer.patience += secondsToAdd;
-            console.log(`[customers.js] Extended customer ${customerId}'s patience by ${secondsToAdd} seconds to ${customer.patience}`);
+            customer.patience += minutesToAdd;
+            console.log(`[customers.js] Extended customer ${customerId}'s patience by ${minutesToAdd} minutes to ${customer.patience}`);
         }
     },
 
     // Decrease patience faster for customers in certain states
     adjustPatienceDecayRate(customer) {
-        // Default decay is 1 second per second
+        // Default decay is 1 per game minute
         let decayRate = 1;
 
         // Customers waiting for consultation get more impatient
@@ -177,11 +174,6 @@ window.customers = {
         if (customerIndex > -1) {
             const customer = this.activeCustomers[customerIndex];
             console.log(`[customers.js] Customer ${customerId} (${customer.firstName} ${customer.lastName}) is leaving, status: ${customer.status}`);
-
-            // Clear the customer's timer
-            if (customer.timer !== null) {
-                clearInterval(customer.timer);
-            }
 
             // Remove customer from active list
             this.activeCustomers.splice(customerIndex, 1);
@@ -221,34 +213,22 @@ window.customers = {
         }
     },
 
-    startCustomerTimer(customerId) {
-        const customer = this.activeCustomers.find(c => c.id === customerId);
-        if (!customer) {
-            console.error(`[customers.js] Cannot start timer: customer ${customerId} not found`);
-            return;
-        }
+    // Runs once per game minute from the game clock (see the bottom of this
+    // file), so pause and game speed apply to patience like everything else.
+    updatePatience() {
+        const now = window.clock.now();
 
-        // Clear any existing timer
-        if (customer.timer !== null) {
-            clearInterval(customer.timer);
-        }
+        // Iterate a copy: customerLeaves splices activeCustomers.
+        [...this.activeCustomers].forEach(customer => {
+            customer.patience -= this.adjustPatienceDecayRate(customer);
 
-        customer.timer = setInterval(() => {
-            // Get the decay rate based on customer state
-            const decayRate = this.adjustPatienceDecayRate(customer);
-
-            // Reduce patience at the calculated rate
-            customer.patience -= decayRate;
-
-            // Also slowly reduce mood while waiting
-            if (Date.now() - customer.lastStateChange > 60000) { // If over a minute in current state
-                // Occasionally reduce mood (1 in 20 chance per second)
+            // Mood slowly drops once they've been in one state for an hour
+            if (now - customer.lastStateChange > 60 * 60 * 1000) {
                 if (Math.random() < 0.05) {
                     this.updateCustomerMood(customer.id, -0.1);
                 }
             }
 
-            // Check if the customer has run out of patience
             if (customer.patience <= 0) {
                 console.log(`[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has run out of patience and is leaving`);
 
@@ -257,7 +237,16 @@ window.customers = {
 
                 this.customerLeaves(customer.id);
             }
-        }, 1000); // Check every second
+        });
+    },
+
+    // Closing time: everyone still in the store leaves. They count as
+    // unserved (customerLeaves applies the usual reputation hit), but not as
+    // having run out of patience.
+    sendRemainingCustomersHome() {
+        if (this.activeCustomers.length === 0) return;
+        console.log(`[customers.js] Closing time - sending ${this.activeCustomers.length} remaining customers home`);
+        [...this.activeCustomers].forEach(customer => this.customerLeaves(customer.id));
     },
 
     // Determines effect on reputation when a customer leaves
@@ -341,15 +330,16 @@ window.customers = {
     detectAndFixStuckCustomers() {
         console.log(`[customers.js] Checking for stuck customers...`);
 
-        const now = Date.now();
-        const fiveMinutesMs = 5 * 60 * 1000;
+        const now = window.clock.now();
+        // 5 game hours (the old threshold was 5 real minutes, the same at 1x)
+        const stuckThresholdMs = 5 * 60 * 60 * 1000;
 
         this.activeCustomers.forEach(customer => {
             // How long has the customer been in their current state?
             const timeInCurrentState = now - customer.lastStateChange;
 
             // If stuck in a state for over 5 minutes, take action
-            if (timeInCurrentState > fiveMinutesMs) {
+            if (timeInCurrentState > stuckThresholdMs) {
                 console.warn(`[customers.js] Customer ${customer.id} (${customer.firstName} ${customer.lastName}) appears stuck in state "${customer.status}" for ${Math.floor(timeInCurrentState/60000)} minutes`);
 
                 // Check if the customer has tasks
@@ -425,4 +415,6 @@ window.customers = {
 };
 
 // Stuck-customer detection runs as part of taskManager.js's single
-// integrity-check timer, not on its own interval here.
+// integrity-check job, not on its own interval here.
+
+window.clock.every(1, () => window.customers.updatePatience());

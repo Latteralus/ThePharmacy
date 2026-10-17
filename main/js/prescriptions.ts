@@ -119,7 +119,7 @@ window.prescriptions = {
         console.log(`[prescriptions.js] Selected product: ${product.name} (${productId})`);
 
         const newPrescription: Prescription = {
-            id: `pres-${Date.now()}`,
+            id: `pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             customerId: customerId,
             productId: productId,
             productName: product.name,
@@ -130,7 +130,7 @@ window.prescriptions = {
             doctorName: window.generateDoctorName(),
             refillsAllowed: Math.floor(Math.random() * 3), // 0-2 refills
             assignedEmployeeId: null,
-            createdAt: Date.now()
+            createdAt: window.clock.now()
         };
         this.activePrescriptions.push(newPrescription);
 
@@ -158,7 +158,7 @@ window.prescriptions = {
         }
 
         const newPrescription: Prescription = {
-            id: `pres-${Date.now()}`,
+            id: `pres-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             customerId: customerId,
             productId: record.productId,
             productName: record.productName,
@@ -169,7 +169,7 @@ window.prescriptions = {
             doctorName: record.doctorName,
             refillsAllowed: Math.max(0, record.refillsAvailable - 1),
             assignedEmployeeId: null,
-            createdAt: Date.now(),
+            createdAt: window.clock.now(),
             isRefill: true
         };
         this.activePrescriptions.push(newPrescription);

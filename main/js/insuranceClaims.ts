@@ -316,9 +316,6 @@ window.insuranceClaims = {
             };
         }
 
-        // Process claims automatically every hour
-        setInterval(() => {
-            this.processAllClaims();
-        }, 60 * 60 * 1000 / 24); // Every simulation hour
+        // Claims are processed from timeEvents' hourlyCheck, on game time.
     }
 };

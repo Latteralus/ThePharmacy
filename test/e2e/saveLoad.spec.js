@@ -29,6 +29,19 @@ function launchOptions() {
   return { executablePath: require('electron'), args: [APP_DIR], env };
 }
 
+// Unpackaged runs auto-open DevTools docked beside the page (on
+// 'ready-to-show'), which narrows it enough to push the top bar's Save
+// button off-screen. Wait for it to open, then close it.
+async function closeDevTools(app) {
+  await app.evaluate(async ({ BrowserWindow }) => {
+    const win = BrowserWindow.getAllWindows()[0];
+    for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    win.webContents.closeDevTools();
+  });
+}
+
 test.beforeEach(() => {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'thepharmacy-e2e-'));
   savesDir = path.join(userDataDir, 'saves');
@@ -42,6 +55,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // --- First launch: start a game, save it ---
   const app1 = await electron.launch(launchOptions());
   const page1 = await app1.firstWindow();
+  await closeDevTools(app1);
 
   await page1.waitForSelector('#newGameBtn');
   await page1.click('#newGameBtn');
@@ -80,6 +94,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // --- Second launch: load it from the main menu ---
   const app2 = await electron.launch(launchOptions());
   const page2 = await app2.firstWindow();
+  await closeDevTools(app2);
 
   const errors = [];
   page2.on('pageerror', (err) => errors.push(err.message));

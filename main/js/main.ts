@@ -142,6 +142,11 @@ function updateGameTime(msElapsed: number): void {
                 console.error("[main] Error in minuteCheck event:", error);
             }
         }
+
+        // Run whatever is due on the game clock (customer patience,
+        // integrity checks, autosave, staggered arrivals). Not run once the
+        // day has ended, so nothing fires during the end-of-day summary.
+        window.clock.tick();
     }
 }
 

@@ -48,14 +48,14 @@ window.taskManager = (function(): TaskManagerApi {
         trackTask(taskId: string, currentProgress: number, minutes: number): void {
             if (this.lastUpdates[taskId] === undefined) {
                 // First time tracking this task
-                this.lastUpdates[taskId] = Date.now();
+                this.lastUpdates[taskId] = window.clock.now();
                 this.expectedProgress[taskId] = currentProgress;
             } else {
                 // Calculate expected progress based on minutes
                 this.expectedProgress[taskId] += minutes;
 
                 // Update timestamp
-                this.lastUpdates[taskId] = Date.now();
+                this.lastUpdates[taskId] = window.clock.now();
             }
         },
 
@@ -74,7 +74,7 @@ window.taskManager = (function(): TaskManagerApi {
                     expected: this.expectedProgress[taskId],
                     actual: actualProgress,
                     difference,
-                    timestamp: Date.now()
+                    timestamp: window.clock.now()
                 };
 
                 this.anomalies.push(anomaly);
@@ -124,12 +124,12 @@ window.taskManager = (function(): TaskManagerApi {
             task.status = 'pending';
         }
 
-        // Store task creation time for age-based prioritization
-        task.createdAt = Date.now();
+        // Store task creation time (game time) for age-based prioritization
+        task.createdAt = window.clock.now();
 
         // Add last update time for animations
-        task.lastUpdateTime = Date.now();
-        task.lastProgressTime = Date.now();
+        task.lastUpdateTime = task.createdAt;
+        task.lastProgressTime = task.createdAt;
 
         // Add the task to the array
         tasks.push(task);
@@ -187,8 +187,8 @@ window.taskManager = (function(): TaskManagerApi {
         // Track tasks to finalize after the loop
         const tasksToFinalize: Task[] = [];
 
-        // Current timestamp for update tracking
-        const now = Date.now();
+        // Current game time for update tracking
+        const now = window.clock.now();
 
         // Process each task in the array
         for (let i = 0; i < tasks.length; i++) {
@@ -673,14 +673,12 @@ window.taskManager = (function(): TaskManagerApi {
 
 // Set up run-time verification of task integrity
 (function() {
-    // Run task integrity check on startup
-    setTimeout(() => {
-        console.log("[taskManager.js] Running initial task system integrity check");
-        runTaskSystemIntegrityCheck();
-    }, 2000);
-
-    // Run periodic task integrity checks
-    setInterval(runTaskSystemIntegrityCheck, 60000); // Check every minute
+    // Once as soon as the game is running (frees employees whose loaded
+    // currentTaskId points at a task that wasn't saved), then every game
+    // hour (was every real minute - the same at 1x). On the game clock, so
+    // it doesn't run while paused or during the end-of-day summary.
+    window.clock.after(0, runTaskSystemIntegrityCheck);
+    window.clock.every(60, runTaskSystemIntegrityCheck);
 
     // Function to thoroughly check and fix task system issues
     function runTaskSystemIntegrityCheck(): void {
@@ -744,9 +742,10 @@ window.taskManager = (function(): TaskManagerApi {
                 console.log(`[taskManager.js] Fixed ${fixedTaskCount} tasks with invalid employee assignments`);
             }
 
-            // 3. Check for tasks that might be stuck (in progress for too long)
-            const now = Date.now();
-            const stuckTaskThreshold = 10 * 60 * 1000; // 10 minutes
+            // 3. Check for tasks that might be stuck (in progress for too
+            // long). Game time, so pausing can't make a task look stuck.
+            const now = window.clock.now();
+            const stuckTaskThreshold = 10 * 60 * 60 * 1000; // 10 game hours
 
             window.taskManager.tasks.forEach(task => {
                 if (!task) return; // Skip null/undefined tasks
@@ -755,11 +754,11 @@ window.taskManager = (function(): TaskManagerApi {
                     const timeSinceUpdate = now - task.lastProgressTime;
 
                     if (timeSinceUpdate > stuckTaskThreshold) {
-                        console.warn(`Task may be stuck: ${task.id} (${task.type}) - Last updated ${Math.round(timeSinceUpdate / 1000)} seconds ago`);
+                        console.warn(`Task may be stuck: ${task.id} (${task.type}) - Last updated ${Math.round(timeSinceUpdate / 60000)} game minutes ago`);
 
                         // Option: force completion if severely stuck
-                        if (timeSinceUpdate > 30 * 60 * 1000) { // 30 minutes
-                            console.error(`Task severely stuck for over 30 minutes: ${task.id} - forcing completion`);
+                        if (timeSinceUpdate > 30 * 60 * 60 * 1000) { // 30 game hours
+                            console.error(`Task severely stuck for over 30 game hours: ${task.id} - forcing completion`);
                             try {
                                 window.taskManager.forceCompleteTask(task.id);
                             } catch (error) {
@@ -771,9 +770,9 @@ window.taskManager = (function(): TaskManagerApi {
             });
 
             // 4. Check for customers who have been waiting too long. This is
-            // the one place stuck-customer detection runs (customers.js used
-            // to also run it on its own 2-minute timer, which was redundant).
-            const customerWaitThreshold = 15 * 60 * 1000; // 15 minutes
+            // the one place stuck-customer detection runs (timeEvents used to
+            // also run it on its own 2-minute timer, which was redundant).
+            const customerWaitThreshold = 15 * 60 * 60 * 1000; // 15 game hours
 
             if (window.customers && window.customers.activeCustomers) {
                 window.customers.activeCustomers.forEach(customer => {
@@ -781,7 +780,7 @@ window.taskManager = (function(): TaskManagerApi {
 
                     const waitTime = now - customer.lastStateChange;
                     if (waitTime > customerWaitThreshold) {
-                        console.warn(`Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has been in state "${customer.status}" for ${Math.round(waitTime / 60000)} minutes`);
+                        console.warn(`Customer ${customer.id} (${customer.firstName} ${customer.lastName}) has been in state "${customer.status}" for ${Math.round(waitTime / 60000)} game minutes`);
                     }
                 });
             }

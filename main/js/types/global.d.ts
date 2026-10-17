@@ -366,7 +366,8 @@ interface ElectronApi {
 }
 
 interface AutoSaveApi {
-  start: (intervalMinutes?: number) => void;
+  // Interval in game minutes (default 300, i.e. 5 real minutes at 1x).
+  start: (intervalGameMinutes?: number) => void;
   stop: () => void;
 }
 
@@ -382,11 +383,12 @@ interface Customer {
   arrivedAt: number;
   insurance: InsurancePlan;
   prescriptionId: string | null;
+  // In game minutes. Drained by customers.updatePatience once per game minute.
   patience: number;
-  timer: ReturnType<typeof setInterval> | null;
   firstName: string;
   lastName: string;
   mood: number;
+  // Game time (ms), from clock.now().
   lastStateChange: number;
   // True when this customer was generated from an eligible RefillRecord
   // rather than as a brand-new walk-in.
@@ -404,10 +406,11 @@ interface CustomersApi {
   assignPrescription: (customerId: string, prescriptionId: string | null) => void;
   updateCustomerStatus: (customerId: string, newStatus: string) => void;
   updateCustomerMood: (customerId: string, moodChange: number) => void;
-  extendPatience: (customerId: string, secondsToAdd: number) => void;
+  extendPatience: (customerId: string, minutesToAdd: number) => void;
   adjustPatienceDecayRate: (customer: Customer) => number;
   customerLeaves: (customerId: string) => void;
-  startCustomerTimer: (customerId: string) => void;
+  updatePatience: () => void;
+  sendRemainingCustomersHome: () => void;
   updateReputationOnDeparture: (customer: Customer) => void;
   getRandomCustomerType: () => string;
   getRandomInsurance: () => InsurancePlan;
@@ -436,6 +439,7 @@ interface Task {
   quantityNeeded?: number;
   dependencyTaskId?: string;
   fillTaskDependency?: boolean;
+  // Game time (ms), from clock.now().
   createdAt?: number;
   lastUpdateTime?: number;
   lastProgressTime?: number;
@@ -639,10 +643,16 @@ interface InsuranceClaimsApi {
 interface TimeEventsConfig {
   OPENING_HOUR: number;
   CLOSING_HOUR: number;
-  TASK_UPDATE_INTERVAL: number;
-  CUSTOMER_SPAWN_CHECK_INTERVAL: number;
-  AUTO_TASK_ASSIGN_INTERVAL: number;
-  INVENTORY_CHECK_INTERVAL: number;
+}
+
+// clock.ts - the game clock and scheduler. Delays are in game minutes; jobs
+// only run while the simulation is advancing (day active, not paused).
+interface ClockApi {
+  now: () => number;
+  every: (gameMinutes: number, fn: () => void) => number;
+  after: (gameMinutes: number, fn: () => void) => number;
+  cancel: (id: number) => void;
+  tick: () => void;
 }
 
 // Now the real, full shape (timeEvents.ts owns it). Window.timeEvents stays
@@ -704,8 +714,9 @@ interface Window {
   // falls back to 'Manager') — a pre-existing "silently does nothing" gap,
   // not something this migration fixes. See docs/Changelog.md.
   username?: string;
-  // Both owned by electron-integration.ts.
-  saveGame?: () => Promise<boolean>;
+  // Both owned by electron-integration.ts. `silent` skips the success
+  // notification (autosave).
+  saveGame?: (options?: { silent?: boolean }) => Promise<boolean>;
   loadGame?: () => Promise<boolean>;
   autoSave?: AutoSaveApi;
   notifications?: NotificationsApi;
@@ -741,6 +752,7 @@ interface Window {
   renderFinancesPage?: (container: HTMLElement) => void;
   renderSettingsPage?: (container: HTMLElement) => void;
   timeEvents?: TimeEventsApi;
+  clock: ClockApi;
   // Debug-only global set by timeEvents.ts (console-driven time skip), no
   // callers elsewhere in the codebase.
   forceTimeForward?: (minutes?: number) => boolean;

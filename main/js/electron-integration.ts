@@ -50,7 +50,7 @@
         // Initialize save/load system
         function initSaveLoadSystem() {
             // Add save game function to window
-            window.saveGame = async function() {
+            window.saveGame = async function(options = {}) {
                 try {
                     // Get the current game state
                     // window.brandReputation carries live methods (calcCustomers,
@@ -82,8 +82,8 @@
                     if (result && result.success) {
                         console.log('Game saved successfully');
                         
-                        // Show notification to user
-                        if (window.notifications) {
+                        // Show notification to user (not for autosaves)
+                        if (window.notifications && !options.silent) {
                             window.notifications.add('Game saved successfully', 'success');
                         }
                         return true;
@@ -152,24 +152,23 @@
                 }
             };
             
-            // Add auto-save feature
-            let autoSaveInterval: ReturnType<typeof setInterval> | null = null;
+            // Add auto-save feature. Runs on the game clock, so it never
+            // fires while paused or while the end-of-day summary is open.
+            let autoSaveJob: number | null = null;
 
-            function startAutoSave(interval: number = 5): void {
-                // Clear existing interval if any
-                if (autoSaveInterval) {
-                    clearInterval(autoSaveInterval);
-                }
-
-                // Start new auto-save interval (in minutes)
-                autoSaveInterval = setInterval(window.saveGame!, interval * 60 * 1000);
-                console.log(`Auto-save enabled (every ${interval} minutes)`);
+            // Default 300 game minutes = 5 real minutes at 1x.
+            function startAutoSave(intervalGameMinutes: number = 300): void {
+                stopAutoSave();
+                autoSaveJob = window.clock.every(intervalGameMinutes, () => {
+                    window.saveGame!({ silent: true });
+                });
+                console.log(`Auto-save enabled (every ${intervalGameMinutes} game minutes)`);
             }
 
             function stopAutoSave(): void {
-                if (autoSaveInterval) {
-                    clearInterval(autoSaveInterval);
-                    autoSaveInterval = null;
+                if (autoSaveJob !== null) {
+                    window.clock.cancel(autoSaveJob);
+                    autoSaveJob = null;
                     console.log('Auto-save disabled');
                 }
             }
