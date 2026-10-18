@@ -149,6 +149,23 @@ window.taskManager = (function (): TaskManagerApi {
             .forEach((dependent) => window.prescriptions.supplyFill(dependent));
     }
 
+    // Game minutes of work done per game minute: the assigned employee's
+    // speed (employees.workRate) and, for a compound, its equipment's
+    // condition (production.conditionFactor). 1 for a task nobody is on.
+    function workRate(task: Task): number {
+        const employee = task.assignedTo ? window.employeesData?.find((e) => e.id === task.assignedTo) : undefined;
+        let rate = employee && window.employees?.workRate ? window.employees.workRate(employee, task) : 1;
+        if (task.type === 'compound' && task.productId && window.production?.conditionFactor) {
+            rate *= window.production.conditionFactor(task.productId);
+        }
+        return rate > 0 ? rate : 1;
+    }
+
+    // Game minutes until the task is done at its current speed.
+    function minutesLeft(task: Task): number {
+        return Math.max(0, task.totalTime - task.progress) / workRate(task);
+    }
+
     // Get a task by ID - optimized with caching
     function getTaskById(taskId: string): Task | undefined {
         // Use find since we don't maintain a lookup map
@@ -202,15 +219,18 @@ window.taskManager = (function (): TaskManagerApi {
                 // No stock or materials check here: a fill holds its product
                 // and a compound its materials from before it starts.
 
+                // Work gets done at the worker's speed (skill and morale) and,
+                // for a compound, the equipment's condition.
                 const previousProgress = task.progress;
-                task.progress += minutes;
+                task.progress += minutes * workRate(task);
                 task.lastProgressTime = now;
+                employee.minutesWorkedToday = (employee.minutesWorkedToday ?? 0) + minutes;
 
                 taskEvents.emit('taskProgressUpdated', {
                     task: task,
                     previousProgress: previousProgress,
                     currentProgress: task.progress,
-                    deltaProgress: minutes,
+                    deltaProgress: task.progress - previousProgress,
                 });
 
                 // Check if the task is now complete
@@ -245,15 +265,6 @@ window.taskManager = (function (): TaskManagerApi {
             if (task.assignedTo) {
                 employee = window.employeesData?.find((emp) => emp.id === task.assignedTo) ?? null;
                 if (employee) {
-                    // Update employee morale and mood based on task completion
-                    if (window.employees && typeof window.employees.updateEmployeeMoodOnTaskCompletion === 'function') {
-                        try {
-                            window.employees.updateEmployeeMoodOnTaskCompletion(employee.id, task.type);
-                        } catch (error) {
-                            console.error(`[finalizeTask] Error updating employee mood: ${(error as Error).message}`);
-                        }
-                    }
-
                     // Free the employee by clearing their currentTaskId
                     employee.currentTaskId = null;
                     window.taskAssignment?.requestAutoAssign();
@@ -390,6 +401,8 @@ window.taskManager = (function (): TaskManagerApi {
         getTasksForEmployee,
         getTasksForCustomer,
         updateTasks,
+        workRate,
+        minutesLeft,
         setStatus,
         cancelTask,
         debugTaskStatus,

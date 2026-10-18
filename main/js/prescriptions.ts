@@ -38,8 +38,9 @@ function createCompoundForFill(fill: Task, product: Product): Task {
     console.log(`[prescriptions.js] Created compound task: ${compoundTask.id}`);
 
     // It will wait until materials are bought, and the customer's patience
-    // runs down meanwhile, so tell the player.
-    if (!window.production.canStartCompound(compoundTask)) {
+    // runs down meanwhile, so tell the player. (Equipment that's busy with
+    // another compound is only a short wait, so it's not reported.)
+    if (!window.production.canCompound(product, fill.quantityNeeded ?? 1)) {
         const customer = fill.customerId ? window.customers.getCustomerById(fill.customerId) : undefined;
         const who = customer ? `${customer.firstName} ${customer.lastName}'s` : 'a';
         window.notifications?.add(
@@ -48,12 +49,6 @@ function createCompoundForFill(fill: Task, product: Product): Task {
         );
     }
     return compoundTask;
-}
-
-// Shared by generatePrescription and generateRefillPrescription, for a
-// prescription that's already been pushed onto activePrescriptions.
-function buildTasksForPrescription(prescription: Prescription): void {
-    window.prescriptions.ensureFill(prescription);
 }
 
 // Registers a pending refill opportunity if the just-filled prescription
@@ -103,19 +98,15 @@ window.prescriptions = {
 
         const dosage = Math.floor(Math.random() * 3) + 1; // 1-3 units
 
-        // Prefer a product we can supply in full: enough stock for the
-        // dosage, or the materials to compound it.
-        const unlockedProducts = window.research.getUnlockedProducts();
-        const availableProducts = unlockedProducts.filter((id) => {
-            const product = window.productsData.find((p) => p.id === id);
-            return product && (product.inventory >= dosage || window.production.canCompound(product, dosage));
-        });
-
-        // If no products available or can be compounded, use any unlocked product
-        const productId =
-            availableProducts.length > 0
-                ? availableProducts[Math.floor(Math.random() * availableProducts.length)]
-                : unlockedProducts[Math.floor(Math.random() * unlockedProducts.length)];
+        // Doctors prescribe any product the pharmacy carries (unlocked by
+        // research), whether or not it can be supplied today: canSupply
+        // decides that, and a customer the pharmacy can't serve is turned
+        // away (customers.generateCustomer). Picking only what could be
+        // supplied made equipment pointless (H8).
+        const unlockedProducts = window.research
+            .getUnlockedProducts()
+            .filter((id) => window.productsData.some((p) => p.id === id));
+        const productId = unlockedProducts[Math.floor(Math.random() * unlockedProducts.length)];
 
         const product = window.productsData.find((p) => p.id === productId);
         if (!product) {
@@ -143,8 +134,6 @@ window.prescriptions = {
         window.updateUI('prescriptions');
 
         console.log(`[prescriptions.js] Created prescription: ${newPrescription.id} for customer: ${customerId}`);
-
-        buildTasksForPrescription(newPrescription);
 
         return newPrescription.id;
     },
@@ -186,9 +175,16 @@ window.prescriptions = {
             `[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`,
         );
 
-        buildTasksForPrescription(newPrescription);
-
         return newPrescription.id;
+    },
+
+    // Stock covers the dosage, or the pharmacy has the equipment to make it.
+    // (Short materials still count: the compound waits for a purchase, and
+    // createCompoundForFill tells the player.)
+    canSupply(prescription) {
+        const product = window.productsData.find((p) => p.id === prescription.productId);
+        if (!product) return false;
+        return product.inventory >= Math.max(1, prescription.dosage) || window.production.canMake(product);
     },
 
     ensureFill(prescription) {
@@ -219,7 +215,6 @@ window.prescriptions = {
             roleNeeded: 'Lab Technician',
             status: 'pending-dependent',
             assignedTo: null,
-            requiredEquipment: product.equipmentNeeded,
             quantityNeeded: Math.max(1, prescription.dosage),
             customerId: prescription.customerId,
         };

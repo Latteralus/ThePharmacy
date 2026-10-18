@@ -1,5 +1,6 @@
 // /js/pages/researchPage.js - research levels: where you are, what the next
-// level costs and unlocks, progress while it runs, and everything unlocked.
+// level costs and unlocks, progress while it runs, everything unlocked, and
+// the products customers ask for that you can't make yet.
 
 window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -9,13 +10,14 @@ window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope)
     const root = kit.page(
         mainContent,
         'Research',
-        'Each level takes a few days and unlocks new products and equipment.',
+        'Each level takes a few days, unlocks products customers will ask for and the equipment to make them, and brings 10% more customers.',
     );
 
     const trackCard = kit.card('Research level');
     const nextCard = kit.card('Next level');
+    const missingCard = kit.card("Can't make yet");
     const unlockedCard = kit.card('Unlocked so far');
-    root.append(trackCard.root, nextCard.root, unlockedCard.root);
+    root.append(trackCard.root, nextCard.root, missingCard.root, unlockedCard.root);
 
     const productName = (id: string) => window.productsData.find((p) => p.id === id)?.name;
     const equipmentName = (id: string) => window.equipmentData.find((e) => e.id === id)?.name;
@@ -120,6 +122,39 @@ window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope)
             nextCard.body.appendChild(actions);
         }
 
+        // Unlocked products the pharmacy can't make: customers asking for
+        // them are turned away once the stock runs out
+        missingCard.body.innerHTML = '';
+        const cantMake = window.research
+            .getUnlockedProducts()
+            .map((id) => window.productsData.find((p) => p.id === id))
+            .filter((p): p is Product => !!p && !window.production.canMake(p));
+        missingCard.setCount(cantMake.length || null);
+        if (cantMake.length === 0) {
+            missingCard.body.appendChild(el('p', 'muted', 'You have the equipment for every product you carry.'));
+        } else {
+            missingCard.body.appendChild(
+                el(
+                    'p',
+                    'small muted',
+                    'Customers who ask for these are turned away once the stock runs out. Buy or repair the equipment on the Equipment page.',
+                ),
+            );
+            const table = kit.table([
+                { label: 'Product' },
+                { label: 'In stock', num: true },
+                { label: 'What it needs' },
+            ]);
+            cantMake.forEach((product) =>
+                table.row([
+                    product.name,
+                    fmt.int(product.inventory),
+                    window.production.missingEquipmentText(product).replace(/^needs /, ''),
+                ]),
+            );
+            missingCard.body.appendChild(table.root);
+        }
+
         // Everything unlocked
         unlockedCard.body.innerHTML = '';
         const products = window.research
@@ -146,6 +181,7 @@ window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope)
     render();
     // Each day of progress and completion; cash decides whether you can start
     page.on('research', render);
+    page.on('equipment', render);
     page.on('finances', () => {
         if (!window.researchData.inProgress) render();
     });

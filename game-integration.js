@@ -2,13 +2,50 @@
 const log = require('electron-log');
 
 // Then replace console.log calls with log.info, console.error with log.error, etc.
-const { ipcMain, app } = require('electron');
+const { ipcMain, app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 // Game state management
 let gameState = null;
 let newGameOptions = null;
+
+// The main menu's Settings page (settings.html). Only settings the game
+// actually applies are kept (findings M18): the default speed for new games
+// and autosave (read by the renderer), UI scale and fullscreen (applied
+// here, to every window).
+const DEFAULT_SETTINGS = {
+  simulationSpeed: 1,
+  autoSaveEnabled: true,
+  autoSaveInterval: 5, // minutes of play at 1x
+  uiScale: 1,
+  fullscreenEnabled: false,
+};
+const SPEEDS = [0.5, 1, 2, 5];
+const UI_SCALES = [0.8, 1, 1.2, 1.5];
+
+// Known keys only, each a valid value or its default
+function sanitizeSettings(raw) {
+  const settings = { ...DEFAULT_SETTINGS };
+  if (!raw || typeof raw !== 'object') return settings;
+  const speed = Number(raw.simulationSpeed);
+  if (SPEEDS.includes(speed)) settings.simulationSpeed = speed;
+  if (typeof raw.autoSaveEnabled === 'boolean') settings.autoSaveEnabled = raw.autoSaveEnabled;
+  const interval = Math.round(Number(raw.autoSaveInterval));
+  if (interval >= 1 && interval <= 60) settings.autoSaveInterval = interval;
+  const scale = Number(raw.uiScale);
+  if (UI_SCALES.includes(scale)) settings.uiScale = scale;
+  if (typeof raw.fullscreenEnabled === 'boolean') settings.fullscreenEnabled = raw.fullscreenEnabled;
+  return settings;
+}
+
+// UI scale and fullscreen. Called when a page finishes loading (zoom is
+// per page) and whenever the settings are saved.
+function applyDisplaySettings(win, settings = loadSettings()) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.setZoomFactor(settings.uiScale);
+  if (win.isFullScreen() !== settings.fullscreenEnabled) win.setFullScreen(settings.fullscreenEnabled);
+}
 
 // Initialize game integration. Call once per app - ipcMain.handle throws if a
 // channel is registered twice.
@@ -31,7 +68,9 @@ function setupIpcListeners() {
 
   // Handle game settings changes - using handle instead of on for invoke compatibility
   ipcMain.handle('update-settings', async (event, settings) => {
-    const success = saveSettings(settings);
+    const saved = sanitizeSettings(settings);
+    const success = saveSettings(saved);
+    if (success) BrowserWindow.getAllWindows().forEach((win) => applyDisplaySettings(win, saved));
     return { success };
   });
 
@@ -136,6 +175,7 @@ function saveSettings(settings) {
     const userDataPath = getUserDataPath();
     const settingsPath = path.join(userDataPath, 'settings.json');
 
+    fs.mkdirSync(userDataPath, { recursive: true });
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     log.info('Settings saved successfully');
     return true;
@@ -152,20 +192,12 @@ function loadSettings() {
     const settingsPath = path.join(userDataPath, 'settings.json');
 
     if (fs.existsSync(settingsPath)) {
-      const settingsData = fs.readFileSync(settingsPath, 'utf8');
-      return JSON.parse(settingsData);
-    } else {
-      // Return default settings
-      return {
-        volume: 50,
-        musicEnabled: true,
-        soundEnabled: true,
-        simulationSpeed: 1.0,
-      };
+      return sanitizeSettings(JSON.parse(fs.readFileSync(settingsPath, 'utf8')));
     }
+    return { ...DEFAULT_SETTINGS };
   } catch (error) {
     log.error('Error loading settings:', error);
-    return null;
+    return { ...DEFAULT_SETTINGS };
   }
 }
 
@@ -206,4 +238,5 @@ function getUserDataPath() {
 
 module.exports = {
   initGameIntegration,
+  applyDisplaySettings,
 };

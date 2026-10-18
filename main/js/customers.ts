@@ -23,8 +23,29 @@ const DEPARTURE_PENALTY: Record<Exclude<DepartureReason, 'served'>, number> = {
     impatient: 1.5,
     closing: 1,
     price: 0.5, // refused the price at check-in
+    unavailable: 0.25, // we couldn't supply their prescription
     reset: 0, // sent home by reconcileTasks (no prescription): not their choice
 };
+
+// Products a turned-away customer has been reported for, with the day, so
+// the player hears about each product once a day rather than per customer.
+const turnedAwayReported = new Map<string, number>();
+
+// The customer's prescription can't be supplied (no stock for the dosage,
+// and the equipment to make it is missing or broken), so they go elsewhere.
+function turnAway(customer: Customer, prescription: Prescription): void {
+    const product = window.productsData.find((p) => p.id === prescription.productId);
+    const day = window.gameState?.dayIndex ?? 0;
+    if (product && turnedAwayReported.get(product.id) !== day) {
+        turnedAwayReported.set(product.id, day);
+        window.notifications?.add(
+            `Turned away ${customer.firstName} ${customer.lastName}: ${product.name} is out of stock and ` +
+                `${window.production.missingEquipmentText(product)}. Further customers for it today won't be reported.`,
+            'warning',
+        );
+    }
+    window.customers.customerLeaves(customer.id, 'unavailable');
+}
 
 function createInteractionTask(customerId: string, interaction: 'checkIn' | 'checkout'): void {
     const task: Task = {
@@ -157,13 +178,20 @@ window.customers = {
         }
 
         if (!prescriptionId) {
-            // Nothing we could fill for them (an unlocked product with no
-            // definition, H8), so they don't come in.
+            // No prescription could be written (a refill for a product that
+            // no longer exists), so they don't come in.
             console.warn(`[customers.js] No prescription could be written for ${newCustomer.id}; they don't come in.`);
             this.activeCustomers.splice(this.activeCustomers.indexOf(newCustomer), 1);
             return null;
         }
         newCustomer.prescriptionId = prescriptionId;
+
+        const prescription = window.prescriptions.getPrescription(prescriptionId)!;
+        if (!window.prescriptions.canSupply(prescription)) {
+            turnAway(newCustomer, prescription);
+            return null;
+        }
+        window.prescriptions.ensureFill(prescription);
 
         console.log(
             `[customers.js] New customer generated: ${newCustomer.firstName} ${newCustomer.lastName} (${customerType}, patience: ${newCustomer.patience}${isReturning ? ', returning for a refill' : ''})`,

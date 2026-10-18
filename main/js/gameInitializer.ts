@@ -53,7 +53,9 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
         }
 
         // Apply difficulty modifier to starting cash
-        if (gameOptions.difficulty === 'hard') {
+        if (gameOptions.difficulty === 'expert') {
+            startingCash *= 0.5; // half the starting cash on expert
+        } else if (gameOptions.difficulty === 'hard') {
             startingCash *= 0.7; // 30% less starting cash on hard
             console.log('[gameInitializer] Applying hard difficulty modifier to cash:', startingCash);
         } else if (gameOptions.difficulty === 'easy') {
@@ -138,6 +140,10 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             window.brandReputation.reputationScore = 5; // Lower starting reputation
             window.financesData.overhead = 650; // Higher overhead costs
             console.log('[gameInitializer] Applied hard difficulty settings: reputation=5, overhead=650');
+        } else if (gameOptions.difficulty === 'expert') {
+            // Expert used to play exactly like Normal (L6)
+            window.brandReputation.reputationScore = 0;
+            window.financesData.overhead = 800;
         } else {
             console.log('[gameInitializer] Using normal difficulty settings');
         }
@@ -148,12 +154,12 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             // Urban centers have more customers but higher costs
             window.financesData.overhead *= 1.3; // 30% higher rent in urban areas
             console.log('[gameInitializer] Urban location: overhead increased by 30% to', window.financesData.overhead);
-            // More frequent customers will be handled in brandReputation
+            // 30% more customers (brandReputation.calcCustomers)
         } else if (gameOptions.location === 'rural') {
             // Rural areas have fewer customers but lower costs
             window.financesData.overhead *= 0.7; // 30% lower rent in rural areas
             console.log('[gameInitializer] Rural location: overhead decreased by 30% to', window.financesData.overhead);
-            // Fewer customers will be handled in brandReputation
+            // 25% fewer customers (brandReputation.calcCustomers)
         } else {
             console.log('[gameInitializer] Suburban location: using standard overhead');
         }

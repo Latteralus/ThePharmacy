@@ -1,12 +1,22 @@
 // /js/data/employees.js
+//
+// Staff matter (findings M7, Phase 7):
+// - Speed. A task advances at workRate game minutes of work per game minute:
+//   the skill the task uses (0 → 0.5×, 50 → 1×, 100 → 1.5×), slowed when
+//   morale is below 50 (down to 0.7× at 0).
+// - Morale changes once a day, at closing (endOfDay): rest or overwork,
+//   and pay against the market rate for their role and skill. Below 25
+//   they may quit overnight.
 
+// Starting salaries are about what the market pays for their skills
+// (helpers.fairSalary), so a new game's staff aren't unhappy from day one.
 window.employeesData = [
     {
         id: 'emp001',
         firstName: 'John',
         lastName: 'Doe',
         role: 'Pharmacist',
-        salary: 85000,
+        salary: 150000,
         skills: {
             compounding: 70,
             dispensing: 85,
@@ -15,7 +25,6 @@ window.employeesData = [
             sales: 50,
         },
         morale: 80, // 0=worst morale, 100=best morale
-        mood: '😀', // Mood icon, updated dynamically
         hireDate: '2023-01-15', // Date the employee was hired
         currentTaskId: null, // ID of the task currently assigned to the employee
     },
@@ -24,7 +33,7 @@ window.employeesData = [
         firstName: 'Alice',
         lastName: 'Wong',
         role: 'Lab Technician',
-        salary: 60000,
+        salary: 50000,
         skills: {
             compounding: 80,
             dispensing: 50,
@@ -33,7 +42,6 @@ window.employeesData = [
             sales: 30,
         },
         morale: 90,
-        mood: '😀',
         hireDate: '2023-05-20',
         currentTaskId: null,
     },
@@ -41,8 +49,8 @@ window.employeesData = [
         id: 'emp003',
         firstName: 'Carlos',
         lastName: 'Garcia',
-        role: 'Cashier', // Changed from 'Sales Rep' to 'Cashier'
-        salary: 70000,
+        role: 'Cashier',
+        salary: 40000,
         skills: {
             compounding: 20,
             dispensing: 30,
@@ -51,14 +59,26 @@ window.employeesData = [
             sales: 90,
         },
         morale: 60,
-        mood: '💤',
         hireDate: '2023-08-10',
         currentTaskId: null,
     },
-    // ... more employees (optional)
 ];
 
+// Morale, once a day at closing
+const REST_HOURS = 8; // up to this many hours worked: rested
+const RESTED_GAIN = 2;
+const OVERWORK_LOSS_PER_HOUR = 1.5; // per hour over REST_HOURS
+const PAY_SENSITIVITY = 8; // morale per 100% over or under the market rate
+const PAY_MAX_GAIN = 2;
+const PAY_MAX_LOSS = 3;
+const LOW_MORALE = 40; // the player is warned below this
+const QUIT_BELOW = 25; // nightly chance to quit: (QUIT_BELOW - morale) / QUIT_SCALE
+const QUIT_SCALE = 50;
+const NEW_HIRE_MORALE = 80;
+
 window.employees = {
+    lastDayReport: [],
+
     // Get an employee by ID
     getEmployeeById(employeeId) {
         return window.employeesData.find((employee) => employee.id === employeeId);
@@ -69,106 +89,107 @@ window.employees = {
         return `${employee.firstName} ${employee.lastName}`;
     },
 
-    // Calculate employee efficiency (based on skills and morale).
-    // Deliberately not merged with taskAssignment.ts's same-named function:
-    // that one also factors in morale for candidate selection, this one is
-    // skill-only since calculateTaskCompletionTime below applies its own
-    // separate morale adjustment.
-    calculateEmployeeEfficiency(employee) {
-        let skillSum = 0;
-        let skillCount = 0;
-        for (const skill in employee.skills) {
-            skillSum += employee.skills[skill as keyof EmployeeSkills];
-            skillCount++;
+    // The skill a task uses, 0-100
+    taskSkill(employee, task) {
+        const skills = employee.skills;
+        if (!skills) return 50;
+        switch (task.type) {
+            case 'compound':
+                return skills.compounding;
+            case 'fillPrescription':
+                return skills.dispensing;
+            case 'consultation':
+                return (skills.dispensing + skills.customerService) / 2;
+            case 'customerInteraction':
+                return skills.customerService;
+            default:
+                return 50;
         }
-        // We'll treat avgSkill ~ 0..100 as the general skill level
-        return skillCount > 0 ? skillSum / skillCount : 50; // Return 0..100 range if typical
     },
 
-    // Calculates task completion time with:
-    //  - Double time at 0 skill
-    //  - Half time at 100 skill
-    //  - Morale: +/- 5 min (0 morale => +5, 100 morale => -5)
-    calculateTaskCompletionTime(baseTime, employeeId, taskType) {
-        const employee = this.getEmployeeById(employeeId)!;
-        const skillFactor = this.calculateEmployeeEfficiency(employee);
-        // skillFactor ~ 0..100 typically
-
-        // 1) Convert skillFactor => linear scale from 2.0 (worst) down to 0.5 (best)
-        //    If skillFactor=0 => time multiplier=2
-        //    If skillFactor=100 => time multiplier=0.5
-        const skillPercent = Math.min(skillFactor, 100) / 100; // clamp at 100
-        const skillMultiplier = 2 - 1.5 * skillPercent;
-        // e.g. skillPercent=0 => 2 - 0 => 2
-        //      skillPercent=1 => 2 - 1.5 => 0.5
-
-        let adjustedTime = baseTime * skillMultiplier;
-
-        // 2) Apply task-specific skill
-        //    (You might choose to further reduce or increase adjustedTime based on specific relevant skill)
-        if (taskType === 'compounding') {
-            // Slight additional reduction if compounding is high
-            const compSkill = employee.skills.compounding; // ~0..100
-            const compPercent = Math.min(compSkill, 100) / 100;
-            // e.g. up to 25% reduction if compSkill=100
-            adjustedTime *= 1 - 0.25 * compPercent;
-        } else if (taskType === 'dispensing') {
-            const disp = employee.skills.dispensing;
-            const cust = employee.skills.customerService;
-            const dispPercent = Math.min(disp + cust, 200) / 200;
-            // e.g. if disp+cust=200 => 1 => up to 25% reduction
-            adjustedTime *= 1 - 0.25 * dispPercent;
-        }
-        // ... similarly handle other task types if desired
-
-        // 3) Adjust for morale: range from +5 (worst morale=0) to -5 (best morale=100)
-        const morale = employee.morale; // 0..100
-        const moraleDelta = 5 - (morale / 100) * 10;
-        // e.g. morale=0 => +5, morale=100 => -5
-        adjustedTime += moraleDelta;
-
-        // 4) Ensure we never go below 1 minute
-        if (adjustedTime < 1) adjustedTime = 1;
-
-        // Round to a whole number if you like:
-        adjustedTime = Math.round(adjustedTime);
-
-        return adjustedTime;
+    // Game minutes of work done per game minute on this task
+    workRate(employee, task) {
+        const skill = Math.min(100, Math.max(0, this.taskSkill(employee, task)));
+        const morale = Math.min(100, Math.max(0, employee.morale));
+        const moraleFactor = morale >= 50 ? 1 : 0.7 + (0.3 * morale) / 50;
+        return (0.5 + skill / 100) * moraleFactor;
     },
 
-    // Update employee morale
     updateEmployeeMorale(employeeId, moraleChange) {
         const employee = this.getEmployeeById(employeeId);
         if (employee) {
             employee.morale = Math.max(0, Math.min(100, employee.morale + moraleChange));
-
-            // Update mood icon
-            if (employee.morale >= 90) {
-                employee.mood = '😀';
-            } else if (employee.morale >= 70) {
-                employee.mood = '😐';
-            } else if (employee.morale >= 50) {
-                employee.mood = '💤';
-            } else if (employee.morale >= 20) {
-                employee.mood = '☹️';
-            } else {
-                employee.mood = '😡';
-            }
         }
     },
 
-    // Update employee mood on task completion
-    updateEmployeeMoodOnTaskCompletion(employeeId, taskType) {
-        const employee = this.getEmployeeById(employeeId);
-        if (employee) {
-            if (taskType === 'fillPrescription') {
-                this.updateEmployeeMorale(employeeId, 5);
-            } else if (taskType === 'customerInteraction') {
-                this.updateEmployeeMorale(employeeId, 3);
-            } else if (taskType === 'consultation') {
-                this.updateEmployeeMorale(employeeId, 2);
+    // Pay against the market rate: 0.1 is 10% over
+    payVsMarket(employee) {
+        const fair = window.helpers.fairSalary(employee);
+        return fair > 0 ? employee.salary / fair - 1 : 0;
+    },
+
+    // Closing time: today's hours and pay move each employee's morale, and
+    // anyone whose morale is very low may quit. Wages for the day are
+    // charged before this (finances.applyDailyCosts), so a quitter is paid.
+    endOfDay() {
+        const report: StaffDayReport[] = [];
+
+        [...window.employeesData].forEach((employee) => {
+            const hours = (employee.minutesWorkedToday ?? 0) / 60;
+            const before = employee.morale;
+            const reasons: string[] = [];
+
+            const workload = hours > REST_HOURS ? -OVERWORK_LOSS_PER_HOUR * (hours - REST_HOURS) : RESTED_GAIN;
+            if (hours > REST_HOURS) reasons.push(`overworked (${hours.toFixed(1)}h)`);
+
+            const pay = this.payVsMarket(employee);
+            const payChange = Math.max(-PAY_MAX_LOSS, Math.min(PAY_MAX_GAIN, PAY_SENSITIVITY * pay));
+            if (pay <= -0.05) reasons.push(`paid ${Math.round(-pay * 100)}% under market`);
+            else if (pay >= 0.05) reasons.push(`paid ${Math.round(pay * 100)}% over market`);
+
+            this.updateEmployeeMorale(employee.id, workload + payChange);
+            employee.minutesWorkedToday = 0;
+
+            const name = this.getEmployeeFullName(employee);
+            const entry: StaffDayReport = {
+                id: employee.id,
+                name,
+                role: employee.role,
+                hoursWorked: hours,
+                moraleBefore: before,
+                moraleAfter: employee.morale,
+                reasons,
+                quit: false,
+            };
+            report.push(entry);
+
+            if (employee.morale < QUIT_BELOW && Math.random() < (QUIT_BELOW - employee.morale) / QUIT_SCALE) {
+                entry.quit = true;
+                this.removeEmployee(employee.id);
+                window.notifications?.add(
+                    `${name} quit (morale ${Math.round(employee.morale)}%${reasons.length ? `: ${reasons.join(', ')}` : ''}).`,
+                    'error',
+                );
+            } else if (before >= LOW_MORALE && employee.morale < LOW_MORALE) {
+                window.notifications?.add(
+                    `${name}'s morale is low (${Math.round(employee.morale)}%${reasons.length ? `: ${reasons.join(', ')}` : ''}). Below ${QUIT_BELOW}% they may quit.`,
+                    'warning',
+                );
             }
-        }
+        });
+
+        this.lastDayReport = report;
+        window.updateUI('employees');
+        return report;
+    },
+
+    // A raise (or a cut). Morale responds at the next closing time.
+    setSalary(employeeId, salary) {
+        const employee = this.getEmployeeById(employeeId);
+        if (!employee || !Number.isFinite(salary) || salary <= 0) return false;
+        employee.salary = Math.round(salary);
+        window.updateUI('employees');
+        return true;
     },
 
     // Hire an employee
@@ -217,8 +238,7 @@ window.employees = {
                     // leaves `skills` empty (`{}`), not a full EmployeeSkills —
                     // preserved as-is rather than guarded against.
                     skills: skills as EmployeeSkills,
-                    morale: 100,
-                    mood: '😀',
+                    morale: NEW_HIRE_MORALE,
                     hireDate: new Date(window.gameState.currentDate),
                     currentTaskId: null,
                 });
@@ -244,16 +264,21 @@ window.employees = {
 
     // Fire an employee
     fireEmployee(employeeId) {
-        const employeeIndex = window.employeesData.findIndex((emp) => emp.id === employeeId);
-        if (employeeIndex > -1) {
-            // Their task goes back in the queue for someone else
-            const taskId = window.employeesData[employeeIndex].currentTaskId;
-            if (taskId) window.taskAssignment.unassignTask(taskId);
-            window.employeesData.splice(employeeIndex, 1);
-            window.updateUI('employees');
+        if (this.removeEmployee(employeeId)) {
             console.log(`Employee with ID ${employeeId} has been fired.`);
         } else {
             console.error(`Employee not found with ID: ${employeeId}`);
         }
+    },
+
+    // Fired or quit: their task goes back in the queue for someone else.
+    removeEmployee(employeeId) {
+        const employeeIndex = window.employeesData.findIndex((emp) => emp.id === employeeId);
+        if (employeeIndex === -1) return false;
+        const taskId = window.employeesData[employeeIndex].currentTaskId;
+        if (taskId) window.taskAssignment.unassignTask(taskId);
+        window.employeesData.splice(employeeIndex, 1);
+        window.updateUI('employees');
+        return true;
     },
 };

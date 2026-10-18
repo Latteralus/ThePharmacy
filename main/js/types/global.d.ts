@@ -79,23 +79,24 @@ interface ResearchData {
 interface ResearchApi {
     getUnlockedProducts: () => string[];
     getUnlockedEquipment: () => string[];
+    // Whether research has made this item available to buy.
+    isEquipmentUnlocked: (equipmentId: string) => boolean;
     researchNextLevel: () => void;
     checkResearchCompletion: (gameState: GameState) => void;
 }
 
+// Research decides which items can be bought (research.isEquipmentUnlocked).
 interface EquipmentItem {
     id: string;
     name: string;
     cost: number;
     owned: number;
+    // Condition, 0-100. Shared by every unit owned; 0 is broken.
     durability: number;
+    // Compounds one unit can be used for at a time.
     capacity: number;
     autoPurchaseThreshold: number;
     autoPurchaseAmount: number;
-    researchLevelRequired: number;
-    workerType: string;
-    dosageForms: string[];
-    isUnlocked: () => boolean;
 }
 
 interface InsuranceReimbursements {
@@ -327,7 +328,9 @@ interface SaveFile {
     products: SavedItemState<Product, 'price' | 'inventory' | 'maxInventory'>[];
     materials: SavedItemState<Material, 'inventory' | 'autoOrderThreshold' | 'autoOrderAmount'>[];
     equipment: SavedItemState<EquipmentItem, 'owned' | 'durability' | 'autoPurchaseThreshold' | 'autoPurchaseAmount'>[];
-    research: { currentLevel: number; inProgress: ResearchInProgress | null };
+    // refund: set by the v4 -> v5 migration for research toward a level
+    // that no longer exists; apply() pays it back.
+    research: { currentLevel: number; inProgress: ResearchInProgress | null; refund?: number };
     tasks: Task[];
     customers: Customer[];
     activePrescriptions: Prescription[];
@@ -366,6 +369,10 @@ interface HelpersApi {
     calculateMaterialsNeeded: (productId: string, quantity: number) => Record<string, number>;
     calculateOrderCost: (materialsNeeded: Record<string, number>) => number;
     calculateStartingWage: (role: string, skillLevel: string) => number;
+    // The skill (0-100) a role is hired for.
+    keySkill: (employee: Employee) => number;
+    // What the market pays for this role at this key skill, a year.
+    fairSalary: (employee: Employee) => number;
     generateNewEmployeeId: () => string;
     generateFirstName: () => string;
     generateLastName: () => string;
@@ -387,23 +394,50 @@ interface Employee {
     salary: number;
     skills: EmployeeSkills;
     morale: number;
-    mood: string;
+    // Game minutes spent on tasks since the day opened. employees.endOfDay
+    // turns it into rest or overwork, then resets it. Missing in saves from
+    // before Phase 7 (read as 0).
+    minutesWorkedToday?: number;
     // The three static starting employees use an ISO date string; employees
     // hired at runtime (hireEmployee's candidates) get a real Date instead.
     hireDate: string | Date;
     currentTaskId: string | null;
 }
 
+// One employee's day, from employees.endOfDay (shown in the daily summary).
+interface StaffDayReport {
+    id: string;
+    name: string;
+    role: string;
+    hoursWorked: number;
+    moraleBefore: number;
+    moraleAfter: number;
+    // What moved their morale, in player words ("overworked (11.5h)")
+    reasons: string[];
+    quit: boolean;
+}
+
 interface EmployeesApi {
+    // The last closing time's report (empty until the first one).
+    lastDayReport: StaffDayReport[];
     getEmployeeById: (employeeId: string) => Employee | undefined;
     getEmployeeFullName: (employee: Employee) => string;
-    calculateEmployeeEfficiency: (employee: Employee) => number;
-    calculateTaskCompletionTime: (baseTime: number, employeeId: string, taskType: string) => number;
+    // The skill (0-100) a task uses.
+    taskSkill: (employee: Employee, task: Task) => number;
+    // Game minutes of work done per game minute on this task (1 = normal).
+    workRate: (employee: Employee, task: Task) => number;
     updateEmployeeMorale: (employeeId: string, moraleChange: number) => void;
-    updateEmployeeMoodOnTaskCompletion: (employeeId: string, taskType: string) => void;
+    // Salary against helpers.fairSalary: 0.1 is 10% over the market rate.
+    payVsMarket: (employee: Employee) => number;
+    // Closing time: morale from today's hours and pay; very unhappy staff may quit.
+    endOfDay: () => StaffDayReport[];
+    // False for a salary that isn't above $0.
+    setSalary: (employeeId: string, salary: number) => boolean;
     hireEmployee: (role: string, skillLevel: string) => void;
     hireSelectedEmployee: (employeeData: Employee) => void;
     fireEmployee: (employeeId: string) => void;
+    // Fired or quit. False if there's no such employee.
+    removeEmployee: (employeeId: string) => boolean;
 }
 
 interface BrandReputationApi {
@@ -415,9 +449,23 @@ interface BrandReputationApi {
 
 // Partial — preload.js (not yet converted) owns the real, larger shape.
 // loadGame returns whatever JSON is on disk (any save version) or null.
+// The main menu's Settings page (settings.html), stored by the main
+// process in settings.json. game-integration.js fills in defaults.
+interface GameSettings {
+    // Speed a new game starts at (a loaded game keeps its own)
+    simulationSpeed: number;
+    autoSaveEnabled: boolean;
+    // Minutes of play at 1x between autosaves
+    autoSaveInterval: number;
+    // Applied by the main process (zoom factor and fullscreen)
+    uiScale: number;
+    fullscreenEnabled: boolean;
+}
+
 interface GameApi {
     // Running unpackaged: developer tools (the debug overlay) are available.
     isDev?: boolean;
+    getSettings?: () => Promise<Partial<GameSettings> | null>;
     getNewGameOptions?: () => Promise<unknown>;
     loadGame?: () => Promise<unknown>;
     saveGame?: (gameData: SaveFile) => Promise<{ success: boolean } | undefined>;
@@ -459,8 +507,11 @@ type CustomerEvent = 'checkedIn' | 'consulted' | 'filled' | 'paid';
 //   served: paid and left (mood-based)
 //   impatient: ran out of patience
 //   closing: still in the store at 22:00
-//   reset: removed by a Settings debug control (no change)
-type DepartureReason = 'served' | 'impatient' | 'closing' | 'price' | 'reset';
+//   price: refused the price at check-in
+//   unavailable: turned away at the door; the pharmacy couldn't supply
+//     their prescription (no stock, and no working equipment to make it)
+//   reset: had no prescription after a load (reconcileTasks; no change)
+type DepartureReason = 'served' | 'impatient' | 'closing' | 'price' | 'unavailable' | 'reset';
 
 interface Customer {
     id: string;
@@ -489,7 +540,8 @@ interface CustomersApi {
     // no argument at all, which has always worked for that reason. Optional
     // here to match, not a behavior change.
     // null when no prescription could be written (the customer doesn't
-    // come in).
+    // come in), or when it can't be supplied (they're turned away, which
+    // counts as an 'unavailable' departure).
     generateCustomer: (hour?: number) => Customer | null;
     // Applies an event if the customer's current status allows it (logs and
     // returns false otherwise). The only thing that changes Customer.status.
@@ -563,6 +615,11 @@ interface TaskManagerApi {
     getTasksForEmployee: (employeeId: string) => Task[];
     getTasksForCustomer: (customerId: string) => Task[];
     updateTasks: (minutes: number) => void;
+    // Game minutes of work per game minute: the worker's speed and, for a
+    // compound, the equipment's condition. 1 when nobody is on it.
+    workRate: (task: Task) => number;
+    // Game minutes until it's done at that speed.
+    minutesLeft: (task: Task) => number;
     // The only thing that changes Task.status. Refuses (logs, returns
     // false) a move TASK_TRANSITIONS doesn't allow.
     setStatus: (task: Task, to: TaskStatus) => boolean;
@@ -641,8 +698,12 @@ interface RefillRecord {
 interface PrescriptionsApi {
     activePrescriptions: Prescription[];
     refillRegistry: RefillRecord[];
+    // Write a prescription (no tasks yet: customers.generateCustomer checks
+    // canSupply, then calls ensureFill). null if none could be written.
     generatePrescription: (customerId: string) => string | null;
     generateRefillPrescription: (customerId: string, record: RefillRecord) => string | null;
+    // Stock covers the dosage, or the equipment to make it is owned and working.
+    canSupply: (prescription: Prescription) => boolean;
     // Makes sure a pending prescription has a fill task that either holds
     // its stock or waits on a compound task. Returns true if it had to
     // create or repair anything.
@@ -670,8 +731,24 @@ interface ProductionApi {
     canCompound: (product: Product, quantity?: number) => boolean;
     // Minutes to make `quantity` units of a product.
     compoundTime: (product: Product, quantity: number) => number;
-    // Compound tasks: whether it could start now (it holds its materials,
-    // or the materials for what it would make are on hand).
+    // Every item in the product's equipmentNeeded is owned and not broken.
+    canMake: (product: Product) => boolean;
+    // The needed items that aren't owned or are broken.
+    missingEquipment: (product: Product) => EquipmentItem[];
+    // "needs Capsule Filler", "Tablet Press is broken", or '' if none.
+    missingEquipmentText: (product: Product) => string;
+    // Compounds in progress using this item (at most owned x capacity).
+    inUse: (item: EquipmentItem) => number;
+    // Compounding speed from the condition of the most worn item needed.
+    conditionFactor: (productId: string) => number;
+    // What a full repair of this item costs now.
+    repairCost: (item: EquipmentItem) => number;
+    // Pays for and does a full repair. False if refused (cash, or nothing to repair).
+    repairEquipment: (equipmentId: string) => boolean;
+    // Adds bought units; new units are in perfect condition.
+    addEquipment: (item: EquipmentItem, quantity: number) => void;
+    // Compound tasks: whether it could start now (its equipment owned,
+    // working and free, and it holds its materials or they're on hand).
     canStartCompound: (compound: Task) => boolean;
     // Compound tasks: takes the batch's materials out of inventory (true),
     // shrinking a restock to what the materials cover, or returns false if

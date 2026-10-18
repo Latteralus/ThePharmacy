@@ -44,6 +44,7 @@ test('pause freezes the clock and customers; closing time sends customers home',
 
   // A customer walks in, then the game is paused.
   const before = await page.evaluate(() => {
+    window.productsData.forEach((p) => (p.inventory = 5)); // so they're served, whatever they ask for
     window.customers.generateCustomer();
     window.toggleGamePause();
     return {

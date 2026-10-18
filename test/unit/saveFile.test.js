@@ -202,11 +202,11 @@ describe('save -> disk -> load round trip', () => {
     expect(typeof window.brandReputation.calcCustomers).toBe('function');
   });
 
-  test('equipment keeps its isUnlocked method, reading the loaded research level', () => {
-    const levelOne = window.equipmentData.find((e) => e.researchLevelRequired === 1);
-    const levelTwo = window.equipmentData.find((e) => e.researchLevelRequired === 2);
-    expect(levelOne.isUnlocked()).toBe(true);
-    expect(levelTwo.isUnlocked()).toBe(false);
+  test('which equipment can be bought follows the loaded research level', () => {
+    const levelOne = window.researchData.levels[1].unlockedEquipment[0];
+    const levelTwo = window.researchData.levels[2].unlockedEquipment[0];
+    expect(window.research.isEquipmentUnlocked(levelOne)).toBe(true);
+    expect(window.research.isEquipmentUnlocked(levelTwo)).toBe(false);
   });
 
   test('restores speed and the Settings multipliers', () => {
@@ -319,7 +319,6 @@ describe('migrating v1 saves', () => {
     expect(pd001.name).not.toBe('Frozen Old Name');
     expect(window.researchData.currentLevel).toBe(2);
     expect(window.brandReputation.reputationScore).toBe(21);
-    expect(typeof window.equipmentData[0].isUnlocked).toBe('function');
     expect(window.gameState.lastSimulationTime).toBe(0);
   });
 
@@ -431,5 +430,55 @@ describe('ids (M9)', () => {
     delete save.gameState.nextId;
     window.saveFile.apply(save);
     expect(window.nextId('pres')).toBe('pres-1');
+  });
+});
+
+describe('v4 saves (Phase 7: the research tree is levels 0-4)', () => {
+  function v4Save({ level, target }) {
+    const save = throughDisk(window.saveFile.serialize());
+    save.version = 4;
+    save.research = {
+      currentLevel: level,
+      inProgress: target ? { targetLevel: target, startDayIndex: 1, daysRequired: 20 } : null,
+    };
+    // An item v4 had that no product used
+    save.equipment.push({ id: 'eq022', owned: 2, durability: 50 });
+    return save;
+  }
+
+  test('a level past the last one keeps everything there is', () => {
+    const save = window.saveFile.migrate(v4Save({ level: 7 }));
+    expect(save.version).toBe(window.saveFile.version);
+    expect(save.research).toEqual({ currentLevel: 4, inProgress: null });
+  });
+
+  test('research under way toward a level that no longer exists is cancelled and refunded', () => {
+    const cash = window.financesData.cash;
+    window.saveFile.apply(v4Save({ level: 4, target: 5 }));
+    expect(window.researchData).toMatchObject({ currentLevel: 4, inProgress: null });
+    expect(window.financesData.cash).toBe(cash + 25000); // v4 charged 5000 x level
+    expect(window.financesData.transactions[0]).toMatchObject({ type: 'income', amount: 25000 });
+  });
+
+  test('research toward a level that still exists carries on', () => {
+    const cash = window.financesData.cash;
+    window.saveFile.apply(v4Save({ level: 2, target: 3 }));
+    expect(window.researchData.inProgress).toMatchObject({ targetLevel: 3 });
+    expect(window.financesData.cash).toBe(cash);
+  });
+
+  test('equipment that was removed is dropped', () => {
+    window.saveFile.apply(v4Save({ level: 0 }));
+    expect(window.equipmentData.find((e) => e.id === 'eq022')).toBeUndefined();
+    expect(window.equipmentData.map((e) => e.id)).toContain('eq001');
+  });
+
+  test('hours worked today are saved with the staff', () => {
+    playABit();
+    window.employeesData[0].minutesWorkedToday = 123;
+    const save = throughDisk(window.saveFile.serialize());
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.employeesData[0].minutesWorkedToday).toBe(123);
   });
 });

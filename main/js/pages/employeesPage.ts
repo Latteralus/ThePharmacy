@@ -2,6 +2,12 @@
 //
 // Daily wages are salary / 365, which is what end of day charges
 // (finances.applyDailyCosts); the page used to show salary / 30.
+//
+// Staff matter (Phase 7): each row shows hours worked today, speed at their
+// main job and pay against the market, which is what moves morale at
+// closing time (employees.endOfDay). Salaries can be changed here. The
+// table is redrawn only when the staff change; otherwise rows update in
+// place, so a salary being typed isn't wiped.
 
 const SKILL_COLUMNS: Array<{ key: keyof EmployeeSkills; short: string; long: string }> = [
     { key: 'compounding', short: 'Comp.', long: 'Compounding' },
@@ -10,6 +16,13 @@ const SKILL_COLUMNS: Array<{ key: keyof EmployeeSkills; short: string; long: str
     { key: 'inventoryManagement', short: 'Inv.', long: 'Inventory management' },
     { key: 'sales', short: 'Sales', long: 'Sales' },
 ];
+
+// Each role's main job, for the Speed column
+const MAIN_TASK: Record<string, { type: string; label: string }> = {
+    Pharmacist: { type: 'consultation', label: 'consultations' },
+    'Lab Technician': { type: 'compound', label: 'compounding' },
+    Cashier: { type: 'customerInteraction', label: 'the front desk' },
+};
 
 const dailyWage = (employee: Employee): number => employee.salary / 365;
 
@@ -37,44 +50,140 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
     staffView.appendChild(kpis);
 
     const staffCard = kit.card('Staff', { flush: true });
-    staffView.appendChild(staffCard.root);
+    staffView.append(
+        staffCard.root,
+        el(
+            'p',
+            'small muted',
+            'Morale changes at closing: up when someone worked 8 hours or less, down for every hour over, and up or down with pay against the market. ' +
+                'Below 50% they slow down, and below 25% they may quit.',
+        ),
+    );
 
     const skillColumns = (): TableColumn[] =>
         SKILL_COLUMNS.map((s) => ({ label: s.short, num: true, title: `${s.long} (0-100)` }));
 
-    function moraleCell(morale: number): HTMLElement {
-        const tone: Tone = morale >= 70 ? 'good' : morale >= 40 ? 'warn' : 'critical';
-        return kit.meterCell(morale / 100, `${Math.round(morale)}%`, tone).root;
+    function moraleTone(morale: number): Tone {
+        return morale >= 70 ? 'good' : morale >= 40 ? 'warn' : 'critical';
     }
 
-    function renderStaff(): void {
+    function payCue(employee: Employee): { text: string; className: string; title: string } {
+        const pay = window.employees.payVsMarket(employee);
+        const fair = window.helpers.fairSalary(employee);
+        const className = pay <= -0.05 ? 'critical-text' : pay >= 0.05 ? 'good-text' : 'muted';
+        return {
+            text: `${fmt.money(dailyWage(employee))}/day · ${fmt.signedPct(pay)} vs market`,
+            className: `sub ${className}`,
+            title: `The market pays about ${fmt.moneyWhole(fair)} a year for this role at their skill.`,
+        };
+    }
+
+    function speed(employee: Employee): { text: string; title: string } {
+        const main = MAIN_TASK[employee.role] ?? MAIN_TASK.Cashier;
+        const rate = window.employees.workRate(employee, { type: main.type } as Task);
+        return {
+            text: `${rate.toFixed(2)}×`,
+            title: `Speed at ${main.label}, from their skill${employee.morale < 50 ? ' and low morale' : ''}. 1× is normal.`,
+        };
+    }
+
+    // Writes a value into an input unless the player is typing in it
+    function setIdle(input: HTMLInputElement, value: string): void {
+        if (document.activeElement !== input && input.value !== value) input.value = value;
+    }
+
+    // Rows update on every frame's clock tick: only touch what changed
+    function setText(node: HTMLElement, text: string, className?: string, title?: string): void {
+        if (node.textContent !== text) node.textContent = text;
+        if (className !== undefined && node.className !== className) node.className = className;
+        if (title !== undefined && node.title !== title) node.title = title;
+    }
+
+    let renderedStaff = '';
+    let liveRows: Array<() => void> = [];
+
+    function buildStaffTable(): void {
         staffCard.body.innerHTML = '';
+        liveRows = [];
+        const staff = window.employeesData;
+        renderedStaff = staff.map((e) => e.id).join();
+
         const table = kit.table([
             { label: 'Employee' },
-            { label: 'Working on', width: '220px' },
-            { label: 'Salary', num: true },
+            { label: 'Working on', width: '200px' },
+            { label: 'Salary a year', num: true },
+            { label: 'Today', num: true, title: 'Hours worked today. Over 8 lowers morale at closing.' },
+            { label: 'Speed', num: true, title: 'Speed at their main job. 1× is normal.' },
             { label: 'Morale', width: '120px' },
             ...skillColumns(),
             { label: '', className: 'actions' },
         ]);
         staffCard.body.appendChild(table.root);
-
-        const staff = window.employeesData;
         if (staff.length === 0) table.empty('No staff. Hire someone on the Hiring tab.');
 
-        let idle = 0;
         staff.forEach((employee) => {
-            const task = employee.currentTaskId ? window.taskManager.getTaskById(employee.currentTaskId) : undefined;
             const working = el('div');
-            if (task) {
-                const label = el('div');
-                label.append(kit.swatch(window.words.taskKind(task)), window.words.taskLabel(task));
-                working.appendChild(label);
-                if (task.status === 'inProgress') working.appendChild(window.taskbars.createProgressBar(task));
-            } else {
-                idle++;
-                working.appendChild(kit.pill('Idle'));
-            }
+            let shownTask: string | null | undefined;
+
+            const salaryInput = kit.numberInput(Math.round(employee.salary), {
+                min: 1,
+                step: 1000,
+                small: true,
+                width: '96px',
+            });
+            salaryInput.setAttribute('aria-label', `Salary for ${employee.firstName} ${employee.lastName}`);
+            salaryInput.addEventListener('change', () => {
+                const value = parseFloat(salaryInput.value);
+                if (!window.employees.setSalary(employee.id, value)) {
+                    window.toast('Enter a salary above $0.', 'error');
+                    salaryInput.value = String(Math.round(employee.salary));
+                    return;
+                }
+                window.toast(
+                    `${employee.firstName} ${employee.lastName} now earns ${fmt.moneyWhole(employee.salary)} a year (${fmt.money(dailyWage(employee))} a day).`,
+                    'success',
+                );
+            });
+            const pay = el('span');
+            const salaryCell = el('span');
+            salaryCell.append(salaryInput, pay);
+
+            const hours = el('span');
+            const speedCell = el('span');
+            const morale = kit.meterCell(0, '');
+
+            const update = (): void => {
+                const task = employee.currentTaskId
+                    ? window.taskManager.getTaskById(employee.currentTaskId)
+                    : undefined;
+                const taskKey = task ? `${task.id}:${task.status}` : null;
+                if (taskKey !== shownTask) {
+                    shownTask = taskKey;
+                    working.innerHTML = '';
+                    if (task) {
+                        const label = el('div');
+                        label.append(kit.swatch(window.words.taskKind(task)), window.words.taskLabel(task));
+                        working.appendChild(label);
+                        if (task.status === 'inProgress') working.appendChild(window.taskbars.createProgressBar(task));
+                    } else {
+                        working.appendChild(kit.pill('Idle'));
+                    }
+                }
+
+                setIdle(salaryInput, String(Math.round(employee.salary)));
+                const cue = payCue(employee);
+                setText(pay, cue.text, cue.className, cue.title);
+
+                const worked = (employee.minutesWorkedToday ?? 0) / 60;
+                setText(hours, `${worked.toFixed(1)}h`, worked > 8 ? 'warn-text' : '');
+
+                const s = speed(employee);
+                setText(speedCell, s.text, undefined, s.title);
+
+                morale.set(employee.morale / 100, `${Math.round(employee.morale)}%`, moraleTone(employee.morale));
+            };
+            update();
+            liveRows.push(update);
 
             const fire = kit.button(
                 'Terminate',
@@ -92,19 +201,29 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             const row = table.row([
                 kit.primaryCell(`${employee.firstName} ${employee.lastName}`, employee.role),
                 working,
-                kit.primaryCell(`${fmt.moneyWhole(employee.salary)}/yr`, `${fmt.money(dailyWage(employee))}/day`),
-                moraleCell(employee.morale),
+                salaryCell,
+                hours,
+                speedCell,
+                morale.root,
                 ...SKILL_COLUMNS.map((s) => employee.skills?.[s.key] ?? '—'),
                 fire,
             ]);
             row.className = 'employee-card';
+            row.dataset.employeeId = employee.id;
         });
+    }
 
+    function renderStaff(): void {
+        const staff = window.employeesData;
+        if (staff.map((e) => e.id).join() !== renderedStaff) buildStaffTable();
+        else liveRows.forEach((update) => update());
+
+        const idle = staff.filter((e) => !e.currentTaskId).length;
         const wages = staff.reduce((sum, e) => sum + dailyWage(e), 0);
-        const morale = staff.length > 0 ? staff.reduce((sum, e) => sum + e.morale, 0) / staff.length : 0;
+        const avgMorale = staff.length > 0 ? staff.reduce((sum, e) => sum + e.morale, 0) / staff.length : 0;
         staffTile.set(fmt.int(staff.length), staff.length > 0 ? `${idle} idle` : '');
         wagesTile.set(fmt.money(wages), `${fmt.moneyWhole(wages * 365)} a year`);
-        moraleTile.set(staff.length > 0 ? `${Math.round(morale)}%` : '—');
+        moraleTile.set(staff.length > 0 ? `${Math.round(avgMorale)}%` : '—');
         staffCard.setCount(staff.length);
     }
 
@@ -140,7 +259,8 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             'p',
             'small muted',
             `Posting costs ${fmt.moneyWhole(HIRING_FEE)} whether or not you hire, and shows five candidates. ` +
-                'Pharmacists consult, lab technicians restock and compound, cashiers run the front desk.',
+                'Pharmacists consult, lab technicians restock and compound, cashiers run the front desk. ' +
+                'More skilled staff work faster.',
         ),
     );
     form.style.marginBottom = '8px';
@@ -156,6 +276,7 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
         const table = kit.table([
             { label: 'Candidate' },
             { label: 'Salary', num: true },
+            { label: 'Speed', num: true, title: 'Speed at their main job. 1× is normal.' },
             ...skillColumns(),
             { label: '', className: 'actions' },
         ]);
@@ -177,9 +298,13 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
                 },
                 { small: true },
             );
+            const s = speed(candidate);
+            const speedCell = el('span', '', s.text);
+            speedCell.title = s.title;
             const row = table.row([
                 kit.primaryCell(`${candidate.firstName} ${candidate.lastName}`, candidate.role),
-                kit.primaryCell(`${fmt.moneyWhole(candidate.salary)}/yr`, `${fmt.money(dailyWage(candidate))}/day`),
+                kit.primaryCell(`${fmt.moneyWhole(candidate.salary)}/yr`, payCue(candidate).text),
+                speedCell,
                 ...SKILL_COLUMNS.map((s) => candidate.skills?.[s.key] ?? '—'),
                 hire,
             ]);
@@ -188,10 +313,12 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
     };
     window.displayEmployeeCandidates([]);
 
-    // Hires, firings, and staff starting and finishing tasks
+    // Hires, firings, raises and closing time; staff starting and finishing
+    // tasks; the clock (hours worked today)
     renderStaff();
     page.on('employees', renderStaff);
     page.on('tasks', renderStaff);
+    page.on('time', () => liveRows.forEach((update) => update()));
 
     tabs.select(0);
 }

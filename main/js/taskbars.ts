@@ -6,7 +6,8 @@
 // already advances every simulation step, so there's nothing to interpolate.
 //
 // Bars take their task kind's identity colour (--task-* in style.css) and
-// show the game time left; the percentage is in the tooltip.
+// show the game time left at the worker's speed (taskManager.minutesLeft);
+// the percentage is in the tooltip.
 
 (function () {
     function fraction(task: Task): number {
@@ -16,7 +17,9 @@
 
     // Game minutes left, as the player reads it: "<1m left", "3m left", "1h 05m left"
     function timeLeft(task: Task): string {
-        const remaining = Math.max(0, task.totalTime - task.progress);
+        const remaining = window.taskManager?.minutesLeft
+            ? window.taskManager.minutesLeft(task)
+            : Math.max(0, task.totalTime - task.progress);
         if (remaining <= 0) return 'done';
         if (remaining < 1) return '<1m left';
         return `${window.fmt.duration(Math.ceil(remaining))} left`;
@@ -25,8 +28,10 @@
     function tooltip(task: Task): string {
         const lines = [
             window.words.taskLabel(task),
-            `${Math.round(fraction(task) * 100)}% · ${Math.round(task.progress)} of ${Math.round(task.totalTime)} game minutes`,
+            `${Math.round(fraction(task) * 100)}% · ${Math.round(task.progress)} of ${Math.round(task.totalTime)} minutes of work`,
         ];
+        const rate = window.taskManager?.workRate?.(task) ?? 1;
+        if (Math.abs(rate - 1) >= 0.01) lines.push(`Working at ${rate.toFixed(2)}× speed`);
         const customer = task.customerId ? window.customers?.getCustomerById?.(task.customerId) : undefined;
         if (customer) lines.push(`For ${customer.firstName} ${customer.lastName}`);
         return lines.join('\n');

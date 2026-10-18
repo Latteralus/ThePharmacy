@@ -50,11 +50,19 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             return false;
         }
 
-        // A compound takes its batch's materials as it starts. If they've
-        // gone since the task was queued, it stays queued.
-        if (task.type === 'compound' && !window.production.takeMaterials(task)) {
-            console.warn(`[assignTaskToEmployee] Not enough materials to start ${task.id}.`);
-            return false;
+        // A compound needs its equipment free (an earlier compound this
+        // round may have just taken it) and takes its batch's materials as
+        // it starts. If either is gone since the task was queued, it stays
+        // queued.
+        if (task.type === 'compound') {
+            if (!window.production.canStartCompound(task)) {
+                console.warn(`[assignTaskToEmployee] ${task.id} can't start: equipment or materials unavailable.`);
+                return false;
+            }
+            if (!window.production.takeMaterials(task)) {
+                console.warn(`[assignTaskToEmployee] Not enough materials to start ${task.id}.`);
+                return false;
+            }
         }
 
         // Check if employee already has a task
@@ -181,7 +189,8 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                 return false;
             }
 
-            // A compound needs materials for its batch (it takes them when it starts)
+            // A compound needs materials for its batch (it takes them when it
+            // starts) and its equipment owned, working and free
             if (task.type === 'compound') {
                 return window.production?.canStartCompound(task) ?? false;
             }
@@ -310,8 +319,8 @@ window.taskAssignment = (function (): TaskAssignmentApi {
     }
 
     /**
-     * Finds the best employee for a given task based on role and skills.
-     * With improved logic for role matching and skill prioritization.
+     * The employee for a task: the preferred role with anyone free, then
+     * whoever in it works fastest.
      */
     function findBestEmployeeForTask(task: Task, availableEmployees: Employee[]): Employee | null {
         // Define roles eligible for each task type, with priority order
@@ -323,14 +332,11 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             production: ['Lab Technician', 'Pharmacist'],
         };
 
-        // Check-in and checkout: the Cashier with the best customer service,
-        // or anyone if no Cashier is free
+        // Check-in and checkout: the fastest free Cashier, or anyone if no
+        // Cashier is free
         if (task.interaction) {
             const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
-            if (cashiers.length > 0) {
-                return cashiers.sort((a, b) => (b.skills?.customerService || 0) - (a.skills?.customerService || 0))[0];
-            }
-            return availableEmployees[0] ?? null;
+            return fastest(cashiers.length > 0 ? cashiers : availableEmployees, task);
         }
 
         // Restocking (and Quick Compound) is lab work only. A batch can take
@@ -363,91 +369,22 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             eligibleEmployees = availableEmployees;
         }
 
-        if (eligibleEmployees.length === 0) {
-            return null;
-        }
-
-        // Find the employee with best skills for this task
-        let bestEmployee = eligibleEmployees[0];
-        let bestScore = -1;
-
-        for (const employee of eligibleEmployees) {
-            // Calculate a score based on skills relevant to the task
-            let score = 0;
-
-            // Base score on general efficiency
-            const efficiency = calculateEmployeeEfficiency(employee);
-            score += efficiency;
-
-            // Add bonus for specific skills
-            if (task.type === 'fillPrescription') {
-                score += (employee.skills?.compounding || 0) * 1.5;
-                score += employee.skills?.dispensing || 0;
-            } else if (task.type === 'compound') {
-                score += (employee.skills?.compounding || 0) * 2;
-            } else if (task.type === 'customerInteraction') {
-                score += (employee.skills?.customerService || 0) * 2;
-            } else if (task.type === 'consultation') {
-                score += employee.skills?.customerService || 0;
-                score += (employee.skills?.dispensing || 0) * 1.5;
-            }
-
-            // Preference for employee with higher morale
-            score += employee.morale / 20; // 0-5 bonus points based on morale
-
-            // Preference for same employee who created a related compound
-            if (task.type === 'fillPrescription' && task.dependencyTaskId) {
-                const compoundTask = window.taskManager.tasks.find((t) => t.id === task.dependencyTaskId);
-                if (compoundTask && compoundTask.assignedTo === employee.id) {
-                    score += 50; // Strong preference for continuity
-                }
-            }
-
-            // If this is the employee's primary role, give a significant bonus
-            if (
-                (task.type === 'fillPrescription' && employee.role === 'Lab Technician') ||
-                (task.type === 'consultation' && employee.role === 'Pharmacist') ||
-                (task.type === 'customerInteraction' && employee.role === 'Cashier')
-            ) {
-                score += 30; // Strong bonus for primary role
-            }
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestEmployee = employee;
-            }
-        }
-
-        return bestEmployee;
+        return fastest(eligibleEmployees, task);
     }
 
-    /**
-     * Calculate employee efficiency based on skills and morale
-     */
-    function calculateEmployeeEfficiency(employee: Employee): number {
-        // Calculate average skill
-        let skillSum = 0;
-        let skillCount = 0;
-
-        // Handle case when employee has no skills object
-        if (!employee.skills) {
-            return 50; // Default efficiency
+    // Whoever does this task fastest (skill and morale, employees.workRate).
+    // Ties go to the first in the list.
+    function fastest(candidates: Employee[], task: Task): Employee | null {
+        let best: Employee | null = null;
+        let bestRate = -1;
+        for (const employee of candidates) {
+            const rate = window.employees.workRate(employee, task);
+            if (rate > bestRate) {
+                bestRate = rate;
+                best = employee;
+            }
         }
-
-        for (const skill in employee.skills) {
-            skillSum += employee.skills[skill as keyof EmployeeSkills];
-            skillCount++;
-        }
-
-        const avgSkill = skillCount > 0 ? skillSum / skillCount : 50;
-
-        // Apply morale factor
-        const moraleFactor = 0.5 + employee.morale / 200; // 0.5 to 1.0 based on morale
-
-        // Calculate base efficiency (0-100 scale)
-        const baseEfficiency = avgSkill * moraleFactor;
-
-        return baseEfficiency;
+        return best;
     }
 
     // Log current task assignment state - useful for debugging

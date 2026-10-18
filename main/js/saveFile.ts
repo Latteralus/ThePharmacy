@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 4;
+    const SAVE_VERSION = 5;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -24,12 +24,10 @@ window.saveFile = (function (): SaveFileApi {
         return JSON.parse(JSON.stringify(value));
     }
 
-    // Equipment is copied shallowly so each item keeps its isUnlocked()
-    // method (JSON would drop it).
     const defaults = {
         products: clone(window.productsData),
         materials: clone(window.materialsData),
-        equipment: window.equipmentData.map((item) => ({ ...item })),
+        equipment: clone(window.equipmentData),
         research: clone(window.researchData),
     };
 
@@ -98,6 +96,7 @@ window.saveFile = (function (): SaveFileApi {
         1: (save: SaveFileV1) => SaveFile;
         2: (save: SaveFile) => SaveFile;
         3: (save: SaveFile) => SaveFile;
+        4: (save: SaveFile) => SaveFile;
     } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
@@ -186,6 +185,22 @@ window.saveFile = (function (): SaveFileApi {
             );
             return { ...save, version: 4, employeesData };
         },
+
+        // v4 had research levels 0-10, and levels 3-10 unlocked products and
+        // equipment that didn't exist. The tree is now levels 0-4 (Phase 7).
+        // A save past the last level keeps everything there is; research
+        // under way toward a level that's gone is cancelled and its cost
+        // (5000 x level in v4) refunded when the save is applied.
+        4(save) {
+            const maxLevel = defaults.research.levels.length - 1;
+            const research = { ...save.research, currentLevel: Math.min(save.research.currentLevel, maxLevel) };
+            const target = research.inProgress?.targetLevel ?? 0;
+            if (target > maxLevel) {
+                research.refund = 5000 * target;
+                research.inProgress = null;
+            }
+            return { ...save, version: 5, research };
+        },
     };
 
     function migrate(raw: unknown): SaveFile {
@@ -242,16 +257,20 @@ window.saveFile = (function (): SaveFileApi {
 
         window.productsData = mergeState(clone(defaults.products), save.products, PRODUCT_STATE);
         window.materialsData = mergeState(clone(defaults.materials), save.materials, MATERIAL_STATE);
-        window.equipmentData = mergeState(
-            defaults.equipment.map((item) => ({ ...item })),
-            save.equipment,
-            EQUIPMENT_STATE,
-        );
+        window.equipmentData = mergeState(clone(defaults.equipment), save.equipment, EQUIPMENT_STATE);
         window.researchData = {
             ...clone(defaults.research),
             currentLevel: save.research.currentLevel,
             inProgress: save.research.inProgress,
         };
+        if (save.research.refund) {
+            window.finances.transact({
+                type: 'income',
+                category: 'other',
+                amount: save.research.refund,
+                description: 'Refund: research toward a level that no longer exists',
+            });
+        }
 
         // Customers the current session has scheduled to arrive belong to
         // it, not to the loaded game.

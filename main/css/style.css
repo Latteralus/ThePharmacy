@@ -1040,6 +1040,17 @@ select {
   padding: 5px 0;
 }
 
+/* Headers line up with the unpadded cells, and columns keep a gap */
+.modal .data-table th {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.modal .data-table td + td,
+.modal .data-table th + th {
+  padding-left: 16px;
+}
+
 .split-bar {
   display: flex;
   gap: 2px;

@@ -78,6 +78,7 @@ test('saving writes a real save file, and loading it restores game state', async
     });
     window.productsData.find((p) => p.id === 'pd001').price = 123.45;
     window.setGameSpeed(2);
+    window.productsData.forEach((p) => (p.inventory = 5)); // so they're served, whatever they ask for
     return window.customers.generateCustomer().id;
   });
 
@@ -95,7 +96,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(5);
   // Ids come from a counter saved with the game (M9)
   expect(customerId).toMatch(/^cust-\d+$/);
   expect(saved.gameState.nextId).toBeGreaterThan(Number(customerId.split('-')[1]));
@@ -155,7 +156,7 @@ test('saving writes a real save file, and loading it restores game state', async
       currentDateIsDate: window.gameState?.currentDate instanceof Date,
       transactionDatesAreDates: window.financesData.transactions.every((t) => t.date instanceof Date),
       clockAdvanced: window.gameState.currentDate.getTime() > before,
-      equipmentIsUnlockedIsFunction: typeof window.equipmentData?.[0]?.isUnlocked === 'function',
+      equipmentOwned: window.equipmentData.filter((e) => e.owned > 0).map((e) => e.id),
       brandReputationHasMethods: typeof window.brandReputation?.calcCustomers === 'function',
     }),
     timeAfterLoad,
@@ -166,7 +167,7 @@ test('saving writes a real save file, and loading it restores game state', async
   expect(loaded.currentDateIsDate).toBe(true);
   expect(loaded.transactionDatesAreDates).toBe(true);
   expect(loaded.clockAdvanced).toBe(true);
-  expect(loaded.equipmentIsUnlockedIsFunction).toBe(true);
+  expect(loaded.equipmentOwned).toEqual(['eq001', 'eq002', 'eq003']);
   expect(loaded.brandReputationHasMethods).toBe(true);
 
   // --- Force end of day: the daily summary must open (C2 softlock) ---

@@ -69,6 +69,9 @@ window.timeEvents = (function (): TimeEventsApi {
         if (window.finances && window.finances.applyDailyCosts) {
             window.finances.applyDailyCosts();
         }
+        // Today's hours and pay move staff morale; the unhappiest may quit.
+        // After wages, so a quitter is paid for the day.
+        window.employees?.endOfDay?.();
         gameState.lastEndedDayIndex = gameState.dayIndex;
 
         // Show the daily summary, then wait for the user to start next day
@@ -332,7 +335,7 @@ window.timeEvents = (function (): TimeEventsApi {
                     requireFunds: true,
                 });
                 if (paid) {
-                    eq.owned += eq.autoPurchaseAmount;
+                    window.production.addEquipment(eq, eq.autoPurchaseAmount);
                     totalPurchaseCost += cost;
                     purchasesPlaced++;
 

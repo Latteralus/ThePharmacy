@@ -1,20 +1,117 @@
 // /js/production.js
 
 window.production = (function (): ProductionApi {
-    const DURABILITY_DECAY_PER_USE = 0.5;
+    // Equipment matters (findings H8, Phase 7). A product can be compounded
+    // only when every item in its equipmentNeeded is owned and not broken,
+    // and an item takes on at most owned x capacity compounds at a time.
+    // Each finished compound wears what it used; worn equipment is slower
+    // and broken equipment can't be used until it's repaired.
+    const WEAR_PER_BATCH = 0.5; // condition points per finished compound, shared by the units owned
+    const SLOW_BELOW = 50; // condition under which compounding slows, to 0.5x at 0
+    const WORN_WARNING = 25; // the player is told when condition falls below this
+    const REPAIR_SHARE = 0.25; // a full repair costs this share of the price, per unit owned
 
-    // Wears down the equipment used to make a product by a small flat
-    // amount per completed task. Purely informational for now - durability
-    // has no gameplay effect yet, it just actually moves instead of
-    // sitting at 100 forever.
-    function decayEquipmentDurability(equipmentIds: string[]): void {
-        equipmentIds.forEach((eqId) => {
-            const eq = window.equipmentData.find((e) => e.id === eqId);
-            if (eq) {
-                eq.durability = Math.max(0, eq.durability - DURABILITY_DECAY_PER_USE);
+    function equipmentFor(product: Product): EquipmentItem[] {
+        return product.equipmentNeeded
+            .map((id) => window.equipmentData.find((e) => e.id === id))
+            .filter((item): item is EquipmentItem => !!item);
+    }
+
+    // Needed items that aren't owned, or are broken
+    function missingEquipment(product: Product): EquipmentItem[] {
+        return equipmentFor(product).filter((item) => item.owned < 1 || item.durability <= 0);
+    }
+
+    function canMake(product: Product): boolean {
+        return !!product && missingEquipment(product).length === 0;
+    }
+
+    // What the player needs to do before the product can be made, for messages
+    function missingEquipmentText(product: Product): string {
+        const missing = missingEquipment(product);
+        const toBuy = missing.filter((item) => item.owned < 1).map((item) => item.name);
+        const toRepair = missing.filter((item) => item.owned >= 1).map((item) => item.name);
+        const parts: string[] = [];
+        if (toBuy.length) parts.push(`needs ${toBuy.join(' and ')}`);
+        if (toRepair.length) parts.push(`${toRepair.join(' and ')} ${toRepair.length === 1 ? 'is' : 'are'} broken`);
+        return parts.join('; ');
+    }
+
+    // Compounds being worked on right now that use this item
+    function inUse(item: EquipmentItem): number {
+        return window.taskManager.tasks.filter((task) => {
+            if (task.type !== 'compound' || task.status !== 'inProgress') return false;
+            const product = window.productsData.find((p) => p.id === task.productId);
+            return !!product && product.equipmentNeeded.includes(item.id);
+        }).length;
+    }
+
+    function equipmentFree(product: Product): boolean {
+        return equipmentFor(product).every((item) => inUse(item) < item.owned * item.capacity);
+    }
+
+    // Speed from the condition of the most worn item a product needs
+    function conditionFactor(productId: string): number {
+        const product = window.productsData.find((p) => p.id === productId);
+        if (!product) return 1;
+        const worst = Math.min(100, ...equipmentFor(product).map((item) => item.durability));
+        return worst >= SLOW_BELOW ? 1 : 0.5 + (0.5 * Math.max(0, worst)) / SLOW_BELOW;
+    }
+
+    function wearEquipment(product: Product): void {
+        equipmentFor(product).forEach((item) => {
+            if (item.owned < 1) return;
+            const before = item.durability;
+            item.durability = Math.max(0, item.durability - WEAR_PER_BATCH / item.owned);
+            if (before > 0 && item.durability <= 0) {
+                window.notifications?.add(
+                    `${item.name} is broken. Nothing that needs it can be made until you repair it (Equipment).`,
+                    'error',
+                );
+            } else if (before >= WORN_WARNING && item.durability < WORN_WARNING) {
+                window.notifications?.add(
+                    `${item.name} is worn (${Math.round(item.durability)}%) and slowing the lab. Repair it on the Equipment page.`,
+                    'warning',
+                );
             }
         });
         window.updateUI('equipment');
+    }
+
+    function repairCost(item: EquipmentItem): number {
+        const wear = Math.max(0, 100 - item.durability) / 100;
+        return Math.round(REPAIR_SHARE * item.cost * Math.max(1, item.owned) * wear * 100) / 100;
+    }
+
+    function repairEquipment(equipmentId: string): boolean {
+        const item = window.equipmentData.find((e) => e.id === equipmentId);
+        if (!item || item.owned < 1 || item.durability >= 100) return false;
+        const paid = window.finances.transact({
+            type: 'expense',
+            category: 'equipment',
+            amount: repairCost(item),
+            description: `Repaired ${item.name}`,
+            requireFunds: true,
+        });
+        if (!paid) return false;
+        item.durability = 100;
+        window.updateUI('equipment');
+        window.updateUI('inventory');
+        // Compounds waiting on it can start
+        window.taskAssignment.requestAutoAssign();
+        return true;
+    }
+
+    // Bought (by the player or auto-purchase). New units are in perfect
+    // condition, so the item's condition becomes the average.
+    function addEquipment(item: EquipmentItem, quantity: number): void {
+        if (!(quantity > 0)) return;
+        const owned = Math.max(0, item.owned);
+        item.durability = (item.durability * owned + 100 * quantity) / (owned + quantity);
+        item.owned = owned + quantity;
+        window.updateUI('equipment');
+        window.updateUI('inventory');
+        window.taskAssignment.requestAutoAssign();
     }
 
     // Making a batch shares its setup: the first unit takes the product's
@@ -47,10 +144,11 @@ window.production = (function (): ProductionApi {
         return Math.min(wanted, window.helpers.calculatePotentialProduction(product.id));
     }
 
+    // Its equipment owned, working and free, and the materials taken or on hand
     function canStartCompound(compound: Task): boolean {
-        if (compound.materialsTaken) return true;
         const product = window.productsData.find((p) => p.id === compound.productId);
-        return !!product && startableQuantity(compound, product) >= 1;
+        if (!product || !canMake(product) || !equipmentFree(product)) return false;
+        return !!compound.materialsTaken || startableQuantity(compound, product) >= 1;
     }
 
     // Takes the whole batch's materials out of inventory when someone starts
@@ -119,29 +217,40 @@ window.production = (function (): ProductionApi {
         return compoundTask;
     }
 
-    // Function to check inventory and create compound tasks if needed
+    // Restocks: every product the pharmacy carries (unlocked by research)
+    // and can make, up to its target stock, as far as the materials go.
+    // Restocks queued for something that can no longer be made (equipment
+    // broke) are dropped until it can.
     function checkAndCreateCompoundTasks(): void {
-        console.log('[production.js] Checking inventory for compounding tasks...');
+        const unlocked = new Set(window.research.getUnlockedProducts());
         window.productsData.forEach((product) => {
+            const makeable = unlocked.has(product.id) && canMake(product);
+            if (!makeable) {
+                window.taskManager.tasks
+                    .filter(
+                        (t) =>
+                            t.type === 'compound' &&
+                            t.productId === product.id &&
+                            !t.prescriptionId &&
+                            t.status === 'pending' &&
+                            !t.materialsTaken,
+                    )
+                    .forEach((t) => window.taskManager.cancelTask(t.id));
+                return;
+            }
+
             // Skip if there's already a pending or in-progress compound task for this product
             const existingCompoundTask = window.taskManager.tasks.find(
                 (t) => t.type === 'compound' && t.productId === product.id && t.status !== 'completed',
             );
             if (existingCompoundTask) return;
 
-            // Restock up to maxInventory, as far as the materials go
             if (product.inventory < product.maxInventory) {
                 const quantityToMake = Math.min(
                     product.maxInventory - product.inventory,
                     window.helpers.calculatePotentialProduction(product.id),
                 );
-                if (quantityToMake >= 1) {
-                    createCompoundTask(product, quantityToMake);
-                } else {
-                    console.warn(
-                        `[production.js] Cannot create compound task for ${product.name} due to insufficient materials.`,
-                    );
-                }
+                if (quantityToMake >= 1) createCompoundTask(product, quantityToMake);
             }
         });
     }
@@ -162,20 +271,16 @@ window.production = (function (): ProductionApi {
                     `[production.js] Compounding completed for ${task.quantityToMake} units of ${product.name}. Inventory updated.`,
                 );
 
-                decayEquipmentDurability(product.equipmentNeeded);
+                wearEquipment(product);
                 refreshInventoryUI();
                 // A prescription's fill waiting on this compound is released
                 // by taskManager (releaseDependents), which runs next. A
                 // restock can supply other customers' waiting fills.
                 if (!task.prescriptionId) window.prescriptions.useStockForWaitingFills(product.id);
             }
-        } else if (task.type === 'fillPrescription') {
-            // The stock left inventory when the fill took it (takeStock).
-            const product = window.productsData.find((p) => p.id === task.productId);
-            if (product) {
-                decayEquipmentDurability(product.equipmentNeeded);
-            }
         }
+        // A fill's stock left inventory when the fill took it (takeStock),
+        // and counting out a prescription doesn't use the lab's equipment.
     }
 
     function takeStock(fill: Task): boolean {
@@ -215,6 +320,14 @@ window.production = (function (): ProductionApi {
     return {
         canCompound,
         compoundTime,
+        canMake,
+        missingEquipment,
+        missingEquipmentText,
+        inUse,
+        conditionFactor,
+        repairCost,
+        repairEquipment,
+        addEquipment,
         canStartCompound,
         takeMaterials,
         returnMaterials,

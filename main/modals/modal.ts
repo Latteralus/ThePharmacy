@@ -11,6 +11,7 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
         { key: 'impatient', label: 'Ran out of patience', count: left.impatient ?? 0, color: 'var(--critical)' },
         { key: 'price', label: 'Refused the price', count: left.price ?? 0, color: 'var(--serious)' },
         { key: 'closing', label: 'Still waiting at closing', count: left.closing ?? 0, color: 'var(--warn)' },
+        { key: 'unavailable', label: 'Turned away', count: left.unavailable ?? 0, color: 'var(--ink-muted)' },
     ];
     const lost = lostParts.reduce((sum, part) => sum + part.count, 0);
 
@@ -56,12 +57,42 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
         customers.appendChild(el('p', 'muted small', 'No customers today.'));
     }
 
+    // Staff: today's hours and how morale moved (employees.endOfDay ran
+    // just before this)
+    const body: Node[] = [money.root, customers];
+    const report = window.employees?.lastDayReport ?? [];
+    if (report.length > 0) {
+        const staff = el('div');
+        staff.appendChild(el('strong', '', 'Staff'));
+        const staffTable = table([
+            { label: 'Employee' },
+            { label: 'Hours', num: true },
+            { label: 'Morale', width: '120px' },
+            { label: 'Why' },
+        ]);
+        report.forEach((entry) => {
+            const change = entry.moraleAfter - entry.moraleBefore;
+            const moraleText = `${Math.round(entry.moraleBefore)}% → ${Math.round(entry.moraleAfter)}%`;
+            const morale = entry.quit
+                ? pill('Quit', 'critical')
+                : el('span', change < -0.5 ? 'critical-text' : change > 0.5 ? 'good-text' : '', moraleText);
+            staffTable.row([
+                window.kit.primaryCell(entry.name, entry.role),
+                `${entry.hoursWorked.toFixed(1)}h`,
+                morale,
+                entry.reasons.length > 0 ? entry.reasons.join(', ') : 'Rested, paid fairly',
+            ]);
+        });
+        staff.appendChild(staffTable.root);
+        body.push(staff);
+    }
+
     const date = window.gameState.currentDate;
     const nextDayBtn = window.kit.button('Start next day', 'primary');
     const dialog = window.kit.modal({
         title: `End of day ${(window.gameState.dayIndex ?? 0) + 1}`,
         subtitle: date ? window.fmt.day(date) : undefined,
-        body: [money.root, customers],
+        body,
         actions: [nextDayBtn],
         className: 'daily-summary',
     });

@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const { initGameIntegration } = require('./game-integration');
+const { initGameIntegration, applyDisplaySettings } = require('./game-integration');
 const log = require('electron-log');
 
 // Lets tests run against a throwaway profile instead of the player's real
@@ -72,6 +72,9 @@ function createWindow() {
   // Add a global variable for the resource path
   global.resourcesPath = path.join(__dirname, 'main');
   log.info('Resources path set to:', global.resourcesPath);
+
+  // The main menu's UI scale and fullscreen settings, on every page
+  mainWindow.webContents.on('did-finish-load', () => applyDisplaySettings(mainWindow));
 
   mainWindow.loadFile(indexPath);
 

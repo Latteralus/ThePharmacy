@@ -307,6 +307,45 @@ describe('modals (U19-U21)', () => {
     expect(next).toHaveBeenCalled();
     expect(document.querySelector('.daily-summary')).toBeNull();
   });
+
+  test("the daily summary counts customers turned away, and shows each employee's day (Phase 7)", () => {
+    window.financesData = { cash: 1, revenue: { today: 0 }, expenses: { today: 0 }, profit: { today: 0 } };
+    window.gameState.customersToday = { served: 2, unavailable: 3 };
+    window.employees = {
+      lastDayReport: [
+        {
+          id: 'a',
+          name: 'Alice Wong',
+          role: 'Lab Technician',
+          hoursWorked: 11.5,
+          moraleBefore: 60,
+          moraleAfter: 54,
+          reasons: ['overworked (11.5h)'],
+          quit: false,
+        },
+        {
+          id: 'b',
+          name: 'Bob Ray',
+          role: 'Cashier',
+          hoursWorked: 9,
+          moraleBefore: 12,
+          moraleAfter: 9,
+          reasons: ['paid 30% under market'],
+          quit: true,
+        },
+      ],
+    };
+    window.showDailySummaryModal(jest.fn());
+
+    const modal = document.querySelector('.daily-summary');
+    expect(modal.textContent).toContain('3 lost');
+    expect(modal.textContent).toContain('Turned away 3');
+    expect(modal.textContent).toContain('Alice Wong');
+    expect(modal.textContent).toContain('60% → 54%');
+    expect(modal.textContent).toContain('overworked (11.5h)');
+    expect(modal.textContent).toContain('Quit');
+    delete window.employees;
+  });
 });
 
 describe('the Operations page', () => {
@@ -565,6 +604,8 @@ describe('stock and equipment pages', () => {
     window.globalMarkup = window.globalMarkup || 1.35;
     window.financesData.cash = 100000;
     window.taskAssignment = { requestAutoAssign: jest.fn() };
+    window.taskManager = { tasks: [] };
+    require('../../main/js/production.js');
     require('../../main/js/pages/inventoryPage.js');
     require('../../main/js/pages/marketplacePage.js');
     require('../../main/js/pages/equipmentPage.js');
@@ -673,7 +714,7 @@ describe('stock and equipment pages', () => {
 
   test('Equipment updates owned and wear in place, and redraws when research unlocks more', () => {
     window.researchData.currentLevel = 0;
-    const unlocked = window.equipmentData.filter((eq) => eq.isUnlocked());
+    const unlocked = window.equipmentData.filter((eq) => window.research.isEquipmentUnlocked(eq.id));
     const eq = unlocked[0];
     window.showPage('equipment');
     const eqRow = row(eq.name, '.equipment-card');
@@ -689,17 +730,62 @@ describe('stock and equipment pages', () => {
     expect(eqRow.textContent).toContain('90%');
     expect(buyQty.value).toBe('2');
 
-    window.researchData.currentLevel = 10;
+    window.researchData.currentLevel = 4;
     window.updateUI('equipment');
     window.ui.flush();
-    expect(main().querySelectorAll('.equipment-card').length).toBe(
-      window.equipmentData.filter((e) => e.isUnlocked()).length,
+    expect(main().querySelectorAll('.equipment-card').length).toBe(window.equipmentData.length);
+  });
+
+  test('Inventory lists only what research has unlocked, and says when equipment is missing (Phase 7)', () => {
+    window.researchData.currentLevel = 0;
+    window.showPage('inventory');
+    const rows = [...main().querySelectorAll('.product-row')].map((r) => r.dataset.productId);
+    expect(rows).toEqual(window.researchData.levels[0].unlockedProducts.slice().sort());
+
+    // Capsules need a Capsule Filler, which a new game doesn't own
+    const capsuleRow = main().querySelector('.product-row[data-product-id="pd002"]');
+    expect(capsuleRow.textContent).toContain('Needs equipment');
+    const compound = [...capsuleRow.querySelectorAll('button')].find((b) => b.textContent === 'Compound');
+    expect(compound.disabled).toBe(true);
+
+    // Bought: the row updates in place
+    window.production.addEquipment(
+      window.equipmentData.find((e) => e.id === 'eq004'),
+      1,
     );
+    window.ui.flush();
+    expect(capsuleRow.textContent).not.toContain('Needs equipment');
+    expect(compound.disabled).toBe(false);
+  });
+
+  test('Equipment shows what each item is for, how much is in use, and repairs worn items (Phase 7)', () => {
+    window.researchData.currentLevel = 0;
+    const press = window.equipmentData.find((e) => e.id === 'eq002');
+    press.durability = 60;
+    window.showPage('equipment');
+    const pressRow = main().querySelector('.equipment-card[data-equipment-id="eq002"]');
+    expect(pressRow.textContent).toContain('Needed for 7 products');
+    expect(pressRow.cells[3].textContent).toBe('0 / 1');
+    expect(pressRow.textContent).toContain('60%');
+
+    const repair = [...pressRow.querySelectorAll('button')].find((b) => b.textContent.startsWith('Repair'));
+    expect(repair.textContent).toBe('Repair $750.00'); // 25% of $7,500 for 40% wear
+    repair.click();
+    window.ui.flush();
+    expect(press.durability).toBe(100);
+    expect(window.financesData.cash).toBe(100000 - 750);
+    expect(document.querySelector('.toast-stack').textContent).toContain('Repaired Tablet Press');
+    expect(repair.style.visibility).toBe('hidden');
+
+    window.taskManager.tasks.push({ id: 'c1', type: 'compound', status: 'inProgress', productId: 'pd001' });
+    window.updateUI('tasks');
+    window.ui.flush();
+    expect(pressRow.cells[3].textContent).toBe('1 / 1');
   });
 
   test('Equipment auto-purchase settings apply without buying anything (U14)', () => {
     window.researchData.currentLevel = 0;
-    const eq = window.equipmentData.find((e) => e.isUnlocked());
+    const eq = window.equipmentData.find((e) => window.research.isEquipmentUnlocked(e.id));
     window.showPage('equipment');
     const eqRow = row(eq.name, '.equipment-card');
     setInput(eqRow.querySelector(`input[aria-label="Auto-buy point for ${eq.name}"]`), 2);
@@ -726,7 +812,11 @@ describe('the Employees page (U15)', () => {
       },
     ];
     window.taskManager = { tasks: [], getTaskById: () => undefined };
-    window.employees = { fireEmployee: jest.fn(), hireEmployee: jest.fn(), hireSelectedEmployee: jest.fn() };
+    require('../../main/js/data/helpers.js');
+    const staff = window.employeesData;
+    require('../../main/js/data/employees.js');
+    window.employeesData = staff;
+    jest.spyOn(window.employees, 'fireEmployee').mockImplementation(() => {});
     require('../../main/js/taskbars.js');
     require('../../main/js/pages/employeesPage.js');
   });
@@ -754,13 +844,49 @@ describe('the Employees page (U15)', () => {
     expect(window.employees.fireEmployee).toHaveBeenCalledWith('emp-1');
   });
 
+  test('salaries can be changed in place, with pay against the market beside them (Phase 7)', () => {
+    window.showPage('employees');
+    const row = main().querySelector('.employee-card[data-employee-id="emp-1"]');
+    const salary = row.querySelector('input[aria-label="Salary for John Doe"]');
+    expect(row.textContent).toContain('vs market');
+    expect(row.textContent).toContain(window.fmt.money(85000 / 365));
+
+    salary.value = '160000';
+    salary.dispatchEvent(new Event('change'));
+    window.ui.flush();
+    expect(window.employeesData[0].salary).toBe(160000);
+    expect(row.isConnected).toBe(true);
+    expect(document.querySelector('.toast-stack').textContent).toContain('now earns $160,000');
+
+    salary.value = '0';
+    salary.dispatchEvent(new Event('change'));
+    expect(window.employeesData[0].salary).toBe(160000);
+    expect(salary.value).toBe('160000');
+  });
+
+  test('shows hours worked today and speed, and keeps a salary being typed', () => {
+    window.showPage('employees');
+    const row = main().querySelector('.employee-card');
+    const salary = row.querySelector('input[type="number"]');
+    salary.focus();
+    salary.value = '99999';
+
+    window.employeesData[0].minutesWorkedToday = 9 * 60;
+    window.updateUI('tasks');
+    window.ui.flush();
+    expect(row.isConnected).toBe(true);
+    expect(row.textContent).toContain('9.0h');
+    expect(row.textContent).toContain('1.30×'); // consultations: (85 + 75) / 2 = 80
+    expect(salary.value).toBe('99999');
+  });
+
   test('says the posting fee up front, and lists candidates with all their skills', () => {
     window.showPage('employees');
     expect(text()).toContain('Post job ($500)');
     window.displayEmployeeCandidates([{ ...window.employeesData[0], id: 'c-1', firstName: 'Cara' }]);
     const candidate = main().querySelector('.candidate-card');
     expect(candidate.textContent).toContain('Cara Doe');
-    expect(candidate.cells).toHaveLength(8); // name, salary, five skills, hire
+    expect(candidate.cells).toHaveLength(9); // name, salary, speed, five skills, hire
   });
 });
 
@@ -775,6 +901,8 @@ describe('the Finances and Research pages (U16, U17)', () => {
     require('../../main/js/data/helpers.js');
     require('../../main/js/data/finances.js');
     window.financesData.cash = 1000;
+    window.taskManager = { tasks: [] };
+    require('../../main/js/production.js');
     require('../../main/js/pages/financesPage.js');
     require('../../main/js/pages/researchPage.js');
   });
@@ -794,6 +922,21 @@ describe('the Finances and Research pages (U16, U17)', () => {
     [...main().querySelectorAll('.tabs button')].find((b) => b.textContent === 'Transactions').click();
     expect(text()).toContain('Bulk order');
     expect(text()).toContain('−$2,500.00');
+  });
+
+  test("Research lists the products customers ask for that can't be made yet (Phase 7)", () => {
+    window.researchData.currentLevel = 0;
+    window.showPage('research');
+    const card = [...main().querySelectorAll('.card')].find((c) => c.textContent.includes("Can't make yet"));
+    expect(card.textContent).toContain('Ibuprofen Capsule');
+    expect(card.textContent).toContain('Capsule Filler');
+    expect(card.textContent).not.toContain('Acetaminophen Tablet');
+
+    window.equipmentData.find((e) => e.id === 'eq004').owned = 1;
+    window.updateUI('equipment');
+    window.ui.flush();
+    const after = [...main().querySelectorAll('.card')].find((c) => c.textContent.includes("Can't make yet"));
+    expect(after.textContent).toContain('You have the equipment for every product you carry.');
   });
 
   test('Research says what the next level costs, and why it cannot start yet', () => {

@@ -1,128 +1,53 @@
 // /js/data/research.js
+// Five levels, each unlocking products (customers start asking for them)
+// and the equipment that makes them. Levels 3-10 used to unlock products and
+// equipment that didn't exist (H8); the tree was trimmed in Phase 7 to the
+// content the game has. Most new products need equipment bought on the
+// Equipment page before they can be made. Each level also brings more
+// customers (brandReputation.calcCustomers).
 window.researchData = {
     currentLevel: 0,
     inProgress: null,
     levels: [
         {
             level: 0,
-            unlockedProducts: [
-                'pd001',
-                'pd002',
-                'pd003',
-                'pd004',
-                'pd005',
-                'pd006',
-                'pd007',
-                'pd008',
-                'pd009',
-                'pd010',
-            ],
-            unlockedEquipment: ['eq001', 'eq002', 'eq003', 'eq004', 'eq005', 'eq006'],
+            unlockedProducts: ['pd001', 'pd002', 'pd004', 'pd005', 'pd006', 'pd007', 'pd008', 'pd009', 'pd010'],
+            unlockedEquipment: ['eq001', 'eq002', 'eq003', 'eq004'],
             cost: 0,
             researchTime: 0,
-            description: 'Basic pharmacy operations unlocked.',
+            description: 'Everyday tablets and capsules.',
         },
         {
             level: 1,
-            unlockedProducts: ['pd011', 'pd012', 'pd013', 'pd014', 'pd015'],
-            unlockedEquipment: ['eq007', 'eq008', 'eq009'],
+            unlockedProducts: ['pd003', 'pd011', 'pd012', 'pd022', 'pd024'],
+            unlockedEquipment: ['eq005', 'eq006', 'eq007'],
             cost: 5000,
-            researchTime: 5, // Example: 5 in-game days
-            description: 'Unlock new medicines and equipment.',
+            researchTime: 5, // in-game days
+            description: 'Liquids and suspensions, and two more tablets.',
         },
         {
             level: 2,
-            unlockedProducts: ['pd016', 'pd017', 'pd018', 'pd019', 'pd020', 'pd021'],
-            unlockedEquipment: ['eq010', 'eq011', 'eq012', 'eq013', 'eq014'],
+            unlockedProducts: ['pd013', 'pd014', 'pd015', 'pd016', 'pd023'],
+            unlockedEquipment: ['eq008'],
             cost: 10000,
             researchTime: 7,
-            description: 'Further expand your product line and improve efficiency.',
+            description: 'Syrups, another antibiotic suspension, and three more tablets.',
         },
         {
             level: 3,
-            unlockedProducts: ['pd022', 'pd023', 'pd024', 'pd025', 'pd026'],
-            unlockedEquipment: ['eq015', 'eq016'],
+            unlockedProducts: ['pd017', 'pd018', 'pd020', 'pd021'],
+            unlockedEquipment: ['eq013', 'eq017'],
             cost: 15000,
             researchTime: 10,
-            description: 'Unlock advanced medications and equipment.',
+            description: 'Topical gels and specialist tablets.',
         },
         {
             level: 4,
-            unlockedProducts: ['pd027', 'pd028', 'pd029', 'pd030', 'pd031', 'pd032', 'pd033', 'pd034', 'pd035'],
-            unlockedEquipment: ['eq017', 'eq018'],
-            cost: 20000,
-            researchTime: 12,
-            description: 'Specialize in more complex treatments and formulations.',
-        },
-        {
-            level: 5,
-            unlockedProducts: ['pd036', 'pd037', 'pd038', 'pd039', 'pd040'],
-            unlockedEquipment: ['eq019', 'eq020'],
+            unlockedProducts: ['pd019', 'pd025'],
+            unlockedEquipment: ['eq015', 'eq016', 'eq019'],
             cost: 25000,
             researchTime: 14,
-            description: 'Unlock cutting-edge medications and state-of-the-art equipment.',
-        },
-        {
-            level: 6,
-            unlockedProducts: ['pd041', 'pd042', 'pd043', 'pd044', 'pd045'],
-            unlockedEquipment: ['eq021', 'eq022'],
-            cost: 30000,
-            researchTime: 16,
-            description: 'Become a leader in pharmaceutical research and development.',
-        },
-        {
-            level: 7,
-            unlockedProducts: [
-                'pd046',
-                'pd047',
-                'pd048',
-                'pd049',
-                'pd050',
-                'pd051',
-                'pd052',
-                'pd053',
-                'pd054',
-                'pd055',
-            ],
-            unlockedEquipment: [],
-            cost: 35000,
-            researchTime: 18,
-            description: 'Master advanced pharmaceutical techniques and expand your market reach.',
-        },
-        {
-            level: 8,
-            unlockedProducts: ['pd056', 'pd057', 'pd058', 'pd059', 'pd060', 'pd061', 'pd062'],
-            unlockedEquipment: [],
-            cost: 40000,
-            researchTime: 20,
-            description: 'Develop groundbreaking treatments and solidify your industry leadership.',
-        },
-        {
-            level: 9,
-            unlockedProducts: ['pd067', 'pd068', 'pd069', 'pd070', 'pd071', 'pd072', 'pd073', 'pd074', 'pd075'],
-            unlockedEquipment: [],
-            cost: 45000,
-            researchTime: 22,
-            description: 'Reach the pinnacle of pharmaceutical innovation and patient care.',
-        },
-        {
-            level: 10,
-            unlockedProducts: [
-                'pd076',
-                'pd077',
-                'pd078',
-                'pd079',
-                'pd080',
-                'pd081',
-                'pd082',
-                'pd083',
-                'pd084',
-                'pd085',
-            ],
-            unlockedEquipment: [],
-            cost: 50000,
-            researchTime: 24,
-            description: 'Unlock the full potential of your pharmacy and set new industry standards.',
+            description: 'Inhalers and sterile injectables.',
         },
     ],
 };
@@ -142,6 +67,10 @@ window.research = {
             unlocked = unlocked.concat(window.researchData.levels[i].unlockedEquipment);
         }
         return unlocked;
+    },
+
+    isEquipmentUnlocked: function (equipmentId) {
+        return this.getUnlockedEquipment().includes(equipmentId);
     },
 
     // Starts research toward the next level. Cash is deducted immediately,
@@ -199,8 +128,19 @@ window.research = {
 
             console.log(`Research complete: reached level ${window.researchData.currentLevel}.`);
 
-            // Newly unlocked equipment can be bought
+            const level = window.researchData.levels[inProgress.targetLevel];
+            const products = level.unlockedProducts
+                .map((id) => window.productsData.find((p) => p.id === id)?.name)
+                .filter((name): name is string => !!name);
+            window.notifications?.add(
+                `Research level ${level.level} complete. Customers can now ask for ${products.join(', ')}. ` +
+                    'Check the Equipment page for what you need to make them.',
+                'success',
+            );
+
+            // Newly unlocked equipment can be bought, and new products stocked
             window.updateUI('equipment');
+            window.updateUI('inventory');
         }
     },
 };

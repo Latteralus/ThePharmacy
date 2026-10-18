@@ -56,6 +56,7 @@
                             if (typeof window.initializeNewGame === 'function') {
                                 console.log('[bootstrap] Calling initializeNewGame');
                                 window.initializeNewGame(options as NewGameOptions);
+                                applyDefaultSpeed();
 
                                 // Build UI and start game
                                 buildUIAndStartGame();
@@ -132,6 +133,18 @@
                 showErrorMessage('Game initialization function not found');
             }
         }
+    }
+
+    // A new game starts at the speed chosen in the main menu's Settings
+    // (M18). A loaded game keeps the speed it was saved at.
+    function applyDefaultSpeed(): void {
+        window.gameAPI
+            ?.getSettings?.()
+            .then((settings) => {
+                const speed = Number(settings?.simulationSpeed);
+                if ([0.5, 1, 2, 5].includes(speed)) window.setGameSpeed(speed);
+            })
+            .catch((error) => console.error('[bootstrap] Error reading settings:', error));
     }
 
     // Function to build UI and start the game

@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
     <title>Settings - The Pharmacy</title>
     <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         margin: 0;
@@ -14,7 +21,7 @@
       }
 
       .settings-container {
-        max-width: 800px;
+        max-width: 720px;
         margin: 0 auto;
         padding: 2rem;
       }
@@ -34,17 +41,16 @@
 
       .back-button {
         padding: 0.5rem 1rem;
-        background-color: #1a237e;
-        color: white;
-        border: none;
+        background-color: white;
+        color: #1a237e;
+        border: 1px solid #1a237e;
         border-radius: 4px;
         cursor: pointer;
         font-size: 1rem;
-        transition: background-color 0.2s;
       }
 
       .back-button:hover {
-        background-color: #283593;
+        background-color: #e8eaf6;
       }
 
       .settings-group {
@@ -67,6 +73,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 1rem;
         margin-bottom: 1rem;
         padding-bottom: 1rem;
         border-bottom: 1px solid #f5f5f5;
@@ -92,12 +99,8 @@
         min-width: 200px;
       }
 
-      input[type='range'] {
-        width: 100%;
-      }
-
       input[type='number'] {
-        width: 60px;
+        width: 80px;
         padding: 0.5rem;
         border: 1px solid #ddd;
         border-radius: 4px;
@@ -114,43 +117,51 @@
       .checkbox-wrapper {
         display: flex;
         align-items: center;
+        gap: 0.5rem;
       }
 
-      input[type='checkbox'] {
-        margin-right: 0.5rem;
+      .actions {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .save-button,
+      .reset-button {
+        flex: 1;
+        padding: 1rem;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
       }
 
       .save-button {
-        width: 100%;
-        padding: 1rem;
-        background-color: #4caf50;
+        background-color: #1a237e;
         color: white;
         border: none;
-        border-radius: 4px;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: background-color 0.2s;
       }
 
       .save-button:hover {
-        background-color: #388e3c;
+        background-color: #283593;
       }
 
       .reset-button {
-        width: 100%;
-        padding: 1rem;
-        background-color: #f44336;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        font-size: 1rem;
-        cursor: pointer;
-        margin-top: 1rem;
-        transition: background-color 0.2s;
+        background-color: white;
+        color: #1a237e;
+        border: 1px solid #1a237e;
       }
 
-      .reset-button:hover {
-        background-color: #d32f2f;
+      .status {
+        min-height: 1.5rem;
+        margin-top: 1rem;
+        text-align: center;
+      }
+
+      .status.error {
+        color: #b42323;
+      }
+
+      .status.success {
+        color: #006300;
       }
     </style>
   </head>
@@ -161,371 +172,183 @@
         <button class="back-button" id="backBtn">Back to Main Menu</button>
       </div>
 
-      <form id="settingsForm">
-        <!-- Game Settings -->
+      <form id="settingsForm" novalidate>
         <div class="settings-group">
-          <h2>Game Settings</h2>
+          <h2>Game</h2>
 
           <div class="setting-item">
             <div>
-              <div class="setting-label">Simulation Speed</div>
-              <div class="setting-description">Control how fast time passes in the game</div>
+              <label class="setting-label" for="simulationSpeed">Starting speed</label>
+              <div class="setting-description">
+                The speed a new game starts at. In the game, change it with the top bar or the 1–4 keys.
+              </div>
             </div>
             <div class="setting-control">
               <select id="simulationSpeed" name="simulationSpeed">
-                <option value="0.5">0.5x (Slow)</option>
-                <option value="1.0" selected>1.0x (Normal)</option>
-                <option value="2.0">2.0x (Fast)</option>
-                <option value="5.0">5.0x (Very Fast)</option>
+                <option value="0.5">0.5× (Slow)</option>
+                <option value="1" selected>1× (Normal)</option>
+                <option value="2">2× (Fast)</option>
+                <option value="5">5× (Very fast)</option>
               </select>
             </div>
           </div>
 
           <div class="setting-item">
             <div>
-              <div class="setting-label">Difficulty</div>
-              <div class="setting-description">Affects customer frequency, costs, and more</div>
-            </div>
-            <div class="setting-control">
-              <select id="difficulty" name="difficulty">
-                <option value="easy">Easy</option>
-                <option value="normal" selected>Normal</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Auto-save Interval</div>
-              <div class="setting-description">How often the game automatically saves (in minutes)</div>
-            </div>
-            <div class="setting-control">
-              <input type="number" id="autoSaveInterval" name="autoSaveInterval" min="1" max="60" value="5" />
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Auto-save Enabled</div>
+              <div class="setting-label">Autosave</div>
+              <div class="setting-description">Saves your game in the background while you play.</div>
             </div>
             <div class="setting-control">
               <div class="checkbox-wrapper">
                 <input type="checkbox" id="autoSaveEnabled" name="autoSaveEnabled" checked />
-                <label for="autoSaveEnabled">Enable automatic saving</label>
+                <label for="autoSaveEnabled">Save automatically</label>
               </div>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div>
+              <label class="setting-label" for="autoSaveInterval">Autosave every</label>
+              <div class="setting-description">
+                Minutes of play at 1× speed (1 to 60). Faster speeds save sooner; a paused game doesn't save.
+              </div>
+            </div>
+            <div class="setting-control">
+              <input type="number" id="autoSaveInterval" name="autoSaveInterval" min="1" max="60" value="5" />
+              minutes
             </div>
           </div>
         </div>
 
-        <!-- Audio Settings -->
         <div class="settings-group">
-          <h2>Audio Settings</h2>
+          <h2>Display</h2>
 
           <div class="setting-item">
             <div>
-              <div class="setting-label">Music Volume</div>
-            </div>
-            <div class="setting-control">
-              <input type="range" id="musicVolume" name="musicVolume" min="0" max="100" value="50" />
-              <span id="musicVolumeValue">50%</span>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Sound Effects Volume</div>
-            </div>
-            <div class="setting-control">
-              <input type="range" id="sfxVolume" name="sfxVolume" min="0" max="100" value="50" />
-              <span id="sfxVolumeValue">50%</span>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Enable Music</div>
-            </div>
-            <div class="setting-control">
-              <div class="checkbox-wrapper">
-                <input type="checkbox" id="musicEnabled" name="musicEnabled" checked />
-                <label for="musicEnabled">Play background music</label>
-              </div>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Enable Sound Effects</div>
-            </div>
-            <div class="setting-control">
-              <div class="checkbox-wrapper">
-                <input type="checkbox" id="sfxEnabled" name="sfxEnabled" checked />
-                <label for="sfxEnabled">Play sound effects</label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Display Settings -->
-        <div class="settings-group">
-          <h2>Display Settings</h2>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">UI Scale</div>
-              <div class="setting-description">Adjust the size of the user interface</div>
+              <label class="setting-label" for="uiScale">Interface size</label>
+              <div class="setting-description">Makes everything larger or smaller. Applies when you save.</div>
             </div>
             <div class="setting-control">
               <select id="uiScale" name="uiScale">
                 <option value="0.8">80% (Small)</option>
-                <option value="1.0" selected>100% (Normal)</option>
+                <option value="1" selected>100% (Normal)</option>
                 <option value="1.2">120% (Large)</option>
-                <option value="1.5">150% (Very Large)</option>
+                <option value="1.5">150% (Very large)</option>
               </select>
             </div>
           </div>
 
           <div class="setting-item">
             <div>
-              <div class="setting-label">Color Theme</div>
-            </div>
-            <div class="setting-control">
-              <select id="colorTheme" name="colorTheme">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-                <option value="pharmacy" selected>Pharmacy Blue</option>
-                <option value="high-contrast">High Contrast</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="setting-item">
-            <div>
-              <div class="setting-label">Enable Fullscreen</div>
-              <div class="setting-description">Run the game in fullscreen mode</div>
+              <div class="setting-label">Fullscreen</div>
+              <div class="setting-description">Applies when you save.</div>
             </div>
             <div class="setting-control">
               <div class="checkbox-wrapper">
                 <input type="checkbox" id="fullscreenEnabled" name="fullscreenEnabled" />
-                <label for="fullscreenEnabled">Use fullscreen mode</label>
+                <label for="fullscreenEnabled">Run fullscreen</label>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Save Button -->
-        <button class="save-button" type="submit">Save Settings</button>
-
-        <!-- Reset Button -->
-        <button class="reset-button" type="button" id="resetBtn">Reset to Defaults</button>
+        <div class="actions">
+          <button class="reset-button" type="button" id="resetBtn">Restore defaults</button>
+          <button class="save-button" type="submit">Save settings</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
       </form>
     </div>
 
     <script>
-      // Get references to form elements
-      const settingsForm = document.getElementById('settingsForm');
-      const backBtn = document.getElementById('backBtn');
-      const resetBtn = document.getElementById('resetBtn');
-      const musicVolumeInput = document.getElementById('musicVolume');
-      const sfxVolumeInput = document.getElementById('sfxVolume');
-      const musicVolumeValue = document.getElementById('musicVolumeValue');
-      const sfxVolumeValue = document.getElementById('sfxVolumeValue');
+      // The settings the game applies (findings M18). The main process
+      // stores them and applies interface size and fullscreen; the game
+      // reads the starting speed and autosave.
+      const DEFAULTS = {
+        simulationSpeed: 1,
+        autoSaveEnabled: true,
+        autoSaveInterval: 5,
+        uiScale: 1,
+        fullscreenEnabled: false,
+      };
 
-      // Update volume display values
-      musicVolumeInput.addEventListener('input', () => {
-        musicVolumeValue.textContent = `${musicVolumeInput.value}%`;
-      });
+      const form = document.getElementById('settingsForm');
+      const status = document.getElementById('status');
+      const field = (id) => document.getElementById(id);
 
-      sfxVolumeInput.addEventListener('input', () => {
-        sfxVolumeValue.textContent = `${sfxVolumeInput.value}%`;
-      });
+      function showStatus(message, tone) {
+        status.textContent = message;
+        status.className = `status ${tone}`;
+      }
 
-      // Load saved settings
-      async function loadSettings() {
+      function fill(settings) {
+        field('simulationSpeed').value = String(settings.simulationSpeed);
+        field('autoSaveEnabled').checked = !!settings.autoSaveEnabled;
+        field('autoSaveInterval').value = String(settings.autoSaveInterval);
+        field('autoSaveInterval').disabled = !settings.autoSaveEnabled;
+        field('uiScale').value = String(settings.uiScale);
+        field('fullscreenEnabled').checked = !!settings.fullscreenEnabled;
+      }
+
+      function read() {
+        return {
+          simulationSpeed: parseFloat(field('simulationSpeed').value),
+          autoSaveEnabled: field('autoSaveEnabled').checked,
+          autoSaveInterval: parseInt(field('autoSaveInterval').value, 10),
+          uiScale: parseFloat(field('uiScale').value),
+          fullscreenEnabled: field('fullscreenEnabled').checked,
+        };
+      }
+
+      async function load() {
         try {
-          // Check if we're running in Electron
-          if (window.gameAPI) {
-            const savedSettings = await window.gameAPI.getSettings();
-            if (savedSettings) {
-              applySettings(savedSettings);
-            }
-          } else {
-            // Fallback for non-Electron environment
-            const settingsJson = localStorage.getItem('pharmacySettings');
-            if (settingsJson) {
-              const savedSettings = JSON.parse(settingsJson);
-              applySettings(savedSettings);
-            }
-          }
+          const saved = window.gameAPI ? await window.gameAPI.getSettings() : null;
+          fill({ ...DEFAULTS, ...(saved || {}) });
         } catch (error) {
           console.error('Error loading settings:', error);
+          fill(DEFAULTS);
         }
       }
 
-      // Apply loaded settings to form
-      function applySettings(settings) {
-        // Game settings
-        if (settings.simulationSpeed) {
-          document.getElementById('simulationSpeed').value = settings.simulationSpeed;
+      async function save() {
+        const settings = read();
+        if (!(settings.autoSaveInterval >= 1 && settings.autoSaveInterval <= 60)) {
+          showStatus('Autosave needs a number of minutes from 1 to 60.', 'error');
+          return;
         }
-
-        if (settings.difficulty) {
-          document.getElementById('difficulty').value = settings.difficulty;
-        }
-
-        if (settings.autoSaveInterval) {
-          document.getElementById('autoSaveInterval').value = settings.autoSaveInterval;
-        }
-
-        if (settings.hasOwnProperty('autoSaveEnabled')) {
-          document.getElementById('autoSaveEnabled').checked = settings.autoSaveEnabled;
-        }
-
-        // Audio settings
-        if (settings.musicVolume !== undefined) {
-          document.getElementById('musicVolume').value = settings.musicVolume;
-          document.getElementById('musicVolumeValue').textContent = `${settings.musicVolume}%`;
-        }
-
-        if (settings.sfxVolume !== undefined) {
-          document.getElementById('sfxVolume').value = settings.sfxVolume;
-          document.getElementById('sfxVolumeValue').textContent = `${settings.sfxVolume}%`;
-        }
-
-        if (settings.hasOwnProperty('musicEnabled')) {
-          document.getElementById('musicEnabled').checked = settings.musicEnabled;
-        }
-
-        if (settings.hasOwnProperty('sfxEnabled')) {
-          document.getElementById('sfxEnabled').checked = settings.sfxEnabled;
-        }
-
-        // Display settings
-        if (settings.uiScale) {
-          document.getElementById('uiScale').value = settings.uiScale;
-        }
-
-        if (settings.colorTheme) {
-          document.getElementById('colorTheme').value = settings.colorTheme;
-        }
-
-        if (settings.hasOwnProperty('fullscreenEnabled')) {
-          document.getElementById('fullscreenEnabled').checked = settings.fullscreenEnabled;
-        }
-      }
-
-      // Save settings
-      async function saveSettings(formData) {
         try {
-          const settings = {
-            // Game settings
-            simulationSpeed: parseFloat(formData.get('simulationSpeed')),
-            difficulty: formData.get('difficulty'),
-            autoSaveInterval: parseInt(formData.get('autoSaveInterval')),
-            autoSaveEnabled: formData.get('autoSaveEnabled') === 'on',
-
-            // Audio settings
-            musicVolume: parseInt(formData.get('musicVolume')),
-            sfxVolume: parseInt(formData.get('sfxVolume')),
-            musicEnabled: formData.get('musicEnabled') === 'on',
-            sfxEnabled: formData.get('sfxEnabled') === 'on',
-
-            // Display settings
-            uiScale: parseFloat(formData.get('uiScale')),
-            colorTheme: formData.get('colorTheme'),
-            fullscreenEnabled: formData.get('fullscreenEnabled') === 'on',
-          };
-
-          // Save to Electron or localStorage
-          if (window.gameAPI) {
-            await window.gameAPI.updateSettings(settings);
-          } else {
-            // Fallback for non-Electron environment
-            localStorage.setItem('pharmacySettings', JSON.stringify(settings));
-          }
-
-          alert('Settings saved successfully!');
+          const result = window.gameAPI ? await window.gameAPI.updateSettings(settings) : null;
+          if (result && result.success) showStatus('Settings saved.', 'success');
+          else showStatus("Settings couldn't be saved.", 'error');
         } catch (error) {
           console.error('Error saving settings:', error);
-          alert('Error saving settings');
+          showStatus("Settings couldn't be saved.", 'error');
         }
       }
 
-      // Reset settings to defaults
-      function resetSettings() {
-        const defaultSettings = {
-          // Game settings
-          simulationSpeed: '1.0',
-          difficulty: 'normal',
-          autoSaveInterval: 5,
-          autoSaveEnabled: true,
-
-          // Audio settings
-          musicVolume: 50,
-          sfxVolume: 50,
-          musicEnabled: true,
-          sfxEnabled: true,
-
-          // Display settings
-          uiScale: '1.0',
-          colorTheme: 'pharmacy',
-          fullscreenEnabled: false,
-        };
-
-        // Apply default settings to form
-        applySettings(defaultSettings);
-      }
-
-      // Event listeners
-      settingsForm.addEventListener('submit', (event) => {
+      form.addEventListener('submit', (event) => {
         event.preventDefault();
-        const formData = new FormData(settingsForm);
-        saveSettings(formData);
+        save();
       });
 
-      backBtn.addEventListener('click', () => {
+      field('autoSaveEnabled').addEventListener('change', () => {
+        field('autoSaveInterval').disabled = !field('autoSaveEnabled').checked;
+      });
+
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        fill(DEFAULTS);
+        showStatus('Defaults restored. Save to keep them.', 'success');
+      });
+
+      document.getElementById('backBtn').addEventListener('click', () => {
         window.location.href = 'index.html';
       });
 
-      resetBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to reset all settings to defaults?')) {
-          resetSettings();
-        }
-      });
-
-      // Load settings when page loads
-      document.addEventListener('DOMContentLoaded', loadSettings);
-
-      // Handle Electron integration
       document.addEventListener('keydown', (event) => {
-        // Check for Alt+Enter to toggle fullscreen
-        if (event.altKey && event.key === 'Enter') {
-          const fullscreenCheckbox = document.getElementById('fullscreenEnabled');
-          fullscreenCheckbox.checked = !fullscreenCheckbox.checked;
-
-          // Apply fullscreen change if in Electron
-          if (window.gameAPI && window.gameAPI.toggleFullscreen) {
-            window.gameAPI.toggleFullscreen();
-          }
-        }
-
-        // Escape key to go back
-        if (event.key === 'Escape') {
-          window.location.href = 'index.html';
-        }
+        if (event.key === 'Escape') window.location.href = 'index.html';
       });
-    </script>
-    <script>
-      window.addEventListener('error', (event) => {
-        document.body.innerHTML = `
-        <div style="color: red; padding: 20px;">
-          Error: ${event.error.message}<br>
-          Stack: ${event.error.stack}
-        </div>
-      `;
-        console.error('Application error:', event.error);
-      });
+
+      document.addEventListener('DOMContentLoaded', load);
     </script>
   </body>
 </html>

@@ -78,6 +78,7 @@ test('starting a new game reaches the game screen without console errors', async
   // Operations redraws when a customer arrives, with no polling timer
   await page.click('#operations-nav-item');
   const name = await page.evaluate(() => {
+    window.productsData.forEach((p) => (p.inventory = 5)); // so they're served, whatever they ask for
     const customer = window.customers.generateCustomer(window.gameState.currentDate.getHours());
     return `${customer.firstName} ${customer.lastName}`;
   });

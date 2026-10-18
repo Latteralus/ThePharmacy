@@ -1,5 +1,6 @@
 // /js/pages/inventoryPage.js - products (stock against target, prices
-// against the market) and raw materials (stock and auto-order).
+// against the market) and raw materials (stock and auto-order). Products are
+// the ones research has unlocked: what customers can ask for.
 //
 // Typed values apply on change (Enter or leaving the field). Stock, prices
 // and "can make" update in place on 'inventory', and a field the player is
@@ -93,6 +94,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
     // Figures that change during play, updated in place on 'inventory'
     let liveFields: Array<() => void> = [];
     page.on('inventory', () => liveFields.forEach((update) => update()));
+    page.on('equipment', () => liveFields.forEach((update) => update()));
 
     // Writes a value into an input unless the player is typing in it
     function setIdle(input: HTMLInputElement, value: string): void {
@@ -138,12 +140,17 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
             { label: 'Market', num: true, title: 'What customers expect to pay' },
             { label: 'Price', num: true },
             { label: 'vs market', num: true },
-            { label: 'Can make', num: true, title: 'Units your raw materials cover' },
+            {
+                label: 'Can make',
+                num: true,
+                title: 'Units your raw materials cover, or the equipment you need first',
+            },
             { label: 'Compound now', className: 'actions' },
         ]);
         productsCard.body.appendChild(table.root);
 
-        const products = window.productsData.filter((p) => matches(p.name));
+        const unlocked = new Set(window.research.getUnlockedProducts());
+        const products = window.productsData.filter((p) => unlocked.has(p.id) && matches(p.name));
         if (products.length === 0) table.empty('No products match your search.');
 
         products.forEach((product) => {
@@ -191,6 +198,13 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
                         window.toast('Enter at least 1 unit.', 'error');
                         return;
                     }
+                    if (!window.production.canMake(product)) {
+                        window.toast(
+                            `${product.name} can't be made: ${window.production.missingEquipmentText(product)}.`,
+                            'error',
+                        );
+                        return;
+                    }
                     window.production.createCompoundTask(product, quantity);
                     window.toast(`Queued ${quantity} × ${product.name} for the lab.`, 'success');
                 },
@@ -209,7 +223,19 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
                 cue.textContent = c.text;
                 cue.className = c.className;
                 cue.title = c.title;
-                canMake.textContent = fmt.int(window.helpers.calculatePotentialProduction(product.id));
+                if (window.production.canMake(product)) {
+                    canMake.className = '';
+                    canMake.textContent = fmt.int(window.helpers.calculatePotentialProduction(product.id));
+                    canMake.title = '';
+                    compound.disabled = false;
+                } else {
+                    const missing = window.production.missingEquipment(product);
+                    const broken = missing.some((item) => item.owned >= 1);
+                    canMake.className = broken ? 'critical-text' : 'warn-text';
+                    canMake.textContent = broken ? 'Equipment broken' : 'Needs equipment';
+                    canMake.title = window.production.missingEquipmentText(product);
+                    compound.disabled = true;
+                }
             };
             update();
             liveFields.push(update);

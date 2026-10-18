@@ -161,8 +161,22 @@
                 stop: stopAutoSave,
             };
 
-            // Start auto-save by default
+            // Autosave as the main menu's Settings say (M18): every N minutes
+            // of play at 1x, which is N x 60 game minutes, or not at all.
+            // The default runs until the settings arrive.
             startAutoSave();
+            window
+                .gameAPI!.getSettings?.()
+                .then((settings) => {
+                    if (!settings) return;
+                    if (settings.autoSaveEnabled === false) {
+                        stopAutoSave();
+                    } else if (Number(settings.autoSaveInterval) > 0) {
+                        const minutes = Math.min(60, Math.max(1, Number(settings.autoSaveInterval)));
+                        startAutoSave(minutes * 60);
+                    }
+                })
+                .catch((error) => console.error('Error reading settings for autosave:', error));
 
             // Add keyboard shortcuts
             document.addEventListener('keydown', (event) => {
