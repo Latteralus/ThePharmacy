@@ -295,9 +295,7 @@ window.timeEvents = (function (): TimeEventsApi {
             // A compound waiting on these materials can start now
             window.taskAssignment.requestAutoAssign();
 
-            if (window.currentPage === 'inventory' || window.currentPage === 'marketplace') {
-                window.showPage(window.currentPage); // Refresh the current inventory-related page
-            }
+            window.updateUI('inventory');
 
             // Emit event for auto-orders
             events.emit('autoOrdersPlaced', {
@@ -350,9 +348,7 @@ window.timeEvents = (function (): TimeEventsApi {
         });
 
         if (purchasesPlaced > 0) {
-            if (window.currentPage === 'equipment') {
-                window.showPage(window.currentPage); // Refresh the equipment page
-            }
+            window.updateUI('equipment');
 
             events.emit('autoEquipmentPurchased', {
                 totalCost: totalPurchaseCost,

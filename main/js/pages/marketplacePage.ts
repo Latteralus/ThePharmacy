@@ -6,7 +6,7 @@ interface MarketplaceCardRefs {
     matObj: Material;
 }
 
-window.renderMarketplacePage = function (mainContent: HTMLElement): void {
+window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageScope): void {
     mainContent.innerHTML = '';
 
     // Create a container for the Marketplace page
@@ -146,17 +146,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
             const invLabel = document.createElement('strong');
             invLabel.textContent = 'Inventory: ';
             const inventorySpan = document.createElement('span');
-            inventorySpan.textContent = `${mat.inventory}`;
-
-            // color code the inventory text
-            // e.g. >100 => green, 50-100 => orange, <50 => red
-            if (mat.inventory < 50) {
-                inventorySpan.style.color = 'red';
-            } else if (mat.inventory < 100) {
-                inventorySpan.style.color = 'orange';
-            } else {
-                inventorySpan.style.color = 'green';
-            }
+            showInventory(inventorySpan, mat);
 
             invRow.appendChild(invLabel);
             invRow.appendChild(inventorySpan);
@@ -175,6 +165,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
             qtyInput.type = 'number';
             qtyInput.value = '0';
             qtyInput.style.width = '60px';
+            qtyInput.addEventListener('input', updateTotalCostDisplay);
 
             orderRow.appendChild(qtyLabel);
             orderRow.appendChild(qtyInput);
@@ -192,6 +183,19 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
                 matObj: mat,
             });
         });
+    }
+
+    // color code the inventory text
+    // e.g. >100 => green, 50-100 => orange, <50 => red
+    function showInventory(inventorySpan: HTMLSpanElement, mat: Material): void {
+        inventorySpan.textContent = `${mat.inventory}`;
+        if (mat.inventory < 50) {
+            inventorySpan.style.color = 'red';
+        } else if (mat.inventory < 100) {
+            inventorySpan.style.color = 'orange';
+        } else {
+            inventorySpan.style.color = 'green';
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -236,12 +240,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
 
         // A compound waiting on these materials can start now
         window.taskAssignment.requestAutoAssign();
-
-        // Possibly re-render finances, or do it in main UI
-        window.updateFinancialSummary(window.financesData);
-
-        // Re-render to show updated inventory
-        renderMaterials();
+        window.updateUI('inventory');
         updateTotalCostDisplay();
 
         alert(
@@ -269,16 +268,11 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
     // 2) "Confirm Purchase" => confirmPurchase
     purchaseButton.addEventListener('click', confirmPurchase);
 
-    // 3) Each qtyInput might also update total cost on change
-    function watchQuantityChanges(): void {
-        materialCards.forEach((entry) => {
-            entry.qtyInput.addEventListener('input', () => {
-                updateTotalCostDisplay();
-            });
-        });
-    }
-
-    // We'll re-run watchQuantityChanges after each render so newly created inputs are wired up
+    // 3) Stock changes (compounds taking materials, auto-orders) update the
+    // cards in place, keeping any quantities the player has typed
+    page.on('inventory', () => {
+        materialCards.forEach((entry) => showInventory(entry.inventorySpan, entry.matObj));
+    });
 
     // -------------------------------------------------------------------------
     // Initial
@@ -287,6 +281,5 @@ window.renderMarketplacePage = function (mainContent: HTMLElement): void {
 
     // First render
     renderMaterials();
-    watchQuantityChanges();
     updateTotalCostDisplay();
 };

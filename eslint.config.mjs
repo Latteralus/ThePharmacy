@@ -52,6 +52,28 @@ export default tseslint.config(
     },
   },
 
+  // One clock (finding A1): the game schedules on window.clock, in game
+  // minutes, so pause and speed apply. Pages refresh on window.updateUI
+  // announcements (PageScope.on), not on timers. The dev-only debug overlay
+  // and the save file's wall-clock timestamp are the exceptions.
+  {
+    files: ['main/**/*.ts'],
+    ignores: ['main/js/debug.ts', 'main/js/saveFile.ts'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'setInterval', message: 'Use window.clock.every() (game minutes) or a PageScope subscription.' },
+        { name: 'setTimeout', message: 'Use window.clock.after() (game minutes) or a PageScope subscription.' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        { object: 'window', property: 'setInterval', message: 'Use window.clock.every() (game minutes).' },
+        { object: 'window', property: 'setTimeout', message: 'Use window.clock.after() (game minutes).' },
+        { object: 'Date', property: 'now', message: 'Use window.clock.now() (game time), or window.nextId() for ids.' },
+      ],
+    },
+  },
+
   // Electron main/preload, configs, and tests: CommonJS on Node.
   {
     files: ['**/*.js'],

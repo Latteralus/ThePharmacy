@@ -1,6 +1,6 @@
 // /js/pages/employeesPage.js - IMPROVED VERSION
 
-function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
+function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): HTMLElement {
     mainContent.innerHTML = '';
 
     // Main container for the Employees page
@@ -468,9 +468,6 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
 
                 // Show success message
                 alert(`Successfully hired ${candidate.firstName} ${candidate.lastName} as a ${candidate.role}!`);
-
-                // Refresh the employees tab to show the new hire
-                renderEmployees(searchInput.value);
             };
 
             candidateCard.appendChild(hireButton);
@@ -483,7 +480,6 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
     function confirmFireEmployee(employee: Employee): void {
         if (confirm(`Are you sure you want to terminate ${employee.firstName} ${employee.lastName}?`)) {
             window.employees.fireEmployee(employee.id);
-            renderEmployees(searchInput.value); // Update the employee list
         }
     }
 
@@ -512,8 +508,12 @@ function renderEmployeesPage(mainContent: HTMLElement): HTMLElement {
         renderEmployees(this.value);
     });
 
-    // Initial rendering
+    // Initial rendering, then again on every hire and firing, and as staff
+    // start and finish tasks (the Busy/Available badge)
     renderEmployees();
+    const refreshEmployees = (): void => renderEmployees(searchInput.value);
+    page.on('employees', refreshEmployees);
+    page.on('tasks', refreshEmployees);
 
     // Add CSS styling for the page
     const style = document.createElement('style');

@@ -170,10 +170,7 @@ window.customers = {
         );
         enterStatus(newCustomer);
 
-        // Only update UI if on operations page
-        if (window.currentPage === 'operations') {
-            window.ui.updateCustomers();
-        }
+        window.updateUI('customers');
 
         return newCustomer;
     },
@@ -205,7 +202,7 @@ window.customers = {
         this.updateCustomerMood(customerId, 1);
 
         enterStatus(customer);
-        window.ui.updateCustomers();
+        window.updateUI('customers');
         return true;
     },
 
@@ -286,8 +283,7 @@ window.customers = {
                 today[reason] = (today[reason] ?? 0) + 1;
             }
 
-            // UI update
-            window.ui.updateCustomers();
+            window.updateUI('customers');
 
             console.log(`[customers.js] Customer ${customerId} has left.`);
         } else {

@@ -35,8 +35,10 @@ window.taskManager = (function (): TaskManagerApi {
             this.listeners[event] = this.listeners[event].filter((cb) => cb !== callback);
         },
 
-        // Trigger event
+        // Trigger event. Every change but progress is announced to the
+        // pages; progress bars follow task.progress every frame on their own.
         emit(event: string, data: unknown): void {
+            if (event !== 'taskProgressUpdated') window.updateUI('tasks');
             if (!this.listeners[event]) return;
             this.listeners[event].forEach((callback) => {
                 try {

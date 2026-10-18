@@ -247,7 +247,7 @@
         retryButton.style.cursor = 'pointer';
         retryButton.onclick = function () {
             document.body.removeChild(errorContainer);
-            setTimeout(initializeGame, 500);
+            start();
         };
         buttons.appendChild(retryButton);
 
@@ -270,19 +270,29 @@
         document.body.appendChild(errorContainer);
     }
 
-    // Run initialization after a short delay to ensure all scripts are loaded
-    setTimeout(() => {
-        if (checkGameComponents()) {
-            initializeGame();
-        } else {
+    function start(): void {
+        if (!checkGameComponents()) {
             console.log('[bootstrap] Some components are missing, attempting initialization anyway');
-            initializeGame();
         }
-    }, 1000);
+        try {
+            initializeGame();
+        } catch (error) {
+            console.error('[bootstrap] Error initializing game:', error);
+            showErrorMessage('Error initializing game: ' + (error as Error).message);
+        }
+    }
+
+    // This file loads near the top of main.html, and every <script> tag runs
+    // before DOMContentLoaded, so by then every game module is defined.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
 
     // Make bootstrap functions available globally
     window.bootstrapGame = {
-        retry: initializeGame,
+        retry: start,
         checkComponents: checkGameComponents,
         buildUI: buildUIAndStartGame,
     };

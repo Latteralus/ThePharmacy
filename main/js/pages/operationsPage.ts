@@ -1,9 +1,6 @@
-// /js/pages/operationsPage.js - FIXED VERSION
+// /js/pages/operationsPage.js
 
-window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
-    // Indicate we've navigated to "operations"
-    window.currentPage = 'operations';
-
+window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScope): void {
     // Clear existing content
     mainContent.innerHTML = '';
 
@@ -120,7 +117,6 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
 
     // The DIV we want for ui.updateCustomers
     const customersList = document.createElement('div');
-    customersList.id = 'customersList';
     customersSection.appendChild(customersList);
 
     // --------------------- PRESCRIPTIONS SECTION ---------------------
@@ -141,17 +137,29 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
 
     // The DIV we want for ui.updatePrescriptions
     const prescriptionsList = document.createElement('div');
-    prescriptionsList.id = 'prescriptionsList';
     prescriptionsSection.appendChild(prescriptionsList);
 
     // Finally, attach our container to the mainContent
     mainContent.appendChild(container);
 
+    // Prescriptions whose details the player has opened, kept across redraws
+    const expandedPrescriptions = new Set<string>();
+
     // --------------------- INITIAL UI UPDATES ---------------------
-    renderEmployees();
-    renderTasks();
-    renderCustomers();
-    renderPrescriptions();
+    function renderAll(): void {
+        renderEmployees();
+        renderTasks();
+        renderCustomers();
+        renderPrescriptions();
+    }
+    renderAll();
+
+    // Redraw when anything shown here changes (at most once a frame).
+    // Progress bars update themselves every frame (taskbars.ts).
+    page.on('tasks', renderAll);
+    page.on('employees', renderAll);
+    page.on('customers', renderAll);
+    page.on('prescriptions', renderAll);
 
     // --------------------- RENDERING FUNCTIONS ---------------------
 
@@ -363,37 +371,137 @@ window.renderOperationsPage = function (mainContent: HTMLElement): () => void {
         }
     }
 
-    // Use the UI functions for customers and prescriptions
     function renderCustomers(): void {
-        window.ui.updateCustomers();
+        customersList.innerHTML = '';
+        const customers = window.customers?.activeCustomers ?? [];
+
+        if (customers.length === 0) {
+            const noCustomersMessage = document.createElement('p');
+            noCustomersMessage.textContent = 'No customers currently.';
+            customersList.appendChild(noCustomersMessage);
+            return;
+        }
+
+        customers.forEach((customer) => {
+            const customerItem = document.createElement('div');
+            customerItem.className = 'customer-item';
+            customerItem.style.border = '1px solid #ddd';
+            customerItem.style.borderRadius = '4px';
+            customerItem.style.padding = '0.5rem';
+            customerItem.style.marginBottom = '0.5rem';
+            customerItem.style.backgroundColor = '#f9f9f9';
+
+            const customerName = document.createElement('strong');
+            customerName.textContent = customer.isReturning
+                ? `${customer.firstName} ${customer.lastName} (Returning)`
+                : `${customer.firstName} ${customer.lastName}`;
+            customerItem.appendChild(customerName);
+
+            // Make customer status more prominent
+            const customerStatus = document.createElement('p');
+            customerStatus.style.marginTop = '0.25rem';
+            customerStatus.style.fontSize = '1.1em';
+            customerStatus.textContent = `Status: ${customer.status}`;
+            if (customer.status === 'waitingForConsultation') {
+                customerStatus.style.color = 'orange';
+            } else if (customer.status === 'readyForCheckout') {
+                customerStatus.style.color = 'blue';
+            } else if (customer.status === 'completed') {
+                customerStatus.style.color = 'green';
+            }
+            customerItem.appendChild(customerStatus);
+
+            const arrivalTime = document.createElement('p');
+            arrivalTime.textContent = `Arrived at: ${window.ui.formatDateTime(new Date(customer.arrivedAt))}`;
+            arrivalTime.style.fontSize = '0.9em';
+            arrivalTime.style.color = 'grey';
+            customerItem.appendChild(arrivalTime);
+
+            customersList.appendChild(customerItem);
+        });
     }
 
     function renderPrescriptions(): void {
-        window.ui.updatePrescriptions();
-    }
+        prescriptionsList.innerHTML = '';
+        const prescriptions = window.prescriptions?.activePrescriptions ?? [];
 
-    // Set up periodic refresh for this page
-    if (!window.operationsRefreshInterval) {
-        window.operationsRefreshInterval = setInterval(() => {
-            // Only refresh if we're still on the operations page
-            if (window.currentPage === 'operations') {
-                renderEmployees();
-                renderTasks();
-                renderCustomers();
-                renderPrescriptions();
-            } else {
-                // Stop the interval if we navigate away
-                clearInterval(window.operationsRefreshInterval!);
-                window.operationsRefreshInterval = null;
-            }
-        }, 2000); // Refresh every 2 seconds
-    }
-
-    // Return a cleanup function
-    return function cleanup(): void {
-        if (window.operationsRefreshInterval) {
-            clearInterval(window.operationsRefreshInterval);
-            window.operationsRefreshInterval = null;
+        if (prescriptions.length === 0) {
+            const noPrescriptionsMessage = document.createElement('p');
+            noPrescriptionsMessage.textContent = 'No active prescriptions.';
+            prescriptionsList.appendChild(noPrescriptionsMessage);
+            return;
         }
-    };
+
+        prescriptions.forEach((prescription) => {
+            const prescriptionItem = document.createElement('div');
+            prescriptionItem.className = 'prescription-item';
+            prescriptionItem.style.border = '1px solid #ddd';
+            prescriptionItem.style.borderRadius = '4px';
+            prescriptionItem.style.padding = '0.5rem';
+            prescriptionItem.style.marginBottom = '0.5rem';
+            prescriptionItem.style.backgroundColor = '#f9f9f9';
+
+            const prescriptionId = document.createElement('strong');
+            prescriptionId.textContent = `ID: ${prescription.id}`;
+            prescriptionItem.appendChild(prescriptionId);
+
+            const productName = document.createElement('p');
+            productName.textContent = `Product: ${prescription.productName}`;
+            prescriptionItem.appendChild(productName);
+
+            const status = document.createElement('p');
+            status.textContent = `Status: ${prescription.status}`;
+            if (prescription.status === 'pending') {
+                status.style.color = 'orange';
+            } else if (prescription.status === 'filled') {
+                status.style.color = 'blue';
+            }
+            prescriptionItem.appendChild(status);
+
+            const detailsDiv = document.createElement('div');
+            const expanded = expandedPrescriptions.has(prescription.id);
+            detailsDiv.style.display = expanded ? 'block' : 'none';
+
+            const dosage = document.createElement('p');
+            dosage.textContent = `Dosage: ${prescription.dosage}`;
+            detailsDiv.appendChild(dosage);
+
+            const frequency = document.createElement('p');
+            frequency.textContent = `Frequency: ${prescription.frequency}`;
+            detailsDiv.appendChild(frequency);
+
+            const doctorName = document.createElement('p');
+            doctorName.textContent = `Doctor: ${prescription.doctorName}`;
+            detailsDiv.appendChild(doctorName);
+
+            const refills = document.createElement('p');
+            refills.textContent = prescription.isRefill
+                ? `Refills Remaining: ${prescription.refillsAllowed} (this is a refill visit)`
+                : `Refills Remaining: ${prescription.refillsAllowed}`;
+            detailsDiv.appendChild(refills);
+
+            const assignedEmployee = document.createElement('p');
+            const assignedEmp = prescription.assignedEmployeeId
+                ? window.employeesData.find((e) => e.id === prescription.assignedEmployeeId)
+                : undefined;
+            assignedEmployee.textContent = `Assigned To: ${assignedEmp ? `${assignedEmp.firstName} ${assignedEmp.lastName}` : 'Unassigned'}`;
+            detailsDiv.appendChild(assignedEmployee);
+
+            prescriptionItem.appendChild(detailsDiv);
+
+            const toggleButton = document.createElement('button');
+            toggleButton.textContent = expanded ? 'Hide Details' : 'Show Details';
+            toggleButton.style.marginTop = '0.5rem';
+            toggleButton.addEventListener('click', () => {
+                const open = detailsDiv.style.display === 'none';
+                detailsDiv.style.display = open ? 'block' : 'none';
+                toggleButton.textContent = open ? 'Hide Details' : 'Show Details';
+                if (open) expandedPrescriptions.add(prescription.id);
+                else expandedPrescriptions.delete(prescription.id);
+            });
+            prescriptionItem.appendChild(toggleButton);
+
+            prescriptionsList.appendChild(prescriptionItem);
+        });
+    }
 };

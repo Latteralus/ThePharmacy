@@ -45,7 +45,7 @@ function loadGame({ employees = FULL_STAFF(), stock = 5, random = 0 } = {}) {
     isPaused: false,
   };
   window.updateUI = jest.fn();
-  window.ui = { updateCustomers: jest.fn(), updatePrescriptions: jest.fn() };
+  window.ui = { updateTime: jest.fn() };
   window.brandReputation = { loseReputation: jest.fn(), gainReputation: jest.fn() };
   window.employees = { updateEmployeeMoodOnTaskCompletion: jest.fn() };
   window.research = { getUnlockedProducts: () => ['pd001'] };

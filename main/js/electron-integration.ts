@@ -94,12 +94,11 @@
 
                         console.log('Game loaded successfully');
 
-                        // Update UI
-                        if (window.updateUI) {
-                            window.updateUI('finances');
-                            window.updateUI('operations');
-                            window.updateUI('time');
-                        }
+                        // Everything on screen was replaced: redraw the
+                        // top bar and show the current page afresh.
+                        window.updateUI('finances');
+                        window.updateUI('time');
+                        window.showPage(window.currentPage || 'operations');
 
                         // Show notification to user
                         if (window.notifications) {

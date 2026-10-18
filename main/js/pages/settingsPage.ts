@@ -1,6 +1,6 @@
 // /js/pages/settingsPage.js
 
-window.renderSettingsPage = function (mainContent: HTMLElement): void {
+window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope): void {
     // Clear existing content
     mainContent.innerHTML = '';
 
@@ -168,17 +168,13 @@ window.renderSettingsPage = function (mainContent: HTMLElement): void {
     // Add CSS styling
     addStyles(mainContent);
 
-    // Keep the time and status current. showPage has no teardown hook, so the
-    // interval stops itself once this page has been replaced (M16).
-    const refreshInterval = setInterval(() => {
-        if (!container.isConnected) {
-            clearInterval(refreshInterval);
-            return;
-        }
-        updateTimeDisplay(document.getElementById('current-time-display'));
-        updateDayStatus(document.getElementById('day-status-indicator'));
-        updatePauseStatus(document.getElementById('pause-status-indicator'));
-    }, 1000);
+    // Keep the time and status current (the top bar's clock announces
+    // 'time' every frame, paused or not)
+    page.on('time', () => {
+        updateTimeDisplay(timeDisplay);
+        updateDayStatus(dayStatus);
+        updatePauseStatus(pauseStatus);
+    });
 
     // -----------------------------------
     // Helper Functions

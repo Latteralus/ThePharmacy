@@ -265,11 +265,9 @@ interface RenderInfo {
 // 2026-08-15 "Save/load fixed") has already run, so it's always a real Date
 // instance — `new Date(x)` still accepts a Date argument, so this doesn't
 // break existing callers. simulationAccumulator/lastFrameTime/
-// lastSimulationTime/renderInfo/dateCreated are genuinely optional: three
-// different places construct `window.gameState` (main.js's own fallback,
-// gameInitializer.ts's initializeNewGame, and its runFallbackInitialization)
-// and each sets a different subset — main.js's gameLoop already defensively
-// checks `if (!window.gameState.lastFrameTime)` for exactly this reason.
+// lastSimulationTime/renderInfo/dateCreated are genuinely optional: the unit
+// tests build `window.gameState` with only the fields they need, and
+// main.js's gameLoop treats a missing lastFrameTime as the first frame.
 interface GameState {
     currentDate: Date;
     dayIndex: number;
@@ -718,18 +716,41 @@ interface TaskbarsApi {
     createProgressBar: (task: Task) => HTMLDivElement;
 }
 
+// What a system announces with window.updateUI(topic) when it changes
+// state a page shows. 'inventory' covers product stock and prices and
+// material stock.
+type ChangeTopic =
+    | 'time'
+    | 'finances'
+    | 'customers'
+    | 'prescriptions'
+    | 'tasks'
+    | 'employees'
+    | 'inventory'
+    | 'equipment'
+    | 'research';
+
+// Handed to each page renderer by showPage, for as long as the page is shown.
+interface PageScope {
+    // Calls fn (once per frame at most) whenever `topic` is announced.
+    on: (topic: ChangeTopic, fn: () => void) => void;
+    // Calls fn when the player navigates away.
+    onLeave: (fn: () => void) => void;
+}
+
+type PageRenderer = (container: HTMLElement, page: PageScope) => void;
+
 interface UiApi {
-    init: () => void;
     formatDate: (dateObj: Date) => string;
     formatTime: (dateObj: Date) => string;
     formatDateTime: (dateObj: Date) => string;
     updateTime: () => void;
-    updateFinances: () => void;
-    updateCustomers: () => void;
-    updatePrescriptions: () => void;
-    updateUI: (page?: string) => void;
-    forceUpdate: (page: string) => void;
-    refreshCache: () => void;
+    updateUI: (topic: ChangeTopic) => void;
+    // Returns an unsubscribe function. Pages use PageScope.on instead.
+    subscribe: (topic: ChangeTopic, fn: () => void) => () => void;
+    // Handles queued announcements now instead of on the next frame (tests).
+    flush: () => void;
+    showPage: (pageName: string) => void;
 }
 
 interface InsuranceClaim {
@@ -871,37 +892,25 @@ interface Window {
     loadGame?: () => Promise<boolean>;
     autoSave?: AutoSaveApi;
     notifications?: NotificationsApi;
-    renderOperationsPage?: (container: HTMLElement) => () => void;
-    // Set by operationsPage.ts's own render call; the cleanup function
-    // returned by renderOperationsPage is never actually captured by
-    // showPage (main.ts casts the renderer's return type away), so this
-    // interval is the page's only way to stop refreshing itself once you
-    // navigate away.
-    operationsRefreshInterval?: ReturnType<typeof setInterval> | null;
-    renderEmployees?: () => void;
     // Owned by employeesPage.js, not converted yet, but called unconditionally
     // by employees.ts's hireEmployee (no typeof guard in the original either)
     // — required for the same reason as showPage/ui/taskManager above.
     displayEmployeeCandidates: (candidates: Employee[]) => void;
-    // Owned by inventoryPage.js, not converted yet.
-    renderInventoryPage?: (container: HTMLElement) => void;
-    updateInventoryDisplay?: () => void;
-    // Owned by dashboardPage.js/ordersPage.js. Never referenced by name
-    // anywhere (main.ts's showPage looks page renderers up dynamically by
-    // constructed string, see `render${Page}Page`) — declared for the same
-    // reason every other directly-assigned global is, not because anything
-    // reads them through this property.
-    renderDashboardPage?: (container: HTMLElement) => void;
-    renderOrdersPage?: (container: HTMLElement) => void;
-    renderCustomersPage?: (container: HTMLElement) => void;
-    renderMarketingPage?: (container: HTMLElement) => void;
-    renderStatisticsPage?: (container: HTMLElement) => void;
-    renderEquipmentPage?: (container: HTMLElement) => void;
-    renderResearchPage?: (container: HTMLElement) => void;
-    renderMarketplacePage?: (container: HTMLElement) => void;
-    renderEmployeesPage?: (container: HTMLElement) => HTMLElement;
-    renderFinancesPage?: (container: HTMLElement) => void;
-    renderSettingsPage?: (container: HTMLElement) => void;
+    // Page renderers. showPage looks them up by name (`render${Page}Page`)
+    // and passes each a PageScope for the time it's on screen.
+    renderOperationsPage?: PageRenderer;
+    renderDashboardPage?: PageRenderer;
+    renderOrdersPage?: PageRenderer;
+    renderCustomersPage?: PageRenderer;
+    renderMarketingPage?: PageRenderer;
+    renderStatisticsPage?: PageRenderer;
+    renderInventoryPage?: PageRenderer;
+    renderEquipmentPage?: PageRenderer;
+    renderResearchPage?: PageRenderer;
+    renderMarketplacePage?: PageRenderer;
+    renderEmployeesPage?: PageRenderer;
+    renderFinancesPage?: PageRenderer;
+    renderSettingsPage?: PageRenderer;
     timeEvents?: TimeEventsApi;
     clock: ClockApi;
     // A new id, `${prefix}-${n}`, from the counter saved on gameState (ids.ts).
@@ -917,8 +926,6 @@ interface Window {
     renderSidebar: () => HTMLElement;
     updateActiveNavItem: (pageName: string) => void;
     updateSidebarReputation: () => void;
-    updateFinancialSummary: (financesData: FinancesData) => void;
-    updateTimeDisplay: (date: Date) => void;
     customers: CustomersApi;
     insuranceClaims: InsuranceClaimsApi;
     materialsData: Material[];
@@ -935,7 +942,7 @@ interface Window {
     financesData: FinancesData;
     finances: FinancesApi;
     gameState: GameState;
-    updateUI: (page: string) => void;
+    updateUI: (topic: ChangeTopic) => void;
     helpers: HelpersApi;
     isGameInitialized: boolean;
     gameLoop: (timestamp: number) => void;
@@ -946,7 +953,6 @@ interface Window {
     loadSavedGame: () => Promise<boolean>;
     applySavedGame: (gameData: unknown) => void;
     saveFile: SaveFileApi;
-    runFallbackInitialization: () => boolean;
     bootstrapGame: BootstrapApi;
     // Settings-page multipliers, saved with the game (SaveSettings).
     // brandReputation.calcCustomers reads customerFrequencyMultiplier.

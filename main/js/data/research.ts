@@ -189,6 +189,9 @@ window.research = {
         const inProgress = window.researchData.inProgress;
         if (!inProgress) return;
 
+        // Another day of progress, whether or not it's done
+        window.updateUI('research');
+
         const daysElapsed = gameState.dayIndex - inProgress.startDayIndex;
         if (daysElapsed >= inProgress.daysRequired) {
             window.researchData.currentLevel = inProgress.targetLevel;
@@ -196,15 +199,8 @@ window.research = {
 
             console.log(`Research complete: reached level ${window.researchData.currentLevel}.`);
 
-            window.updateUI('research');
-            window.updateUI('finances');
-
-            // Force a re-render if the player is currently looking at the
-            // Research page, since its progress bar reflects inProgress
-            // directly rather than polling on its own.
-            if (window.currentPage === 'research') {
-                window.showPage('research');
-            }
+            // Newly unlocked equipment can be bought
+            window.updateUI('equipment');
         }
     },
 };

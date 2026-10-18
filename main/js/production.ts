@@ -14,6 +14,7 @@ window.production = (function (): ProductionApi {
                 eq.durability = Math.max(0, eq.durability - DURABILITY_DECAY_PER_USE);
             }
         });
+        window.updateUI('equipment');
     }
 
     // Making a batch shares its setup: the first unit takes the product's
@@ -145,35 +146,9 @@ window.production = (function (): ProductionApi {
         });
     }
 
-    // Refresh the inventory UI, falling back through whatever update path is
-    // actually available (used after any task completion that changes stock).
+    // Product or material stock changed
     function refreshInventoryUI(): void {
-        if (typeof window.updateUI === 'function') {
-            window.updateUI('inventory');
-            return;
-        }
-
-        console.log('[production.js] window.updateUI function not found. Inventory UI may need manual refresh.');
-
-        // A `window.ui.updateInventory()` check used to sit here as the
-        // first fallback. Removed: ui.js's real API (see UiApi in
-        // global.d.ts) has never exposed an `updateInventory` method, so
-        // the branch could never fire — dead code, not a behavior change
-        // to drop it.
-        if (typeof window.updateInventoryDisplay === 'function') {
-            window.updateInventoryDisplay();
-        } else if (window.currentPage === 'inventory' && typeof window.renderInventoryPage === 'function') {
-            const mainContent = document.querySelector<HTMLElement>('.main-content');
-            if (mainContent) {
-                window.renderInventoryPage(mainContent);
-            }
-        }
-
-        try {
-            document.dispatchEvent(new CustomEvent('inventoryUpdated'));
-        } catch (error) {
-            console.error('[production.js] Error dispatching inventoryUpdated event:', (error as Error).message);
-        }
+        window.updateUI('inventory');
     }
 
     // Function to handle task completion (called by taskManager when a task is finalized)

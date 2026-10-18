@@ -1,6 +1,112 @@
 // improved-topBar.js
 
+// Notifications. Timestamps are game time, like everything else the player
+// reads in the game. updateUI finds the badge and list by id, so it does
+// nothing until renderTopBar's element is on the page; renderTopBar draws
+// the badge from unreadCount itself.
+(function () {
+    let nextNotificationId = 1;
+    window.notifications = {
+        items: [],
+        unreadCount: 0,
+
+        add: function (message: string, type = 'info'): number {
+            const notification: NotificationItem = {
+                id: nextNotificationId++,
+                message,
+                type,
+                timestamp: new Date(window.clock.now()),
+                read: false,
+            };
+
+            this.items.unshift(notification); // Add to beginning of array
+            this.unreadCount++;
+
+            // Limit to most recent 50 notifications
+            if (this.items.length > 50) {
+                const dropped = this.items.pop()!;
+                if (!dropped.read) this.unreadCount--;
+            }
+
+            this.updateUI();
+            return notification.id;
+        },
+
+        markAsRead: function (id: number): void {
+            const notification = this.items.find((n) => n.id === id);
+            if (notification && !notification.read) {
+                notification.read = true;
+                this.unreadCount--;
+                this.updateUI();
+            }
+        },
+
+        markAllAsRead: function (): void {
+            this.items.forEach((n) => {
+                n.read = true;
+            });
+            this.unreadCount = 0;
+            this.updateUI();
+        },
+
+        updateUI: function (): void {
+            const countElem = document.getElementById('notificationCount');
+            if (countElem) showUnreadCount(countElem, this.unreadCount);
+
+            const listElem = document.getElementById('notificationsList');
+            if (listElem) {
+                if (this.items.length === 0) {
+                    listElem.innerHTML = '<p class="no-notifications">No new notifications</p>';
+                } else {
+                    listElem.innerHTML = '';
+
+                    this.items.forEach((notification) => {
+                        const notificationItem = document.createElement('div');
+                        notificationItem.className = `notification-item ${notification.type} ${notification.read ? 'read' : 'unread'}`;
+
+                        // textContent, not innerHTML - messages can carry
+                        // player-supplied text (names, pharmacy name).
+                        const content = document.createElement('div');
+                        content.className = 'notification-content';
+                        const messageEl = document.createElement('span');
+                        messageEl.className = 'notification-message';
+                        messageEl.textContent = notification.message;
+                        const timeEl = document.createElement('span');
+                        timeEl.className = 'notification-time';
+                        timeEl.textContent = window.ui.formatTime(notification.timestamp);
+                        content.append(messageEl, timeEl);
+                        notificationItem.appendChild(content);
+
+                        // Mark as read when clicked
+                        notificationItem.addEventListener('click', () => {
+                            this.markAsRead(notification.id);
+                            notificationItem.classList.remove('unread');
+                            notificationItem.classList.add('read');
+                        });
+
+                        listElem.appendChild(notificationItem);
+                    });
+                }
+            }
+        },
+    };
+})();
+
+function showUnreadCount(countElem: HTMLElement, unreadCount: number): void {
+    countElem.textContent = String(unreadCount);
+    countElem.style.display = unreadCount > 0 ? 'block' : 'none';
+}
+
+let welcomed = false;
+
 window.renderTopBar = function renderTopBar(): HTMLElement {
+    // The first top bar of a session greets the player (in game time, so it
+    // goes before the badge below is drawn).
+    if (!welcomed) {
+        welcomed = true;
+        window.notifications!.add('Welcome to The Pharmacy!', 'success');
+    }
+
     const topBar = document.createElement('header');
     topBar.className = 'top-bar';
 
@@ -146,8 +252,7 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     const notificationCount = document.createElement('span');
     notificationCount.className = 'notification-count';
     notificationCount.id = 'notificationCount';
-    notificationCount.textContent = '0';
-    notificationCount.style.display = 'none'; // Hide initially
+    showUnreadCount(notificationCount, window.notifications!.unreadCount);
     notificationsButton.appendChild(notificationCount);
 
     // Notification click handler
@@ -183,109 +288,6 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     notificationsPanel.appendChild(notificationsList);
 
     topBar.appendChild(notificationsPanel);
-
-    // Initialize notifications system if it doesn't exist
-    if (!window.notifications) {
-        let nextNotificationId = 1;
-        window.notifications = {
-            items: [],
-            unreadCount: 0,
-
-            add: function (message: string, type = 'info'): number {
-                const notification: NotificationItem = {
-                    id: nextNotificationId++,
-                    message,
-                    type,
-                    timestamp: new Date(),
-                    read: false,
-                };
-
-                this.items.unshift(notification); // Add to beginning of array
-                this.unreadCount++;
-
-                // Update the UI
-                this.updateUI();
-
-                // Limit to most recent 50 notifications
-                if (this.items.length > 50) {
-                    this.items.pop();
-                }
-
-                return notification.id;
-            },
-
-            markAsRead: function (id: number): void {
-                const notification = this.items.find((n) => n.id === id);
-                if (notification && !notification.read) {
-                    notification.read = true;
-                    this.unreadCount--;
-                    this.updateUI();
-                }
-            },
-
-            markAllAsRead: function (): void {
-                this.items.forEach((n) => {
-                    n.read = true;
-                });
-                this.unreadCount = 0;
-                this.updateUI();
-            },
-
-            updateUI: function (): void {
-                const countElem = document.getElementById('notificationCount');
-                if (countElem) {
-                    countElem.textContent = String(this.unreadCount);
-                    countElem.style.display = this.unreadCount > 0 ? 'block' : 'none';
-                }
-
-                const listElem = document.getElementById('notificationsList');
-                if (listElem) {
-                    if (this.items.length === 0) {
-                        listElem.innerHTML = '<p class="no-notifications">No new notifications</p>';
-                    } else {
-                        listElem.innerHTML = '';
-
-                        this.items.forEach((notification) => {
-                            const notificationItem = document.createElement('div');
-                            notificationItem.className = `notification-item ${notification.type} ${notification.read ? 'read' : 'unread'}`;
-
-                            // Format the timestamp
-                            const timeString = notification.timestamp.toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                            });
-
-                            // textContent, not innerHTML - messages can carry
-                            // player-supplied text (names, pharmacy name).
-                            const content = document.createElement('div');
-                            content.className = 'notification-content';
-                            const messageEl = document.createElement('span');
-                            messageEl.className = 'notification-message';
-                            messageEl.textContent = notification.message;
-                            const timeEl = document.createElement('span');
-                            timeEl.className = 'notification-time';
-                            timeEl.textContent = timeString;
-                            content.append(messageEl, timeEl);
-                            notificationItem.appendChild(content);
-
-                            // Mark as read when clicked
-                            notificationItem.addEventListener('click', () => {
-                                this.markAsRead(notification.id);
-                                notificationItem.classList.remove('unread');
-                                notificationItem.classList.add('read');
-                            });
-
-                            listElem.appendChild(notificationItem);
-                        });
-                    }
-                }
-            },
-        };
-
-        setTimeout(() => {
-            window.notifications!.add('Welcome to The Pharmacy!', 'success');
-        }, 2000);
-    }
 
     // Function to show notifications panel
     function showNotificationsPanel(): void {
@@ -518,30 +520,4 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     document.head.appendChild(style);
 
     return topBar;
-};
-
-// Update financial summary (to be called when finances change)
-window.updateFinancialSummary = function (financesData: FinancesData): void {
-    const currentCash = document.getElementById('currentCash');
-    if (currentCash) {
-        currentCash.textContent = `$${financesData.cash.toFixed(2)}`;
-    }
-
-    const dailyIncome = document.getElementById('dailyIncome');
-    if (dailyIncome) {
-        dailyIncome.textContent = `$${financesData.dailyIncome.toFixed(2)}`;
-    }
-
-    const pendingInsurance = document.getElementById('pendingInsurance');
-    if (pendingInsurance) {
-        pendingInsurance.textContent = `$${financesData.pendingInsuranceIncome.toFixed(2)}`;
-    }
-};
-
-// Update time display
-window.updateTimeDisplay = function (date: Date): void {
-    const gameTime = document.getElementById('gameTime');
-    if (gameTime) {
-        gameTime.textContent = window.ui.formatDateTime(date);
-    }
 };

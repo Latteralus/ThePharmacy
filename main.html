@@ -116,62 +116,6 @@
           });
         }
       });
-
-      // Wait for everything to load and check if initialization completed
-      window.addEventListener('load', function () {
-        console.log('Window load event triggered - checking if initialization completed');
-
-        // Check if the game started properly
-        setTimeout(function () {
-          // Look for signs that the game is already initialized
-          const topBarExists = document.querySelector('.top-bar');
-          const sidebarExists = document.querySelector('.sidebar');
-
-          // If the game interface is not visible, try fallback initialization
-          if (!topBarExists || !sidebarExists) {
-            console.log('Game interface not detected - running fallback initialization');
-
-            // Create a fallback initialization button
-            const fallbackButton = document.createElement('div');
-            fallbackButton.style.position = 'fixed';
-            fallbackButton.style.top = '50%';
-            fallbackButton.style.left = '50%';
-            fallbackButton.style.transform = 'translate(-50%, -50%)';
-            fallbackButton.style.padding = '20px';
-            fallbackButton.style.backgroundColor = '#1a237e';
-            fallbackButton.style.color = 'white';
-            fallbackButton.style.borderRadius = '8px';
-            fallbackButton.style.cursor = 'pointer';
-            fallbackButton.style.textAlign = 'center';
-            fallbackButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
-            fallbackButton.style.zIndex = '9999';
-            fallbackButton.innerHTML = `
-            <h3 style="margin-top: 0;">Game Initialization Issue</h3>
-            <p>The game interface didn't load correctly.</p>
-            <button id="try-fallback" style="padding: 10px 20px; background-color: #4caf50; color: white; border: none; border-radius: 4px; margin: 10px; cursor: pointer;">Try Manual Initialization</button>
-            <button id="go-back" style="padding: 10px 20px; background-color: #f44336; color: white; border: none; border-radius: 4px; margin: 10px; cursor: pointer;">Return to Main Menu</button>
-          `;
-
-            document.body.appendChild(fallbackButton);
-
-            // Add event listeners to buttons
-            document.getElementById('try-fallback').addEventListener('click', function () {
-              if (window.runFallbackInitialization) {
-                window.runFallbackInitialization();
-                fallbackButton.style.display = 'none';
-              } else {
-                console.error('Fallback initialization function not found');
-                alert('Fallback initialization function not found. Returning to main menu.');
-                window.location.href = 'index.html';
-              }
-            });
-
-            document.getElementById('go-back').addEventListener('click', function () {
-              window.location.href = 'index.html';
-            });
-          }
-        }, 3000); // Wait 3 seconds after load to check
-      });
     </script>
   </body>
 </html>

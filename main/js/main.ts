@@ -26,8 +26,6 @@ function gameLoop(timestamp: number): void {
         return;
     }
 
-    frameCount++;
-
     window.gameState.lastFrameTime = timestamp;
 
     // Only run simulation if game is active and not paused
@@ -202,118 +200,5 @@ window.toggleGamePause = function (): void {
 
 // Expose the game loop for external use
 window.gameLoop = gameLoop;
-
-// Check if we need to initialize the game state manually (fallback)
-if (!window.isGameInitialized && typeof window.initializeNewGame !== 'function') {
-    console.log('Initializing game state directly from main.js (fallback)');
-
-    // Initialize minimal game state for fallback
-    window.gameState = {
-        currentDate: new Date(startDate.getTime()),
-        dayIndex: 0,
-        isDayActive: true,
-        isPaused: false,
-        simulationAccumulator: 0,
-        lastFrameTime: 0,
-        lastSimulationTime: 0,
-        renderInfo: {
-            fps: 0,
-            frameCount: 0,
-            lastFpsUpdate: 0,
-        },
-        pharmacyName: 'Default Pharmacy',
-        difficulty: 'normal',
-        location: 'suburban',
-    };
-
-    window.isGameInitialized = true;
-}
-
-// Define the showPage function if it doesn't exist
-if (typeof window.showPage !== 'function') {
-    window.showPage = function (pageName: string): void {
-        console.log(`Navigating to page: ${pageName}`);
-
-        // Update the active navigation item in the sidebar
-        if (typeof window.updateActiveNavItem === 'function') {
-            window.updateActiveNavItem(pageName);
-        }
-
-        // Get the main content container
-        const mainContent = document.querySelector<HTMLElement>('.main-content');
-        if (!mainContent) {
-            console.error('Main content container not found');
-            return;
-        }
-
-        // Clear existing content
-        mainContent.innerHTML = '';
-
-        // Store current page name for reference
-        window.currentPage = pageName;
-
-        // Call the appropriate page renderer based on the page name
-        const rendererName = `render${pageName.charAt(0).toUpperCase() + pageName.slice(1)}Page`;
-
-        const renderer = (window as unknown as Record<string, unknown>)[rendererName];
-        if (typeof renderer === 'function') {
-            try {
-                // Call the page renderer
-                (renderer as (container: HTMLElement) => void)(mainContent);
-                console.log(`Rendered page: ${pageName}`);
-
-                // Dispatch custom event that page has changed (for components that need to react)
-                const event = new CustomEvent('pageChanged', {
-                    detail: { page: pageName },
-                });
-                document.dispatchEvent(event);
-            } catch (error) {
-                console.error(`Error rendering page ${pageName}:`, error);
-                mainContent.innerHTML = `<div class="error-message">
-                    <h3>Error Loading Page</h3>
-                    <p>There was an error loading the ${pageName} page.</p>
-                    <pre>${(error as Error).message}</pre>
-                </div>`;
-            }
-        } else {
-            console.error(`Page renderer not found: ${rendererName}`);
-            mainContent.innerHTML = `<div class="error-message">
-                <h3>Page Not Found</h3>
-                <p>The requested page "${pageName}" does not exist or is still under development.</p>
-            </div>`;
-        }
-    };
-}
-
-// Game loop monitoring. frameCount is incremented by gameLoop itself.
-let lastFrameTime = Date.now();
-let frameCount = 0;
-
-setInterval(() => {
-    const now = Date.now();
-    const elapsed = now - lastFrameTime;
-    const fps = frameCount / (elapsed / 1000);
-    frameCount = 0;
-    lastFrameTime = now;
-
-    // Add safety checks for all gameState properties
-    const gameTimeStr =
-        window.gameState?.currentDate instanceof Date ? window.gameState.currentDate.toLocaleTimeString() : 'unknown';
-
-    console.log(
-        `[main] Game loop health check: ${elapsed}ms since last frame, ` +
-            `FPS: ${fps.toFixed(1)}, ` +
-            `game time: ${gameTimeStr}`,
-    );
-
-    // Check if game is paused or day is inactive
-    if (window.gameState?.isPaused) {
-        console.log('[main] Game is currently PAUSED');
-    }
-
-    if (!window.gameState?.isDayActive) {
-        console.log('[main] Day is currently INACTIVE');
-    }
-}, 5000);
 
 console.log('main.js loaded successfully');

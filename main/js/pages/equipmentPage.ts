@@ -2,13 +2,14 @@
 
 interface EquipmentCardRefs {
     rootDiv: HTMLDivElement;
+    updateLiveFields: () => void;
     buyQtyInput: HTMLInputElement;
     autoThreshInput: HTMLInputElement;
     autoAmtInput: HTMLInputElement;
     eqObj: EquipmentItem;
 }
 
-window.renderEquipmentPage = function (mainContent: HTMLElement): void {
+window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope): void {
     // Clear existing content
     mainContent.innerHTML = '';
 
@@ -68,10 +69,20 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
     summaryRow.appendChild(purchaseButton);
     container.appendChild(summaryRow);
 
+    // Which equipment the grid was drawn for (research unlocks more)
+    let renderedUnlocked = '';
+    function unlockedIds(): string {
+        return window.equipmentData
+            .filter((eq) => eq.isUnlocked())
+            .map((eq) => eq.id)
+            .join();
+    }
+
     // Function to render equipment cards
     function renderEquipment(): void {
         equipmentGrid.innerHTML = '';
         equipmentCards.length = 0;
+        renderedUnlocked = unlockedIds();
 
         const filterText = filterInput.value.toLowerCase().trim();
 
@@ -105,11 +116,14 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
             const infoRow = document.createElement('div');
             infoRow.className = 'info-row';
             const ownedLine = document.createElement('p');
-            ownedLine.textContent = `Owned: ${eq.owned}`;
             const capacityLine = document.createElement('p');
             capacityLine.textContent = `Capacity: ${eq.capacity}`;
             const durabilityLine = document.createElement('p');
-            durabilityLine.textContent = `Durability: ${eq.durability}%`;
+            const updateLiveFields = (): void => {
+                ownedLine.textContent = `Owned: ${eq.owned}`;
+                durabilityLine.textContent = `Durability: ${eq.durability}%`;
+            };
+            updateLiveFields();
             infoRow.appendChild(ownedLine);
             infoRow.appendChild(capacityLine);
             infoRow.appendChild(durabilityLine);
@@ -162,8 +176,13 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
             equipmentGrid.appendChild(card);
 
             // Store references for later use
+            [buyQtyInput, autoThreshInput, autoAmtInput].forEach((input) => {
+                input.addEventListener('input', updateTotalCostDisplay);
+            });
+
             equipmentCards.push({
                 rootDiv: card,
+                updateLiveFields,
                 buyQtyInput,
                 autoThreshInput,
                 autoAmtInput,
@@ -210,8 +229,7 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
             entry.eqObj.autoPurchaseAmount = parseInt(entry.autoAmtInput.value, 10) || 0;
         });
 
-        window.updateFinancialSummary(window.financesData);
-        renderEquipment();
+        window.updateUI('equipment');
         updateTotalCostDisplay();
 
         alert(`Purchase successful! Total cost: $${totalCost.toFixed(2)}`);
@@ -223,19 +241,21 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
         totalCostValue.textContent = sum.toFixed(2);
     }
 
-    // Event listeners for input changes
-    function watchEquipmentChanges(): void {
-        equipmentCards.forEach((entry) => {
-            entry.buyQtyInput.addEventListener('input', updateTotalCostDisplay);
-            entry.autoThreshInput.addEventListener('input', updateTotalCostDisplay);
-            entry.autoAmtInput.addEventListener('input', updateTotalCostDisplay);
-        });
-    }
+    // Purchases and wear update the cards in place, keeping anything the
+    // player has typed; newly researched equipment redraws the grid.
+    page.on('equipment', () => {
+        if (unlockedIds() !== renderedUnlocked) {
+            renderEquipment();
+            updateTotalCostDisplay();
+        } else {
+            equipmentCards.forEach((entry) => entry.updateLiveFields());
+        }
+    });
 
     // Event listener for filter input
     filterInput.addEventListener('input', () => {
         renderEquipment();
-        watchEquipmentChanges();
+        updateTotalCostDisplay();
     });
 
     // Event listener for purchase button
@@ -244,7 +264,6 @@ window.renderEquipmentPage = function (mainContent: HTMLElement): void {
     // Initial rendering
     mainContent.appendChild(container);
     renderEquipment();
-    watchEquipmentChanges();
     updateTotalCostDisplay();
 
     // Add CSS styling

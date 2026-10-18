@@ -1,6 +1,6 @@
 // /js/pages/researchPage.js
 
-window.renderResearchPage = function (mainContent: HTMLElement): void {
+window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope): void {
     // Clear existing content
     mainContent.innerHTML = '';
 
@@ -239,6 +239,7 @@ window.renderResearchPage = function (mainContent: HTMLElement): void {
     // Append the container to the main content area
     mainContent.appendChild(container);
 
-    // Initial UI update
+    // Initial UI update, then again as research moves on (each day, and on completion)
     updateResearchUI();
+    page.on('research', updateResearchUI);
 };

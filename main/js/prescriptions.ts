@@ -140,6 +140,7 @@ window.prescriptions = {
             createdAt: window.clock.now(),
         };
         this.activePrescriptions.push(newPrescription);
+        window.updateUI('prescriptions');
 
         console.log(`[prescriptions.js] Created prescription: ${newPrescription.id} for customer: ${customerId}`);
 
@@ -179,6 +180,7 @@ window.prescriptions = {
             isRefill: true,
         };
         this.activePrescriptions.push(newPrescription);
+        window.updateUI('prescriptions');
 
         console.log(
             `[prescriptions.js] Created refill prescription: ${newPrescription.id} for customer: ${customerId}`,
@@ -279,7 +281,7 @@ window.prescriptions = {
         const prescription = this.activePrescriptions.find((p) => p.id === prescriptionId);
         if (prescription) {
             prescription.status = newStatus;
-            window.ui.updatePrescriptions();
+            window.updateUI('prescriptions');
         } else {
             console.error(`[prescriptions.js] Prescription not found: ${prescriptionId}`);
         }
@@ -357,8 +359,7 @@ window.prescriptions = {
             `[prescriptions.js] Removed ${customerPrescriptions.length} prescriptions for departed customer ${customerId}`,
         );
 
-        // Update UI if needed
-        window.ui.updatePrescriptions();
+        window.updateUI('prescriptions');
     },
 
     // Returns the first refill opportunity that's both owed and past its

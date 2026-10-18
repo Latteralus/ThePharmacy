@@ -42,6 +42,25 @@ test('starting a new game reaches the game screen without console errors', async
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
   await page.waitForSelector('.sidebar', { timeout: 20_000 });
 
+  // The welcome is there from the start (it used to wait 2 real seconds)
+  await expect(page.locator('#notificationCount')).toHaveText('1');
+
+  // Every page renders through showPage's PageScope (A5) without errors
+  const pages = await page.$$eval('.nav-links .nav-item', (items) => items.map((item) => item.id));
+  expect(pages.length).toBeGreaterThan(10);
+  for (const id of pages) {
+    await page.click(`#${id}`);
+    await expect(page.locator('.main-content .error-message')).toHaveCount(0);
+  }
+
+  // Operations redraws when a customer arrives, with no polling timer
+  await page.click('#operations-nav-item');
+  const name = await page.evaluate(() => {
+    const customer = window.customers.generateCustomer(window.gameState.currentDate.getHours());
+    return `${customer.firstName} ${customer.lastName}`;
+  });
+  await expect(page.locator('.main-content .customer-item').first()).toContainText(name);
+
   expect(consoleErrors).toEqual([]);
 
   await app.close();

@@ -175,7 +175,7 @@ describe('customer patience on the game clock', () => {
     window.taskManager = { tasks: [], getTasksForCustomer: () => [], cancelTask: jest.fn() };
     window.taskAssignment = { unassignTask: jest.fn() };
     window.prescriptions = { removePrescriptionsByCustomer: jest.fn() };
-    window.ui = { updateCustomers: jest.fn() };
+    window.updateUI = jest.fn();
 
     require('../../main/js/clock.js');
     require('../../main/js/ids.js');

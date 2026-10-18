@@ -1,6 +1,6 @@
 // /js/pages/inventoryPage.js
 
-window.renderInventoryPage = function (mainContent: HTMLElement): void {
+window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope): void {
     mainContent.innerHTML = '';
 
     const container = document.createElement('div');
@@ -118,9 +118,15 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
     container.appendChild(productsGrid);
     container.appendChild(materialsGrid);
 
+    // Redraw the figures that change during play (stock, price) in place, so
+    // a value the player is typing into a card isn't wiped by a refresh.
+    let liveFields: Array<() => void> = [];
+    page.on('inventory', () => liveFields.forEach((update) => update()));
+
     // Function to render products
     function renderProducts(): void {
         productsGrid.innerHTML = '';
+        liveFields = [];
         const filterText = filterInput.value.toLowerCase().trim();
 
         window.productsData.forEach((prod) => {
@@ -159,7 +165,6 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             card.appendChild(marketPriceLabel);
 
             const currentPriceLabel = document.createElement('p');
-            currentPriceLabel.textContent = `Current Price: $${prod.price.toFixed(2)}`;
             card.appendChild(currentPriceLabel);
 
             const newPriceRow = document.createElement('div');
@@ -175,9 +180,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             updatePriceButton.textContent = 'Update';
             updatePriceButton.onclick = () => {
                 const newPrice = parseFloat(newPriceInput.value);
-                if (window.finances.updateProductPrice(prod.id, newPrice)) {
-                    currentPriceLabel.textContent = `Current Price: $${newPrice.toFixed(2)}`;
-                } else {
+                if (!window.finances.updateProductPrice(prod.id, newPrice)) {
                     alert('Enter a price above $0.');
                 }
             };
@@ -188,14 +191,19 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
 
             // Current Stock
             const stockLabel = document.createElement('p');
-            stockLabel.textContent = `In Stock: ${prod.inventory}`;
             card.appendChild(stockLabel);
 
             // Potential Production
-            const potentialProduction = window.helpers.calculatePotentialProduction(prod.id);
             const potentialLabel = document.createElement('p');
-            potentialLabel.textContent = `Can Make: ${potentialProduction}`;
             card.appendChild(potentialLabel);
+
+            const updateLiveFields = (): void => {
+                currentPriceLabel.textContent = `Current Price: $${prod.price.toFixed(2)}`;
+                stockLabel.textContent = `In Stock: ${prod.inventory}`;
+                potentialLabel.textContent = `Can Make: ${window.helpers.calculatePotentialProduction(prod.id)}`;
+            };
+            updateLiveFields();
+            liveFields.push(updateLiveFields);
 
             // Quick Order for Compounding
             const quickOrderDiv = document.createElement('div');
@@ -256,6 +264,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
     // Function to render materials
     function renderMaterials(): void {
         materialsGrid.innerHTML = '';
+        liveFields = [];
         const filterText = filterInput.value.toLowerCase().trim();
 
         window.materialsData.forEach((mat) => {
@@ -282,7 +291,6 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             const invLabel = document.createElement('strong');
             invLabel.textContent = 'Inventory: ';
             const inventorySpan = document.createElement('span');
-            inventorySpan.textContent = `${mat.inventory}`;
             invRow.appendChild(invLabel);
             invRow.appendChild(inventorySpan);
             card.appendChild(invRow);
@@ -292,6 +300,12 @@ window.renderInventoryPage = function (mainContent: HTMLElement): void {
             autoOrderRow.className = 'auto-order-row';
             autoOrderRow.textContent = `Auto-Order Threshold: ${mat.autoOrderThreshold}, Amount: ${mat.autoOrderAmount}`;
             card.appendChild(autoOrderRow);
+
+            const updateLiveFields = (): void => {
+                inventorySpan.textContent = `${mat.inventory}`;
+            };
+            updateLiveFields();
+            liveFields.push(updateLiveFields);
 
             materialsGrid.appendChild(card);
         });
