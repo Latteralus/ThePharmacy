@@ -1,222 +1,133 @@
-interface MarketplaceCardRefs {
-    rootDiv: HTMLDivElement;
-    nameSpan: HTMLSpanElement;
-    inventorySpan: HTMLSpanElement;
-    qtyInput: HTMLInputElement;
-    matObj: Material;
-}
+// /js/pages/marketplacePage.js - buy raw materials. Quantities typed here
+// survive stock changes (compounds taking materials, auto-orders), which
+// update the stock column in place.
 
 window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageScope): void {
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
 
-    // Create a container for the Marketplace page
-    const container = document.createElement('div');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '1rem';
+    // Most materials share one discount ladder; show it once if they do.
+    const tiersText = (mat: Material): string =>
+        mat.bulkDiscounts.map((d) => `${Math.round(d.discount * 100)}% off ${fmt.int(d.minQuantity)}+`).join(' · ');
+    const ladders = new Set(window.materialsData.map(tiersText));
+    const sharedTiers = ladders.size === 1 ? [...ladders][0] : '';
 
-    // Title
-    const title = document.createElement('h2');
-    title.textContent = 'Marketplace';
-    container.appendChild(title);
+    const root = kit.page(
+        mainContent,
+        'Marketplace',
+        sharedTiers
+            ? `Raw materials, delivered at once. Bulk discounts: ${sharedTiers}.`
+            : 'Raw materials, delivered at once.',
+    );
 
-    // Short description
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'Order more materials here.';
-    container.appendChild(subtitle);
+    const toolbar = el('div', 'toolbar');
+    const search = el('input', 'input search');
+    search.type = 'search';
+    search.placeholder = 'Search materials…';
+    search.setAttribute('aria-label', 'Search materials');
+    toolbar.appendChild(search);
+    root.appendChild(toolbar);
 
-    // -------------------------------------------------------------------------
-    // 1) Filter / Search bar
-    // -------------------------------------------------------------------------
-    const filterRow = document.createElement('div');
-    filterRow.style.display = 'flex';
-    filterRow.style.alignItems = 'center';
-    filterRow.style.gap = '1rem';
+    const card = kit.card(undefined, { flush: true });
+    root.appendChild(card.root);
 
-    const filterLabel = document.createElement('label');
-    filterLabel.textContent = 'Search:';
-    filterLabel.style.fontWeight = 'bold';
+    // The order: material id -> quantity, kept across searches
+    const order = new Map<string, number>();
 
-    const filterInput = document.createElement('input');
-    filterInput.type = 'text';
-    filterInput.placeholder = 'Type to filter materials...';
-    filterInput.style.flex = '1';
+    const orderBar = el('div', 'order-bar');
+    const summary = el('span', 'muted');
+    const total = el('span', 'order-total');
+    const clear = kit.button('Clear', 'ghost', () => {
+        order.clear();
+        render();
+        updateTotal();
+    });
+    const buy = kit.button('Buy materials', 'primary', confirmPurchase);
+    orderBar.append(summary, total, clear, buy);
+    root.appendChild(orderBar);
 
-    filterLabel.appendChild(filterInput);
-    filterRow.appendChild(filterLabel);
+    let stockCells: Array<() => void> = [];
+    const lineCosts = new Map<string, HTMLElement>();
 
-    container.appendChild(filterRow);
+    function lineCost(mat: Material): number {
+        const qty = order.get(mat.id) ?? 0;
+        return qty > 0 ? window.calculateMaterialCost(mat.id, qty) : 0;
+    }
 
-    // -------------------------------------------------------------------------
-    // 2) Materials container (grid of cards)
-    // -------------------------------------------------------------------------
-    const materialsGrid = document.createElement('div');
-    materialsGrid.style.display = 'grid';
-    materialsGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
-    materialsGrid.style.gap = '1rem';
+    function render(): void {
+        card.body.innerHTML = '';
+        stockCells = [];
+        lineCosts.clear();
+        const columns: TableColumn[] = [
+            { label: 'Material' },
+            { label: 'Unit price', num: true },
+            { label: 'In stock', num: true },
+            { label: 'Order qty', num: true },
+            { label: 'Line cost', num: true, title: 'With any bulk discount' },
+        ];
+        if (!sharedTiers) columns.splice(2, 0, { label: 'Bulk discounts' });
+        const table = kit.table(columns);
+        card.body.appendChild(table.root);
 
-    container.appendChild(materialsGrid);
+        const text = search.value.toLowerCase().trim();
+        const materials = window.materialsData.filter((m) => !text || m.name.toLowerCase().includes(text));
+        if (materials.length === 0) table.empty('No materials match your search.');
 
-    // We'll store references to dynamically updated elements:
-    const materialCards: MarketplaceCardRefs[] = [];
+        materials.forEach((mat) => {
+            const stock = el('span');
+            const showStock = (): void => {
+                stock.textContent = fmt.int(mat.inventory);
+                stock.className = mat.inventory <= 0 ? 'critical-text' : '';
+            };
+            showStock();
+            stockCells.push(showStock);
 
-    // -------------------------------------------------------------------------
-    // 3) Bottom row for bulk purchase summary
-    // -------------------------------------------------------------------------
-    const summaryRow = document.createElement('div');
-    summaryRow.style.display = 'flex';
-    summaryRow.style.justifyContent = 'space-between';
-    summaryRow.style.alignItems = 'center';
-    summaryRow.style.marginTop = '1rem';
-
-    const totalCostLabel = document.createElement('strong');
-    totalCostLabel.textContent = 'Total Purchase: $';
-
-    const totalCostValue = document.createElement('span');
-    totalCostValue.textContent = '0.00';
-
-    const purchaseButton = document.createElement('button');
-    purchaseButton.textContent = 'Confirm Purchase';
-    purchaseButton.style.padding = '0.5rem 1rem';
-    purchaseButton.style.fontWeight = 'bold';
-
-    // Append them in a small row
-    const purchaseRowLeft = document.createElement('div');
-    purchaseRowLeft.appendChild(totalCostLabel);
-    purchaseRowLeft.appendChild(totalCostValue);
-
-    summaryRow.appendChild(purchaseRowLeft);
-    summaryRow.appendChild(purchaseButton);
-
-    container.appendChild(summaryRow);
-
-    // -------------------------------------------------------------------------
-    // Render function: builds each card for materials
-    // -------------------------------------------------------------------------
-    function renderMaterials(): void {
-        materialsGrid.innerHTML = '';
-        materialCards.length = 0; // clear
-
-        // Filter by name if user typed something
-        const filterText = filterInput.value.toLowerCase().trim();
-
-        window.materialsData.forEach((mat) => {
-            if (filterText && !mat.name.toLowerCase().includes(filterText)) {
-                return; // skip if not matching the filter
-            }
-
-            // Card container
-            const card = document.createElement('div');
-            card.style.border = '1px solid #ccc';
-            card.style.borderRadius = '4px';
-            card.style.padding = '1rem';
-            card.style.backgroundColor = '#fff';
-            card.style.display = 'flex';
-            card.style.flexDirection = 'column';
-            card.style.gap = '0.5rem';
-
-            // Title row: item name + cost
-            const titleRow = document.createElement('div');
-            titleRow.style.display = 'flex';
-            titleRow.style.justifyContent = 'space-between';
-            titleRow.style.fontWeight = 'bold';
-
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = mat.name; // e.g. "Acetaminophen Base"
-
-            const costSpan = document.createElement('span');
-            costSpan.textContent = `$${mat.cost.toFixed(2)}`;
-
-            titleRow.appendChild(nameSpan);
-            titleRow.appendChild(costSpan);
-
-            card.appendChild(titleRow);
-
-            // The total below applies these (calculateMaterialCost)
-            if (mat.bulkDiscounts.length > 0) {
-                const discountRow = document.createElement('small');
-                discountRow.textContent = `Bulk: ${mat.bulkDiscounts
-                    .map((d) => `${Math.round(d.discount * 100)}% off ${d.minQuantity}+`)
-                    .join(', ')}`;
-                card.appendChild(discountRow);
-            }
-
-            // Inventory row: "Current inventory: N" with color-coded highlight
-            const invRow = document.createElement('div');
-            const invLabel = document.createElement('strong');
-            invLabel.textContent = 'Inventory: ';
-            const inventorySpan = document.createElement('span');
-            showInventory(inventorySpan, mat);
-
-            invRow.appendChild(invLabel);
-            invRow.appendChild(inventorySpan);
-            card.appendChild(invRow);
-
-            // Order quantity row
-            const orderRow = document.createElement('div');
-            orderRow.style.display = 'flex';
-            orderRow.style.gap = '0.5rem';
-            orderRow.style.alignItems = 'center';
-
-            const qtyLabel = document.createElement('span');
-            qtyLabel.textContent = 'Order Qty: ';
-
-            const qtyInput = document.createElement('input');
-            qtyInput.type = 'number';
-            qtyInput.value = '0';
-            qtyInput.style.width = '60px';
-            qtyInput.addEventListener('input', updateTotalCostDisplay);
-
-            orderRow.appendChild(qtyLabel);
-            orderRow.appendChild(qtyInput);
-
-            card.appendChild(orderRow);
-
-            materialsGrid.appendChild(card);
-
-            // Track references for calculating total cost later
-            materialCards.push({
-                rootDiv: card,
-                nameSpan,
-                inventorySpan,
-                qtyInput,
-                matObj: mat,
+            const qty = kit.numberInput(order.get(mat.id) ?? 0, { min: 0, small: true, width: '84px' });
+            qty.setAttribute('aria-label', `Quantity of ${mat.name}`);
+            const cost = el('span');
+            lineCosts.set(mat.id, cost);
+            qty.addEventListener('input', () => {
+                const value = parseInt(qty.value, 10);
+                if (Number.isFinite(value) && value > 0) order.set(mat.id, value);
+                else order.delete(mat.id);
+                updateTotal();
             });
+
+            const cells: TableCell[] = [mat.name, fmt.money(mat.cost), stock, qty, cost];
+            if (!sharedTiers) cells.splice(2, 0, el('span', 'small muted', tiersText(mat)));
+            const row = table.row(cells);
+            row.className = 'material-row';
         });
+        updateTotal();
     }
 
-    // color code the inventory text
-    // e.g. >100 => green, 50-100 => orange, <50 => red
-    function showInventory(inventorySpan: HTMLSpanElement, mat: Material): void {
-        inventorySpan.textContent = `${mat.inventory}`;
-        if (mat.inventory < 50) {
-            inventorySpan.style.color = 'red';
-        } else if (mat.inventory < 100) {
-            inventorySpan.style.color = 'orange';
-        } else {
-            inventorySpan.style.color = 'green';
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Calculate the total cost of all selected items
-    // -------------------------------------------------------------------------
-    function calculateTotalCost(): number {
+    function orderTotal(): number {
         let sum = 0;
-        materialCards.forEach((entry) => {
-            const qty = parseInt(entry.qtyInput.value, 10) || 0;
-            if (qty > 0) {
-                sum += window.calculateMaterialCost(entry.matObj.id, qty);
-            }
+        window.materialsData.forEach((mat) => {
+            sum += lineCost(mat);
         });
         return sum;
     }
 
-    // -------------------------------------------------------------------------
-    // Purchase logic: subtract cost from finances, add items to inventory
-    // -------------------------------------------------------------------------
+    function updateTotal(): void {
+        window.materialsData.forEach((mat) => {
+            const cell = lineCosts.get(mat.id);
+            if (cell) cell.textContent = order.has(mat.id) ? fmt.money(lineCost(mat)) : '';
+        });
+        const sum = orderTotal();
+        const lines = order.size;
+        summary.textContent = lines > 0 ? `${lines} material${lines === 1 ? '' : 's'}` : 'Nothing in the order yet';
+        total.textContent = fmt.money(sum);
+        const short = sum > window.financesData.cash;
+        total.className = short ? 'order-total critical-text' : 'order-total';
+        total.title = short ? `More than your ${fmt.money(window.financesData.cash)} cash` : '';
+        buy.disabled = lines === 0 || short;
+    }
+
     function confirmPurchase(): void {
-        const totalCost = calculateTotalCost();
+        const totalCost = orderTotal();
+        if (totalCost <= 0) return;
         const paid = window.finances.transact({
             type: 'expense',
             category: 'materials',
@@ -225,61 +136,29 @@ window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageSco
             requireFunds: true,
         });
         if (!paid) {
-            alert('Not enough cash to buy these materials!');
+            window.toast('Not enough cash for this order.', 'error');
             return;
         }
 
-        // Update each material's inventory
-        materialCards.forEach((entry) => {
-            const qty = parseInt(entry.qtyInput.value, 10) || 0;
-            if (qty > 0) {
-                entry.matObj.inventory += qty;
-                entry.qtyInput.value = '0'; // reset after purchase
-            }
+        window.materialsData.forEach((mat) => {
+            const qty = order.get(mat.id) ?? 0;
+            if (qty > 0) mat.inventory += qty;
         });
+        order.clear();
 
         // A compound waiting on these materials can start now
         window.taskAssignment.requestAutoAssign();
         window.updateUI('inventory');
-        updateTotalCostDisplay();
-
-        alert(
-            `Purchase successful! Spent $${totalCost.toFixed(2)}. Remaining cash: $${window.financesData.cash.toFixed(2)}`,
-        );
+        render();
+        window.toast(`Bought materials for ${fmt.money(totalCost)}.`, 'success');
     }
 
-    // -------------------------------------------------------------------------
-    // updateTotalCostDisplay: refresh the displayed total
-    // -------------------------------------------------------------------------
-    function updateTotalCostDisplay(): void {
-        const sum = calculateTotalCost();
-        totalCostValue.textContent = sum.toFixed(2);
-    }
+    search.addEventListener('input', render);
 
-    // -------------------------------------------------------------------------
-    // Event Listeners
-    // -------------------------------------------------------------------------
-    // 1) Filter input => re-render
-    filterInput.addEventListener('input', () => {
-        renderMaterials();
-        updateTotalCostDisplay();
-    });
+    // Stock changes update the column in place, keeping typed quantities
+    page.on('inventory', () => stockCells.forEach((update) => update()));
+    // The Buy button depends on cash
+    page.on('finances', updateTotal);
 
-    // 2) "Confirm Purchase" => confirmPurchase
-    purchaseButton.addEventListener('click', confirmPurchase);
-
-    // 3) Stock changes (compounds taking materials, auto-orders) update the
-    // cards in place, keeping any quantities the player has typed
-    page.on('inventory', () => {
-        materialCards.forEach((entry) => showInventory(entry.inventorySpan, entry.matObj));
-    });
-
-    // -------------------------------------------------------------------------
-    // Initial
-    // -------------------------------------------------------------------------
-    mainContent.appendChild(container);
-
-    // First render
-    renderMaterials();
-    updateTotalCostDisplay();
+    render();
 };

@@ -6,6 +6,7 @@
 describe('taskbars.createProgressBar', () => {
   beforeEach(() => {
     jest.resetModules();
+    require('../../main/components/kit.js');
     require('../../main/js/taskbars.js');
   });
 
@@ -26,11 +27,11 @@ describe('taskbars.createProgressBar', () => {
     };
 
     const bar = window.taskbars.createProgressBar(task);
-    const percentText = bar.querySelector('.progress-percent').textContent;
     const timeText = bar.querySelector('.time-remaining').textContent;
 
-    expect(percentText).toMatch(/^\d+%$/);
-    expect(timeText).toMatch(/^\d+:\d{2} remaining$/);
+    expect(timeText).toBe('6m left');
+    expect(bar.querySelector('.progress-fill').style.width).toBe('33.3%');
+    expect(bar.title).toContain('33%');
 
     // Belt-and-suspenders: no run of 3+ decimal digits anywhere in the bar's
     // visible text (covers the percent/time text plus the tooltip).
@@ -38,9 +39,24 @@ describe('taskbars.createProgressBar', () => {
     expect(bar.title).not.toMatch(/\.\d{3,}/);
   });
 
-  test('clamps percent to 100% when progress exceeds totalTime', () => {
+  test('clamps to a full bar when progress exceeds totalTime', () => {
     const task = { id: 'task-2', type: 'fillPrescription', totalTime: 5, progress: 5.7 };
     const bar = window.taskbars.createProgressBar(task);
-    expect(bar.querySelector('.progress-percent').textContent).toBe('100%');
+    expect(bar.querySelector('.progress-fill').style.width).toBe('100%');
+    expect(bar.querySelector('.time-remaining').textContent).toBe('done');
+  });
+
+  test("takes its task kind's colour and follows progress every frame", () => {
+    const task = { id: 'task-3', type: 'consultation', totalTime: 10, progress: 1 };
+    window.taskManager = { tasks: [task] };
+    const bar = window.taskbars.createProgressBar(task);
+    document.body.appendChild(bar);
+    expect(bar.className).toBe('task-progress-bar kind-consult');
+
+    task.progress = 9.5;
+    window.updateTaskProgressBars();
+    expect(bar.querySelector('.progress-fill').style.width).toBe('95%');
+    expect(bar.querySelector('.time-remaining').textContent).toBe('<1m left');
+    bar.remove();
   });
 });

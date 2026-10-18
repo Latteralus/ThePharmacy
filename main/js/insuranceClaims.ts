@@ -30,7 +30,7 @@ function settleClaim(claim: InsuranceClaim, rejected: boolean): boolean {
         type: 'income',
         category: 'insurance',
         amount: claim.amountDue,
-        description: `Insurance payment for prescription ${claim.prescriptionId}`,
+        description: `Claim paid by ${claim.insurancePlan}`,
         customerId: claim.customerId,
         prescriptionId: claim.prescriptionId,
     });

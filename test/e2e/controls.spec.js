@@ -67,7 +67,7 @@ test('the Load menu, Settings page and Ctrl+L', async () => {
   await page.evaluate(() => window.showPage('settings'));
   await page.waitForSelector('.settings-page-container');
   const buttons = await page.locator('.settings-page-container button').allTextContents();
-  expect(buttons).toEqual(['Pause Game']);
+  expect(buttons).toEqual([await page.evaluate(() => (window.gameState.isPaused ? 'Resume' : 'Pause'))]);
   expect(
     await page.evaluate(() => ({
       forceTimeForward: typeof window.forceTimeForward,

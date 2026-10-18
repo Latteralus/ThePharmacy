@@ -1,507 +1,277 @@
-// /js/pages/operationsPage.js
+// /js/pages/operationsPage.js - the live view of the store: who is waiting
+// and how patient they are, what each employee is doing, and the work queue
+// with customer work ahead of restocks.
 
 window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScope): void {
-    // Clear existing content
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt, words } = window;
 
-    // Create a top-level container
-    const container = document.createElement('div');
-    container.className = 'operations-page-container';
+    const root = kit.page(mainContent, 'Operations', "Who's in the store, who's working on what, and what's waiting.");
 
-    // Add a header
-    const header = document.createElement('h2');
-    header.textContent = 'Operations (Live Environment)';
-    container.appendChild(header);
+    // --------------------- KPIs ---------------------
+    const kpis = el('div', 'kpi-row');
+    const inStoreTile = kit.statTile('Customers in store');
+    const waitingTile = kit.statTile('Customer tasks waiting for staff');
+    const idleTile = kit.statTile('Idle staff');
+    const restockTile = kit.statTile('Restocks queued');
+    kpis.append(inStoreTile.root, waitingTile.root, idleTile.root, restockTile.root);
+    root.appendChild(kpis);
 
-    // Add a short subtitle or info
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'Real-time status of employees, tasks, and customers.';
-    container.appendChild(subtitle);
+    // --------------------- Customers and staff ---------------------
+    const customersCard = kit.card('Customers', { flush: true });
+    root.appendChild(customersCard.root);
+    const customersTable = kit.table([
+        { label: 'Customer' },
+        { label: 'Prescription' },
+        { label: 'Stage' },
+        { label: 'Waiting', num: true, title: 'Game time since they walked in' },
+        { label: 'Patience', width: '200px', title: 'Game minutes before they give up and leave' },
+        { label: 'Mood', title: 'Out of 10. Happy customers raise reputation when they leave.' },
+    ]);
+    customersCard.body.appendChild(customersTable.root);
 
-    // Create a top row that will hold summary statistics
-    const summaryRow = document.createElement('div');
-    summaryRow.style.display = 'flex';
-    summaryRow.style.gap = '1rem';
-    summaryRow.style.marginBottom = '1rem';
-    container.appendChild(summaryRow);
+    const staffCard = kit.card('Staff', { flush: true });
+    root.appendChild(staffCard.root);
+    const staffTable = kit.table([
+        { label: 'Employee' },
+        { label: 'Working on' },
+        { label: 'Progress', width: '220px' },
+    ]);
+    staffCard.body.appendChild(staffTable.root);
 
-    // Card for "Active Tasks" count
-    const activeTasksCard = document.createElement('div');
-    activeTasksCard.style.flex = '1';
-    activeTasksCard.style.border = '1px solid #ccc';
-    activeTasksCard.style.borderRadius = '4px';
-    activeTasksCard.style.padding = '1rem';
-    activeTasksCard.style.backgroundColor = '#fff';
-    activeTasksCard.innerHTML = '<h4>Active Tasks</h4><p id="activeTasksCount">0</p>';
-    summaryRow.appendChild(activeTasksCard);
+    // --------------------- Work queue ---------------------
+    let showAllRestocks = false;
+    const restockToggle = kit.button(
+        'Show all restocks',
+        'ghost',
+        () => {
+            showAllRestocks = !showAllRestocks;
+            renderQueue();
+        },
+        { small: true },
+    );
+    const queueCard = kit.card('Work queue', { flush: true, actions: [restockToggle] });
+    root.appendChild(queueCard.root);
+    const queueTable = kit.table([
+        { label: 'Task' },
+        { label: 'For' },
+        { label: 'Status' },
+        { label: 'Assigned to' },
+        { label: 'Progress', width: '220px' },
+    ]);
+    queueCard.body.appendChild(queueTable.root);
 
-    // Card for "Idle Employees" count
-    const idleEmployeesCard = document.createElement('div');
-    idleEmployeesCard.style.flex = '1';
-    idleEmployeesCard.style.border = '1px solid #ccc';
-    idleEmployeesCard.style.borderRadius = '4px';
-    idleEmployeesCard.style.padding = '1rem';
-    idleEmployeesCard.style.backgroundColor = '#fff';
-    idleEmployeesCard.innerHTML = '<h4>Idle Employees</h4><p id="idleEmployeesCount">0</p>';
-    summaryRow.appendChild(idleEmployeesCard);
+    // Cells that change with the clock rather than with an announcement
+    let liveCells: Array<() => void> = [];
 
-    // Main content sections: "Employees & Tasks" (left) and "Customers & Prescriptions" (right)
-    const mainGrid = document.createElement('div');
-    mainGrid.style.display = 'grid';
-    mainGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
-    mainGrid.style.gap = '1.5rem';
-    container.appendChild(mainGrid);
+    function employeeName(id: string | null | undefined): string {
+        const emp = id ? window.employeesData.find((e) => e.id === id) : undefined;
+        return emp ? `${emp.firstName} ${emp.lastName}` : '';
+    }
 
-    // Left column: Employees & Tasks
-    const leftCol = document.createElement('div');
-    mainGrid.appendChild(leftCol);
+    function customerName(id: string | undefined): string {
+        const customer = id ? window.customers?.getCustomerById(id) : undefined;
+        return customer ? `${customer.firstName} ${customer.lastName}` : '';
+    }
 
-    // Right column: Customers & Prescriptions
-    const rightCol = document.createElement('div');
-    mainGrid.appendChild(rightCol);
+    function activeTasks(): Task[] {
+        return window.taskManager.tasks.filter((t) => t.status !== 'completed');
+    }
 
-    // --------------------- EMPLOYEES & TASKS SECTION ---------------------
-    const employeesSection = document.createElement('div');
-    employeesSection.style.border = '1px solid #ccc';
-    employeesSection.style.borderRadius = '4px';
-    employeesSection.style.padding = '1rem';
-    employeesSection.style.backgroundColor = '#fff';
-    leftCol.appendChild(employeesSection);
+    function isRestock(task: Task): boolean {
+        return task.type === 'compound' && !task.prescriptionId;
+    }
 
-    const employeesTitle = document.createElement('h3');
-    employeesTitle.textContent = 'Employees & Tasks';
-    employeesTitle.style.cursor = 'pointer'; // Make the title clickable to collapse
-    employeesTitle.addEventListener('click', () => {
-        employeesList.classList.toggle('collapsed');
-    });
-    employeesSection.appendChild(employeesTitle);
+    function taskCell(task: Task): HTMLElement {
+        const wrap = el('span');
+        wrap.append(kit.swatch(words.taskKind(task)), words.taskLabel(task));
+        return wrap;
+    }
 
-    // A container for the list of employees
-    const employeesList = document.createElement('div');
-    employeesList.id = 'employeesList'; // Add ID for direct updating
-    employeesSection.appendChild(employeesList);
+    // --------------------- Customers ---------------------
+    function patienceOf(customer: Customer): { fraction: number; text: string; tone: Tone } {
+        const full = window.customers.customerTypes[customer.type]?.patience || customer.patience || 1;
+        const fraction = Math.max(0, Math.min(1, customer.patience / full));
+        const tone: Tone = fraction > 0.5 ? 'good' : fraction > 0.25 ? 'warn' : 'critical';
+        return { fraction, text: fmt.duration(customer.patience), tone };
+    }
 
-    // Next, a container for "All Active Tasks"
-    const tasksSection = document.createElement('div');
-    tasksSection.style.marginTop = '1rem';
-    employeesSection.appendChild(tasksSection);
+    function renderCustomers(): void {
+        customersTable.clear();
+        const customers = window.customers?.activeCustomers ?? [];
+        customersCard.setCount(customers.length || null);
 
-    const tasksTitle = document.createElement('h3');
-    tasksTitle.textContent = 'All Active Tasks';
-    tasksTitle.style.cursor = 'pointer'; // Make clickable
-    tasksTitle.addEventListener('click', () => {
-        tasksList.classList.toggle('collapsed');
-    });
-    tasksSection.appendChild(tasksTitle);
+        if (customers.length === 0) {
+            customersTable.empty('No customers currently.');
+            return;
+        }
 
-    // Create a container for tasks
-    const tasksList = document.createElement('div');
-    tasksList.id = 'tasksList'; // Add ID for direct updating
-    tasksSection.appendChild(tasksList);
+        const prescriptions = window.prescriptions?.activePrescriptions ?? [];
+        customers.forEach((customer) => {
+            const prescription = prescriptions.find((p) => p.id === customer.prescriptionId);
+            const name = `${customer.firstName} ${customer.lastName}`;
+            const nameCell = kit.primaryCell(
+                name,
+                customer.isReturning ? 'Returning customer' : customer.insurance?.planName,
+            );
+            const prescriptionCell = prescription
+                ? kit.primaryCell(
+                      `${prescription.productName} ×${prescription.dosage}`,
+                      `${words.prescriptionStatus(prescription.status)}${prescription.isRefill ? ' · refill' : ''}`,
+                  )
+                : '—';
+            if (prescription && prescriptionCell instanceof HTMLElement) {
+                prescriptionCell.title =
+                    `${prescription.productName} ×${prescription.dosage}, ${prescription.frequency}\n` +
+                    `Prescribed by ${prescription.doctorName}\n` +
+                    `Prescription: ${words.prescriptionStatus(prescription.status)}\n` +
+                    `Refills remaining: ${prescription.refillsAllowed}`;
+            }
 
-    // --------------------- CUSTOMERS SECTION ---------------------
-    const customersSection = document.createElement('div');
-    customersSection.style.border = '1px solid #ccc';
-    customersSection.style.borderRadius = '4px';
-    customersSection.style.padding = '1rem';
-    customersSection.style.backgroundColor = '#fff';
-    rightCol.appendChild(customersSection);
+            const stage = words.customerStage(customer.status);
+            const waiting = el('span');
+            const patience = patienceOf(customer);
+            const patienceCell = kit.meterCell(patience.fraction, patience.text, patience.tone);
+            const moodCell = el('span');
 
-    const customersTitle = document.createElement('h3');
-    customersTitle.textContent = 'Customers in the Pharmacy';
-    customersTitle.style.cursor = 'pointer'; // Make the title clickable
-    customersTitle.addEventListener('click', () => {
-        customersList.classList.toggle('collapsed');
-    });
-    customersSection.appendChild(customersTitle);
+            const update = (): void => {
+                const now = window.gameState.currentDate.getTime();
+                waiting.textContent = fmt.duration((now - customer.arrivedAt) / 60000);
+                const p = patienceOf(customer);
+                patienceCell.set(p.fraction, p.text, p.tone);
+                const mood = words.mood(customer.mood);
+                const moodText = `${Math.round(customer.mood)} · ${mood.label}`;
+                if (moodCell.textContent !== moodText) moodCell.textContent = moodText;
+                moodCell.className = mood.tone === 'neutral' ? '' : `${mood.tone}-text`;
+            };
+            update();
+            liveCells.push(update);
 
-    // The DIV we want for ui.updateCustomers
-    const customersList = document.createElement('div');
-    customersSection.appendChild(customersList);
+            const row = customersTable.row([
+                nameCell,
+                prescriptionCell,
+                kit.pill(stage.label, stage.tone),
+                waiting,
+                patienceCell.root,
+                moodCell,
+            ]);
+            row.className = 'customer-item';
+        });
+    }
 
-    // --------------------- PRESCRIPTIONS SECTION ---------------------
-    const prescriptionsSection = document.createElement('div');
-    prescriptionsSection.style.border = '1px solid #ccc';
-    prescriptionsSection.style.borderRadius = '4px';
-    prescriptionsSection.style.padding = '1rem';
-    prescriptionsSection.style.backgroundColor = '#fff';
-    rightCol.appendChild(prescriptionsSection);
+    // --------------------- Staff ---------------------
+    function renderStaff(): number {
+        staffTable.clear();
+        let idle = 0;
+        window.employeesData.forEach((emp) => {
+            const task = emp.currentTaskId ? window.taskManager.getTaskById(emp.currentTaskId) : undefined;
+            const who = kit.primaryCell(`${emp.firstName} ${emp.lastName}`, emp.role);
+            if (task) {
+                const forWhom = customerName(task.customerId);
+                const working = el('span');
+                working.appendChild(taskCell(task));
+                if (forWhom) working.appendChild(el('span', 'sub', `for ${forWhom}`));
+                const progress = task.status === 'inProgress' ? window.taskbars.createProgressBar(task) : '';
+                staffTable.row([who, working, progress]);
+            } else {
+                idle++;
+                staffTable.row([who, kit.pill('Idle'), '']);
+            }
+        });
+        staffCard.setCount(window.employeesData.length);
+        return idle;
+    }
 
-    const prescriptionsTitle = document.createElement('h3');
-    prescriptionsTitle.textContent = 'Active Prescriptions';
-    prescriptionsTitle.style.cursor = 'pointer'; // Make the title clickable
-    prescriptionsTitle.addEventListener('click', () => {
-        prescriptionsList.classList.toggle('collapsed');
-    });
-    prescriptionsSection.appendChild(prescriptionsTitle);
+    // --------------------- Queue ---------------------
+    function queueRow(task: Task): void {
+        const forWhom = isRestock(task) ? 'Stock' : customerName(task.customerId) || '—';
+        const status = words.taskStatus(task.status);
+        const statusCell = task.status === 'pending-dependent' ? kit.pill(status, 'warn') : status;
+        const progress = task.status === 'inProgress' ? window.taskbars.createProgressBar(task) : '';
+        queueTable.row(
+            [taskCell(task), forWhom, statusCell, employeeName(task.assignedTo) || '—', progress],
+            'task-entry',
+        );
+    }
 
-    // The DIV we want for ui.updatePrescriptions
-    const prescriptionsList = document.createElement('div');
-    prescriptionsSection.appendChild(prescriptionsList);
+    function byProgressThenAge(a: Task, b: Task): number {
+        const rank = (t: Task) => (t.status === 'inProgress' ? 0 : t.status === 'pending' ? 1 : 2);
+        return rank(a) - rank(b) || (a.createdAt ?? 0) - (b.createdAt ?? 0);
+    }
 
-    // Finally, attach our container to the mainContent
-    mainContent.appendChild(container);
+    function renderQueue(): void {
+        queueTable.clear();
+        const tasks = activeTasks();
+        queueCard.setCount(tasks.length || null);
 
-    // Prescriptions whose details the player has opened, kept across redraws
-    const expandedPrescriptions = new Set<string>();
+        const customerWork = tasks.filter((t) => !isRestock(t)).sort(byProgressThenAge);
+        const restocks = tasks.filter(isRestock).sort(byProgressThenAge);
+        restockToggle.style.display = restocks.some((t) => t.status !== 'inProgress') ? '' : 'none';
+        restockToggle.textContent = showAllRestocks ? 'Hide queued restocks' : 'Show all restocks';
 
-    // --------------------- INITIAL UI UPDATES ---------------------
+        if (tasks.length === 0) {
+            queueTable.empty('No active tasks at the moment.');
+            return;
+        }
+
+        queueTable.group(`Customer work · ${customerWork.length}`);
+        if (customerWork.length === 0) queueTable.empty('Nothing waiting for customers.');
+        customerWork.forEach(queueRow);
+
+        if (restocks.length > 0) {
+            queueTable.group(`Restocks · ${restocks.length}`);
+            const running = restocks.filter((t) => t.status === 'inProgress');
+            const queued = restocks.filter((t) => t.status !== 'inProgress');
+            (showAllRestocks ? restocks : running).forEach(queueRow);
+            if (!showAllRestocks && queued.length > 0) {
+                const names = queued.map((t) => t.productName).filter(Boolean);
+                const summary = `${queued.length} queued: ${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''}`;
+                queueTable.note(summary);
+            }
+        }
+    }
+
+    // --------------------- KPIs ---------------------
+    function renderKpis(idle: number): void {
+        const customers = window.customers?.activeCustomers ?? [];
+        const ready = customers.filter((c) => c.status === 'readyForCheckout').length;
+        inStoreTile.set(fmt.int(customers.length), ready > 0 ? `${ready} ready to pay` : '');
+
+        const tasks = activeTasks();
+        const waiting = tasks.filter((t) => !isRestock(t) && t.status === 'pending');
+        const blocked = tasks.filter((t) => t.status === 'pending-dependent').length;
+        waitingTile.set(
+            fmt.int(waiting.length),
+            blocked > 0 ? `${blocked} more waiting on a compound` : '',
+            waiting.length > 0 && idle === 0 ? 'warn' : 'neutral',
+        );
+
+        idleTile.set(
+            `${idle} of ${window.employeesData.length}`,
+            idle === window.employeesData.length ? 'Nothing to do' : '',
+        );
+
+        const restocks = tasks.filter(isRestock);
+        const running = restocks.filter((t) => t.status === 'inProgress').length;
+        restockTile.set(fmt.int(restocks.length), running > 0 ? `${running} being made` : '');
+    }
+
     function renderAll(): void {
-        renderEmployees();
-        renderTasks();
+        liveCells = [];
         renderCustomers();
-        renderPrescriptions();
+        const idle = renderStaff();
+        renderQueue();
+        renderKpis(idle);
     }
     renderAll();
 
     // Redraw when anything shown here changes (at most once a frame).
-    // Progress bars update themselves every frame (taskbars.ts).
+    // Progress bars follow their tasks every frame on their own (taskbars.ts),
+    // and waiting time, patience and mood follow the clock.
     page.on('tasks', renderAll);
     page.on('employees', renderAll);
     page.on('customers', renderAll);
     page.on('prescriptions', renderAll);
-
-    // --------------------- RENDERING FUNCTIONS ---------------------
-
-    // Render employees with card style
-    function renderEmployees(): void {
-        const employeesList = document.getElementById('employeesList');
-        if (!employeesList) return;
-
-        employeesList.innerHTML = '';
-        let idleCount = 0;
-
-        window.employeesData.forEach((emp) => {
-            const empCard = document.createElement('div');
-            empCard.style.border = '1px solid #ddd';
-            empCard.style.borderRadius = '4px';
-            empCard.style.padding = '0.5rem';
-            empCard.style.marginBottom = '0.5rem';
-            empCard.style.backgroundColor = '#f9f9f9';
-
-            const empHeader = document.createElement('strong');
-            empHeader.textContent = `${emp.firstName} ${emp.lastName} (${emp.role})`;
-            empCard.appendChild(empHeader);
-
-            const taskInfo = document.createElement('p');
-            if (emp.currentTaskId) {
-                const task = window.taskManager.tasks.find((t) => t.id === emp.currentTaskId);
-                if (task) {
-                    // Make the task type more descriptive
-                    let taskTypeDescription = task.type;
-                    if (taskTypeDescription === 'fillPrescription') {
-                        taskTypeDescription = 'Filling Prescription';
-                    } else if (taskTypeDescription === 'customerInteraction') {
-                        taskTypeDescription = 'Customer Interaction';
-                    } else if (taskTypeDescription === 'consultation') {
-                        taskTypeDescription = 'Consultation';
-                    } else if (taskTypeDescription === 'compound') {
-                        taskTypeDescription = 'Compounding';
-                    }
-
-                    taskInfo.textContent = `Current Task: ${taskTypeDescription}`;
-                    empCard.appendChild(taskInfo);
-
-                    // --- PROGRESS BAR ---
-                    if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
-                        empCard.appendChild(window.taskbars.createProgressBar(task));
-                    }
-                } else {
-                    taskInfo.textContent = 'Current Task: Error - Not Found';
-                    taskInfo.style.color = 'red';
-                    empCard.appendChild(taskInfo);
-                }
-            } else {
-                taskInfo.textContent = 'Current Task: None (Idle)';
-                taskInfo.style.color = 'grey'; // Make idle status visually distinct
-                empCard.appendChild(taskInfo);
-                idleCount++;
-            }
-
-            employeesList.appendChild(empCard);
-        });
-
-        // Update the "Idle Employees" summary
-        const idleEl = document.getElementById('idleEmployeesCount');
-        if (idleEl) {
-            idleEl.textContent = idleCount.toString();
-        }
-    }
-
-    // Render all active tasks
-    function renderTasks(): void {
-        const tasksList = document.getElementById('tasksList');
-        if (!tasksList) return;
-
-        tasksList.innerHTML = ''; // Clear existing tasks
-
-        const activeTasks = window.taskManager.tasks.filter((t) => t.status !== 'completed');
-        const activeCount = activeTasks.length;
-
-        // Update the summary for active tasks
-        const activeTasksEl = document.getElementById('activeTasksCount');
-        if (activeTasksEl) {
-            activeTasksEl.textContent = activeCount.toString();
-        }
-
-        if (activeCount === 0) {
-            const none = document.createElement('p');
-            none.className = 'task-entry';
-            none.textContent = 'No active tasks at the moment.';
-            tasksList.appendChild(none);
-            return;
-        }
-
-        // Group tasks by type
-        const groupedTasks: Record<string, Task[]> = {};
-        activeTasks.forEach((task) => {
-            if (!groupedTasks[task.type]) {
-                groupedTasks[task.type] = [];
-            }
-            groupedTasks[task.type].push(task);
-        });
-
-        // Render tasks group by group
-        for (const taskType in groupedTasks) {
-            const tasksOfType = groupedTasks[taskType];
-
-            // Add a header for each task type
-            const groupHeader = document.createElement('h4');
-            let taskTypeDescription = taskType;
-            if (taskTypeDescription === 'fillPrescription') {
-                taskTypeDescription = 'Filling Prescriptions';
-            } else if (taskTypeDescription === 'customerInteraction') {
-                taskTypeDescription = 'Customer Interactions';
-            } else if (taskTypeDescription === 'consultation') {
-                taskTypeDescription = 'Consultations';
-            } else if (taskTypeDescription === 'compound') {
-                taskTypeDescription = 'Compounding';
-            }
-
-            groupHeader.textContent = taskTypeDescription;
-            tasksList.appendChild(groupHeader);
-
-            tasksOfType.forEach((task: Task) => {
-                const taskDiv = document.createElement('div');
-                taskDiv.className = 'task-entry';
-                taskDiv.style.border = '1px solid #ddd';
-                taskDiv.style.borderRadius = '4px';
-                taskDiv.style.padding = '0.5rem';
-                taskDiv.style.marginBottom = '0.5rem';
-                taskDiv.style.backgroundColor = '#fafafa';
-
-                const titleRow = document.createElement('div');
-                titleRow.style.display = 'flex';
-                titleRow.style.alignItems = 'center';
-                titleRow.style.marginBottom = '0.25rem';
-
-                const colorIcon = document.createElement('span');
-                colorIcon.style.display = 'inline-block';
-                colorIcon.style.width = '10px';
-                colorIcon.style.height = '10px';
-                colorIcon.style.borderRadius = '50%';
-                colorIcon.style.marginRight = '8px';
-
-                if (task.type === 'compound') {
-                    colorIcon.style.backgroundColor = '#ff9800'; // Orange for compounding
-                } else if (task.type === 'fillPrescription') {
-                    colorIcon.style.backgroundColor = '#4caf50'; // Green for filling
-                } else if (task.type === 'customerInteraction') {
-                    colorIcon.style.backgroundColor = '#2196f3'; // Blue for customer interaction
-                } else if (task.type === 'consultation') {
-                    colorIcon.style.backgroundColor = '#9C27B0'; // Purple for consultation
-                } else {
-                    colorIcon.style.backgroundColor = '#607D8B'; // Grey for other tasks
-                }
-                titleRow.appendChild(colorIcon);
-
-                const titleText = document.createElement('strong');
-                if (task.type === 'fillPrescription') {
-                    titleText.textContent = `Prescription ID: ${task.prescriptionId}`;
-                } else if (task.type === 'compound') {
-                    titleText.textContent = `Compounding: ${task.productName}`;
-                } else {
-                    titleText.textContent = `Task ID: ${task.id}`;
-                }
-                titleRow.appendChild(titleText);
-
-                taskDiv.appendChild(titleRow);
-
-                // Add product name if not shown in title
-                if (task.productName && task.type !== 'compound') {
-                    const productLine = document.createElement('p');
-                    productLine.textContent = `Product: ${task.productName}`;
-                    taskDiv.appendChild(productLine);
-                }
-
-                // Show status with color coding
-                const statusLine = document.createElement('p');
-                statusLine.textContent = `Status: ${task.status}`;
-                if (task.status === 'inProgress') {
-                    statusLine.style.color = 'green';
-                } else if (task.status === 'pending') {
-                    statusLine.style.color = 'blue';
-                } else if (task.status === 'pending-dependent') {
-                    statusLine.style.color = 'orange';
-                    statusLine.textContent = 'Status: waiting for prerequisites';
-                }
-                taskDiv.appendChild(statusLine);
-
-                // Assigned employee
-                if (task.assignedTo) {
-                    const assignedEmp = window.employeesData.find((e) => e.id === task.assignedTo);
-                    if (assignedEmp) {
-                        const assignedLine = document.createElement('p');
-                        assignedLine.textContent = `Assigned to: ${assignedEmp.firstName} ${assignedEmp.lastName} (${assignedEmp.role})`;
-                        taskDiv.appendChild(assignedLine);
-                    }
-                } else {
-                    const unassignedLine = document.createElement('p');
-                    unassignedLine.textContent = 'Assigned to: (none)';
-                    taskDiv.appendChild(unassignedLine);
-                }
-
-                // Progress bar for in-progress tasks
-                if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
-                    taskDiv.appendChild(window.taskbars.createProgressBar(task));
-                }
-
-                tasksList.appendChild(taskDiv);
-            });
-        }
-    }
-
-    function renderCustomers(): void {
-        customersList.innerHTML = '';
-        const customers = window.customers?.activeCustomers ?? [];
-
-        if (customers.length === 0) {
-            const noCustomersMessage = document.createElement('p');
-            noCustomersMessage.textContent = 'No customers currently.';
-            customersList.appendChild(noCustomersMessage);
-            return;
-        }
-
-        customers.forEach((customer) => {
-            const customerItem = document.createElement('div');
-            customerItem.className = 'customer-item';
-            customerItem.style.border = '1px solid #ddd';
-            customerItem.style.borderRadius = '4px';
-            customerItem.style.padding = '0.5rem';
-            customerItem.style.marginBottom = '0.5rem';
-            customerItem.style.backgroundColor = '#f9f9f9';
-
-            const customerName = document.createElement('strong');
-            customerName.textContent = customer.isReturning
-                ? `${customer.firstName} ${customer.lastName} (Returning)`
-                : `${customer.firstName} ${customer.lastName}`;
-            customerItem.appendChild(customerName);
-
-            // Make customer status more prominent
-            const customerStatus = document.createElement('p');
-            customerStatus.style.marginTop = '0.25rem';
-            customerStatus.style.fontSize = '1.1em';
-            customerStatus.textContent = `Status: ${customer.status}`;
-            if (customer.status === 'waitingForConsultation') {
-                customerStatus.style.color = 'orange';
-            } else if (customer.status === 'readyForCheckout') {
-                customerStatus.style.color = 'blue';
-            } else if (customer.status === 'completed') {
-                customerStatus.style.color = 'green';
-            }
-            customerItem.appendChild(customerStatus);
-
-            const arrivalTime = document.createElement('p');
-            arrivalTime.textContent = `Arrived at: ${window.ui.formatDateTime(new Date(customer.arrivedAt))}`;
-            arrivalTime.style.fontSize = '0.9em';
-            arrivalTime.style.color = 'grey';
-            customerItem.appendChild(arrivalTime);
-
-            customersList.appendChild(customerItem);
-        });
-    }
-
-    function renderPrescriptions(): void {
-        prescriptionsList.innerHTML = '';
-        const prescriptions = window.prescriptions?.activePrescriptions ?? [];
-
-        if (prescriptions.length === 0) {
-            const noPrescriptionsMessage = document.createElement('p');
-            noPrescriptionsMessage.textContent = 'No active prescriptions.';
-            prescriptionsList.appendChild(noPrescriptionsMessage);
-            return;
-        }
-
-        prescriptions.forEach((prescription) => {
-            const prescriptionItem = document.createElement('div');
-            prescriptionItem.className = 'prescription-item';
-            prescriptionItem.style.border = '1px solid #ddd';
-            prescriptionItem.style.borderRadius = '4px';
-            prescriptionItem.style.padding = '0.5rem';
-            prescriptionItem.style.marginBottom = '0.5rem';
-            prescriptionItem.style.backgroundColor = '#f9f9f9';
-
-            const prescriptionId = document.createElement('strong');
-            prescriptionId.textContent = `ID: ${prescription.id}`;
-            prescriptionItem.appendChild(prescriptionId);
-
-            const productName = document.createElement('p');
-            productName.textContent = `Product: ${prescription.productName}`;
-            prescriptionItem.appendChild(productName);
-
-            const status = document.createElement('p');
-            status.textContent = `Status: ${prescription.status}`;
-            if (prescription.status === 'pending') {
-                status.style.color = 'orange';
-            } else if (prescription.status === 'filled') {
-                status.style.color = 'blue';
-            }
-            prescriptionItem.appendChild(status);
-
-            const detailsDiv = document.createElement('div');
-            const expanded = expandedPrescriptions.has(prescription.id);
-            detailsDiv.style.display = expanded ? 'block' : 'none';
-
-            const dosage = document.createElement('p');
-            dosage.textContent = `Dosage: ${prescription.dosage}`;
-            detailsDiv.appendChild(dosage);
-
-            const frequency = document.createElement('p');
-            frequency.textContent = `Frequency: ${prescription.frequency}`;
-            detailsDiv.appendChild(frequency);
-
-            const doctorName = document.createElement('p');
-            doctorName.textContent = `Doctor: ${prescription.doctorName}`;
-            detailsDiv.appendChild(doctorName);
-
-            const refills = document.createElement('p');
-            refills.textContent = prescription.isRefill
-                ? `Refills Remaining: ${prescription.refillsAllowed} (this is a refill visit)`
-                : `Refills Remaining: ${prescription.refillsAllowed}`;
-            detailsDiv.appendChild(refills);
-
-            const assignedEmployee = document.createElement('p');
-            const assignedEmp = prescription.assignedEmployeeId
-                ? window.employeesData.find((e) => e.id === prescription.assignedEmployeeId)
-                : undefined;
-            assignedEmployee.textContent = `Assigned To: ${assignedEmp ? `${assignedEmp.firstName} ${assignedEmp.lastName}` : 'Unassigned'}`;
-            detailsDiv.appendChild(assignedEmployee);
-
-            prescriptionItem.appendChild(detailsDiv);
-
-            const toggleButton = document.createElement('button');
-            toggleButton.textContent = expanded ? 'Hide Details' : 'Show Details';
-            toggleButton.style.marginTop = '0.5rem';
-            toggleButton.addEventListener('click', () => {
-                const open = detailsDiv.style.display === 'none';
-                detailsDiv.style.display = open ? 'block' : 'none';
-                toggleButton.textContent = open ? 'Hide Details' : 'Show Details';
-                if (open) expandedPrescriptions.add(prescription.id);
-                else expandedPrescriptions.delete(prescription.id);
-            });
-            prescriptionItem.appendChild(toggleButton);
-
-            prescriptionsList.appendChild(prescriptionItem);
-        });
-    }
+    page.on('time', () => liveCells.forEach((update) => update()));
 };

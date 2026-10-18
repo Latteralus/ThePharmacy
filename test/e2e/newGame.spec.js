@@ -42,12 +42,34 @@ test('starting a new game reaches the game screen without console errors', async
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
   await page.waitForSelector('.sidebar', { timeout: 20_000 });
 
+  // The top bar names the pharmacy and has the time controls, with hotkeys
+  // (findings U1, U2)
+  await expect(page.locator('#pharmacyName')).toHaveText('Playwright Test Pharmacy');
+  await page.locator('.main-content').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
+  await expect(page.locator('#pauseButton')).toContainText('Resume');
+  await page.keyboard.press('3');
+  expect(await page.evaluate(() => window.getGameSpeed())).toBe(2);
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => window.gameState.isPaused)).toBe(false);
+
   // The welcome is there from the start (it used to wait 2 real seconds)
   await expect(page.locator('#notificationCount')).toHaveText('1');
 
   // Every page renders through showPage's PageScope (A5) without errors
   const pages = await page.$$eval('.nav-links .nav-item', (items) => items.map((item) => item.id));
-  expect(pages.length).toBeGreaterThan(10);
+  // Placeholder pages are hidden until they have data behind them (findings U7)
+  expect(pages).toEqual([
+    'operations-nav-item',
+    'inventory-nav-item',
+    'marketplace-nav-item',
+    'equipment-nav-item',
+    'employees-nav-item',
+    'finances-nav-item',
+    'research-nav-item',
+    'settings-nav-item',
+  ]);
   for (const id of pages) {
     await page.click(`#${id}`);
     await expect(page.locator('.main-content .error-message')).toHaveCount(0);

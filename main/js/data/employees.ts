@@ -227,7 +227,7 @@ window.employees = {
             console.log('Candidates generated:', candidates);
             window.displayEmployeeCandidates(candidates);
         } else {
-            alert('Insufficient funds to hire a new employee.');
+            window.toast(`Not enough cash for the ${window.fmt.money(hiringFee)} job posting fee.`, 'error');
         }
     },
 
@@ -236,8 +236,9 @@ window.employees = {
         window.employeesData.push(employeeData);
         window.taskAssignment.requestAutoAssign();
         window.updateUI('employees');
-        alert(
-            `Successfully hired ${employeeData.firstName} ${employeeData.lastName} as a ${employeeData.role} with a salary of $${employeeData.salary.toFixed(2)}.`,
+        window.toast(
+            `Hired ${employeeData.firstName} ${employeeData.lastName} as ${employeeData.role} at ${window.fmt.moneyWhole(employeeData.salary)} a year.`,
+            'success',
         );
     },
 

@@ -64,11 +64,16 @@ export default tseslint.config(
         'error',
         { name: 'setInterval', message: 'Use window.clock.every() (game minutes) or a PageScope subscription.' },
         { name: 'setTimeout', message: 'Use window.clock.after() (game minutes) or a PageScope subscription.' },
+        // These block the renderer, and with it the game loop (findings L14/U19)
+        { name: 'alert', message: 'Use window.toast(message, tone).' },
+        { name: 'confirm', message: 'Use window.showConfirmModal(message, label, onConfirm).' },
       ],
       'no-restricted-properties': [
         'error',
         { object: 'window', property: 'setInterval', message: 'Use window.clock.every() (game minutes).' },
         { object: 'window', property: 'setTimeout', message: 'Use window.clock.after() (game minutes).' },
+        { object: 'window', property: 'alert', message: 'Use window.toast(message, tone).' },
+        { object: 'window', property: 'confirm', message: 'Use window.showConfirmModal(message, label, onConfirm).' },
         { object: 'Date', property: 'now', message: 'Use window.clock.now() (game time), or window.nextId() for ids.' },
       ],
     },

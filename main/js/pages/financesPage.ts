@@ -1,760 +1,321 @@
-// improved-financesPage.js (concise version)
+// /js/pages/financesPage.js - money in and out: today's figures, this
+// month's P&L by category with a daily chart, and the transaction log.
+// Everything redraws on 'finances' (every transaction announces it).
+//
+// Prices are set on the Inventory page.
 
-window.renderFinancesPage = function (mainContent: HTMLElement): void {
-    mainContent.innerHTML = '';
+const CATEGORY_LABELS: Record<string, string> = {
+    copays: 'Copays',
+    insurance: 'Insurance payments',
+    wages: 'Wages',
+    overhead: 'Overhead',
+    materials: 'Materials',
+    equipment: 'Equipment',
+    research: 'Research',
+    hiring: 'Hiring',
+    other: 'Other',
+};
+const REVENUE_ORDER = ['copays', 'insurance', 'other'];
+const EXPENSE_ORDER = ['wages', 'overhead', 'materials', 'equipment', 'research', 'hiring', 'other'];
 
-    const container = document.createElement('div');
-    container.className = 'finances-page-container';
+window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope): void {
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
+    const data = window.financesData;
 
-    // Title
-    const title = document.createElement('h2');
-    title.textContent = 'Financial Dashboard';
-    container.appendChild(title);
-
-    // Financial Summary Cards Section
-    const summarySection = document.createElement('div');
-    summarySection.className = 'financial-summary-section';
-
-    // Create summary cards in a grid layout
-    const summaryGrid = document.createElement('div');
-    summaryGrid.className = 'summary-grid';
-
-    // Cash card
-    const cashCard = createSummaryCard(
-        'Cash on Hand',
-        `$${window.financesData.cash.toFixed(2)}`,
-        window.financesData.cash > 5000 ? 'good' : window.financesData.cash > 1000 ? 'neutral' : 'warning',
+    const root = kit.page(
+        mainContent,
+        'Finances',
+        'Cash, profit and where the money goes. Prices are set on the Inventory page.',
     );
-    summaryGrid.appendChild(cashCard);
 
-    // Today's Revenue card
-    const todayRevenue = window.financesData.revenue?.today || 0;
-    const revenueCard = createSummaryCard("Today's Revenue", `$${todayRevenue.toFixed(2)}`, 'neutral');
-    summaryGrid.appendChild(revenueCard);
+    // --------------------- KPIs ---------------------
+    const kpis = el('div', 'kpi-row');
+    const cashTile = kit.statTile('Cash on hand');
+    const revenueTile = kit.statTile('Revenue today');
+    const costsTile = kit.statTile('Costs today');
+    const netTile = kit.statTile('Net today');
+    const owedTile = kit.statTile('Insurance owed');
+    kpis.append(cashTile.root, revenueTile.root, costsTile.root, netTile.root, owedTile.root);
+    root.appendChild(kpis);
 
-    // Today's Profit card
-    const todayProfit = window.financesData.profit?.today || 0;
-    const profitCard = createSummaryCard(
-        "Today's Profit",
-        `$${todayProfit.toFixed(2)}`,
-        todayProfit > 0 ? 'good' : 'warning',
-    );
-    summaryGrid.appendChild(profitCard);
+    // --------------------- Tabs ---------------------
+    const monthView = el('div', 'columns');
+    const todayView = el('div', 'stack');
+    const transactionsView = el('div', 'stack');
+    const views = [monthView, todayView, transactionsView];
+    let activeTab = 0;
+    const tabs = kit.tabs(['This month', 'Today', 'Transactions'], (index) => {
+        activeTab = index;
+        views.forEach((view, i) => (view.style.display = i === index ? '' : 'none'));
+        refresh();
+    });
+    root.append(tabs.root, ...views);
 
-    // Pending Insurance card
-    const pendingInsurance = window.financesData.pendingInsuranceIncome;
-    const insuranceCard = createSummaryCard('Pending Insurance', `$${pendingInsurance.toFixed(2)}`, 'neutral');
-    summaryGrid.appendChild(insuranceCard);
-
-    summarySection.appendChild(summaryGrid);
-    container.appendChild(summarySection);
-
-    // Tabs
-    const tabs = document.createElement('div');
-    tabs.className = 'tabs';
-    const tabHeaders = ['Overview', 'Daily Report', 'Monthly Report', 'Transactions'];
-    const tabContents: HTMLDivElement[] = [];
-
-    tabHeaders.forEach((headerText) => {
-        const tabHeader = document.createElement('button');
-        tabHeader.className = 'tab';
-        tabHeader.textContent = headerText;
-        tabs.appendChild(tabHeader);
-
-        const tabContent = document.createElement('div');
-        tabContent.className = 'tab-content';
-        tabContent.style.display = 'none';
-        container.appendChild(tabContent);
-        tabContents.push(tabContent);
-
-        tabHeader.addEventListener('click', () => {
-            // Deactivate all tabs and hide content
-            const allTabs = document.querySelectorAll('.tab');
-            allTabs.forEach((tab) => tab.classList.remove('active'));
-            tabContents.forEach((content) => (content.style.display = 'none'));
-
-            // Activate clicked tab and show content
-            tabHeader.classList.add('active');
-            tabContent.style.display = 'block';
+    // Rows of a category breakdown, computed from the transaction log
+    function byCategory(from: Date, to: Date): { revenue: Record<string, number>; expenses: Record<string, number> } {
+        const revenue: Record<string, number> = {};
+        const expenses: Record<string, number> = {};
+        data.transactions.forEach((t) => {
+            if (t.date < from || t.date > to) return;
+            const bucket = t.type === 'income' ? revenue : expenses;
+            const key = CATEGORY_LABELS[t.category] ? t.category : 'other';
+            bucket[key] = (bucket[key] ?? 0) + t.amount;
         });
+        return { revenue, expenses };
+    }
+
+    function plTable(title: string, from: Date, to: Date, card: Card, comparison?: { revenue: number }): void {
+        card.body.innerHTML = '';
+        const { revenue, expenses } = byCategory(from, to);
+        const table = kit.table([{ label: title }, { label: 'Amount', num: true }]);
+        card.body.appendChild(table.root);
+
+        const sum = (rows: Record<string, number>) => Object.values(rows).reduce((a, b) => a + b, 0);
+        const totalRevenue = sum(revenue);
+        const totalExpenses = sum(expenses);
+
+        table.group('Revenue');
+        REVENUE_ORDER.forEach((key) => revenue[key] && table.row([CATEGORY_LABELS[key], fmt.money(revenue[key])]));
+        const revenueTotal = el('span', '', fmt.money(totalRevenue));
+        if (comparison && comparison.revenue > 0) {
+            revenueTotal.title = `Last month ${fmt.money(comparison.revenue)}`;
+            revenueTotal.appendChild(
+                el('span', 'sub', `${fmt.signedPct(totalRevenue / comparison.revenue - 1)} vs last month`),
+            );
+        }
+        table.row(['Total revenue', revenueTotal], 'total');
+
+        table.group('Costs');
+        EXPENSE_ORDER.forEach((key) => expenses[key] && table.row([CATEGORY_LABELS[key], fmt.money(-expenses[key])]));
+        table.row(['Total costs', fmt.money(-totalExpenses)], 'total');
+
+        const net = totalRevenue - totalExpenses;
+        const netCell = el('span', net >= 0 ? 'good-text' : 'critical-text', fmt.money(net));
+        if (totalRevenue > 0) netCell.appendChild(el('span', 'sub', `${fmt.pct(net / totalRevenue)} margin`));
+        table.row(['Net profit', netCell], 'total');
+    }
+
+    // --------------------- This month ---------------------
+    const monthPl = kit.card('Profit and loss', { flush: true });
+    const monthChartCard = kit.card('Revenue and costs by day');
+    monthView.append(monthPl.root, monthChartCard.root);
+    const monthCanvas = el('canvas');
+    const monthBox = el('div', 'chart-box');
+    monthBox.appendChild(monthCanvas);
+    monthChartCard.body.appendChild(monthBox);
+
+    // --------------------- Today ---------------------
+    const todayColumns = el('div', 'columns');
+    const todayPl = kit.card('Today so far', { flush: true });
+    const todayChartCard = kit.card('Revenue by hour');
+    todayColumns.append(todayPl.root, todayChartCard.root);
+    todayView.appendChild(todayColumns);
+    const todayCanvas = el('canvas');
+    const todayBox = el('div', 'chart-box');
+    todayBox.appendChild(todayCanvas);
+    todayChartCard.body.appendChild(todayBox);
+
+    // --------------------- Transactions ---------------------
+    let typeFilter = '';
+    const typeSeg = kit.segmented(
+        [
+            { value: '', label: 'All' },
+            { value: 'income', label: 'Income' },
+            { value: 'expense', label: 'Costs' },
+        ],
+        '',
+        (value) => {
+            typeFilter = value;
+            typeSeg.set(value);
+            renderTransactions();
+        },
+    );
+    const search = el('input', 'input search');
+    search.type = 'search';
+    search.placeholder = 'Search transactions…';
+    search.setAttribute('aria-label', 'Search transactions');
+    search.addEventListener('input', () => renderTransactions());
+    const txToolbar = el('div', 'toolbar');
+    txToolbar.append(typeSeg.root, search);
+    const txCard = kit.card('Transactions', { flush: true, actions: [txToolbar] });
+    transactionsView.appendChild(txCard.root);
+
+    const TRANSACTIONS_SHOWN = 100;
+    function renderTransactions(): void {
+        txCard.body.innerHTML = '';
+        const table = kit.table([
+            { label: 'When', width: '140px' },
+            { label: 'Category', width: '150px' },
+            { label: 'Description' },
+            { label: 'Amount', num: true },
+        ]);
+        txCard.body.appendChild(table.root);
+
+        const text = search.value.toLowerCase().trim();
+        const rows = data.transactions
+            .filter((t) => !typeFilter || t.type === typeFilter)
+            .filter(
+                (t) => !text || t.description.toLowerCase().includes(text) || t.category.toLowerCase().includes(text),
+            )
+            .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+        if (rows.length === 0) table.empty('No transactions found.');
+        rows.slice(0, TRANSACTIONS_SHOWN).forEach((t) => {
+            const income = t.type === 'income';
+            const amount = el('span', income ? 'good-text' : '', `${income ? '+' : '−'}${fmt.money(t.amount)}`);
+            table.row([
+                `${fmt.day(t.date)} ${fmt.clock(t.date)}`,
+                CATEGORY_LABELS[t.category] ?? t.category,
+                t.description,
+                amount,
+            ]);
+        });
+        txCard.setCount(
+            rows.length > TRANSACTIONS_SHOWN ? `${TRANSACTIONS_SHOWN} of ${fmt.int(rows.length)}` : rows.length,
+        );
+    }
+
+    // --------------------- Charts ---------------------
+    const css = getComputedStyle(document.documentElement);
+    const token = (name: string, fallback: string): string => css.getPropertyValue(name).trim() || fallback;
+    const SERIES_1 = token('--series-1', '#2a78d6');
+    const SERIES_2 = token('--series-2', '#eb6834');
+    const GRID = token('--line', '#e3e5ec');
+    const INK_MUTED = token('--ink-muted', '#7a8294');
+
+    function barOptions(showLegend: boolean): Record<string, unknown> {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: showLegend,
+                    position: 'top',
+                    align: 'start',
+                    labels: { boxWidth: 10, boxHeight: 10, color: INK_MUTED },
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx: { dataset: { label: string }; raw: number }) =>
+                            `${ctx.dataset.label}: ${fmt.money(ctx.raw)}`,
+                    },
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: INK_MUTED } },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: GRID },
+                    border: { display: false },
+                    ticks: {
+                        color: INK_MUTED,
+                        callback: (value: number) => (value >= 1000 ? `$${value / 1000}K` : `$${value}`),
+                    },
+                },
+            },
+        };
+    }
+
+    function dataset(label: string, values: number[], color: string): ChartDataset {
+        return {
+            label,
+            data: values,
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 0,
+            borderRadius: { topLeft: 4, topRight: 4 },
+            borderSkipped: 'bottom',
+            maxBarThickness: 24,
+        };
+    }
+
+    // Days of this month up to today
+    function monthSeries(): ChartData {
+        const now = window.gameState.currentDate;
+        const days = now.getDate();
+        const revenue = new Array(days).fill(0);
+        const costs = new Array(days).fill(0);
+        data.transactions.forEach((t) => {
+            if (t.date.getFullYear() !== now.getFullYear() || t.date.getMonth() !== now.getMonth()) return;
+            const i = t.date.getDate() - 1;
+            if (i >= days) return;
+            if (t.type === 'income') revenue[i] += t.amount;
+            else costs[i] += t.amount;
+        });
+        const month = now.toLocaleDateString('en-US', { month: 'short' });
+        return {
+            labels: revenue.map((_, i) => `${month} ${i + 1}`),
+            datasets: [dataset('Revenue', revenue, SERIES_1), dataset('Costs', costs, SERIES_2)],
+        };
+    }
+
+    // Opening hours today (07:00-22:00)
+    function todaySeries(): ChartData {
+        const now = window.gameState.currentDate;
+        const hours = Array.from({ length: 15 }, (_, i) => i + 7);
+        const revenue = hours.map(() => 0);
+        data.transactions.forEach((t) => {
+            if (t.type !== 'income' || t.date.toDateString() !== now.toDateString()) return;
+            const i = t.date.getHours() - 7;
+            if (i >= 0 && i < revenue.length) revenue[i] += t.amount;
+        });
+        return {
+            labels: hours.map((h) => `${String(h).padStart(2, '0')}:00`),
+            datasets: [dataset('Revenue', revenue, SERIES_1)],
+        };
+    }
+
+    let monthChart: Chart | null = null;
+    let todayChart: Chart | null = null;
+    function drawChart(
+        existing: Chart | null,
+        canvas: HTMLCanvasElement,
+        series: ChartData,
+        legend: boolean,
+    ): Chart | null {
+        if (typeof Chart === 'undefined') return null;
+        if (existing) {
+            existing.data.labels = series.labels;
+            series.datasets.forEach((ds, i) => (existing.data.datasets[i].data = ds.data));
+            existing.update('none');
+            return existing;
+        }
+        const ctx = canvas.getContext('2d');
+        return ctx ? new Chart(ctx, { type: 'bar', data: series, options: barOptions(legend) }) : null;
+    }
+    page.onLeave(() => {
+        monthChart?.destroy();
+        todayChart?.destroy();
     });
 
-    // Default to Overview tab
-    tabs.children[0].classList.add('active');
-    tabContents[0].style.display = 'block';
+    // --------------------- Refresh ---------------------
+    function refresh(): void {
+        cashTile.set(fmt.money(data.cash), '', 'neutral');
+        revenueTile.set(fmt.money(data.revenue.today));
+        costsTile.set(fmt.money(data.expenses.today), 'Wages and overhead are charged at closing');
+        netTile.set(fmt.money(data.profit.today), '', data.profit.today < 0 ? 'critical' : 'neutral');
+        netTile.root.querySelector('.stat-value')!.className =
+            `stat-value${data.profit.today < 0 ? ' critical-text' : ''}`;
+        owedTile.set(fmt.money(data.pendingInsuranceIncome), 'Paid as claims clear');
 
-    // --- Overview Tab Content ---
-    const overviewContent = tabContents[0];
-
-    // Revenue/Expense summary section
-    const overviewGrid = document.createElement('div');
-    overviewGrid.className = 'overview-grid';
-
-    // Monthly breakdown
-    const monthlyStatsCard = document.createElement('div');
-    monthlyStatsCard.className = 'finance-card';
-    monthlyStatsCard.innerHTML = `
-        <h3>Monthly Performance</h3>
-        <div class="stat-row">
-            <div class="stat-label">Monthly Revenue:</div>
-            <div class="stat-value">$${(window.financesData.revenue?.thisMonth || 0).toFixed(2)}</div>
-        </div>
-        <div class="stat-row">
-            <div class="stat-label">Monthly Expenses:</div>
-            <div class="stat-value">$${(window.financesData.expenses?.thisMonth || 0).toFixed(2)}</div>
-        </div>
-        <div class="stat-row highlight">
-            <div class="stat-label">Monthly Profit:</div>
-            <div class="stat-value ${(window.financesData.profit?.thisMonth || 0) >= 0 ? 'positive' : 'negative'}">
-                $${(window.financesData.profit?.thisMonth || 0).toFixed(2)}
-            </div>
-        </div>
-    `;
-    overviewGrid.appendChild(monthlyStatsCard);
-
-    // Pricing controls card
-    const pricingCard = document.createElement('div');
-    pricingCard.className = 'finance-card';
-    pricingCard.innerHTML = `
-        <h3>Pricing Controls</h3>
-        <div class="control-group">
-            <label for="global-markup">Global Markup:</label>
-            <div class="input-group">
-                <input type="number" id="global-markup" value="${((window.globalMarkup || 1.25) - 1) * 100}" min="0" max="200" step="5">
-                <span class="input-suffix">%</span>
-            </div>
-            <button id="apply-markup-btn" class="action-button">Apply to All Products</button>
-        </div>
-        <div class="control-group">
-            <button id="set-suggested-prices-btn" class="action-button">Set to Suggested Prices</button>
-        </div>
-    `;
-    overviewGrid.appendChild(pricingCard);
-
-    overviewContent.appendChild(overviewGrid);
-
-    // Revenue vs Expenses Chart
-    const chartSection = document.createElement('div');
-    chartSection.className = 'chart-section';
-
-    const chartTitle = document.createElement('h3');
-    chartTitle.textContent = 'Monthly Financial Overview';
-    chartSection.appendChild(chartTitle);
-
-    const chartCanvas = document.createElement('canvas');
-    chartCanvas.id = 'monthly-financials-chart';
-    chartSection.appendChild(chartCanvas);
-
-    overviewContent.appendChild(chartSection);
-
-    // --- Daily Report Tab Content ---
-    const dailyReportContent = tabContents[1];
-
-    const dailySalesChartCanvas = document.createElement('canvas');
-    dailySalesChartCanvas.id = 'dailySalesChart';
-    dailyReportContent.appendChild(dailySalesChartCanvas);
-
-    // Today's financial summary
-    const todaySummary = document.createElement('div');
-    todaySummary.className = 'today-summary';
-    todaySummary.innerHTML = `
-        <h3>Today's Financial Summary</h3>
-        <div class="summary-table">
-            <div class="summary-row">
-                <div class="summary-category">Revenue:</div>
-                <div class="summary-value">$${(window.financesData.revenue?.today || 0).toFixed(2)}</div>
-            </div>
-            <div class="summary-row">
-                <div class="summary-category">Expenses:</div>
-                <div class="summary-value">$${(window.financesData.expenses?.today || 0).toFixed(2)}</div>
-            </div>
-            <div class="summary-row">
-                <div class="summary-category">Profit:</div>
-                <div class="summary-value ${(window.financesData.profit?.today || 0) >= 0 ? 'positive' : 'negative'}">
-                    $${(window.financesData.profit?.today || 0).toFixed(2)}
-                </div>
-            </div>
-            <div class="summary-row">
-                <div class="summary-category">Completed Orders:</div>
-                <div class="summary-value">${window.financesData.completedOrders || 0}</div>
-            </div>
-        </div>
-    `;
-    dailyReportContent.appendChild(todaySummary);
-
-    // --- Monthly Report Tab Content ---
-    const monthlyReportContent = tabContents[2];
-
-    const monthlySalesChartCanvas = document.createElement('canvas');
-    monthlySalesChartCanvas.id = 'monthlySalesChart';
-    monthlyReportContent.appendChild(monthlySalesChartCanvas);
-
-    // Add monthly statistics
-    const monthlyStats = document.createElement('div');
-    monthlyStats.className = 'monthly-stats';
-    monthlyStats.innerHTML = `
-        <h3>Monthly Statistics</h3>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-title">Revenue</div>
-                <div class="stat-value">$${(window.financesData.revenue?.thisMonth || 0).toFixed(2)}</div>
-                <div class="stat-subtitle">vs Last Month: ${
-                    window.financesData.revenue?.lastMonth > 0
-                        ? (
-                              (window.financesData.revenue?.thisMonth / window.financesData.revenue?.lastMonth - 1) *
-                              100
-                          ).toFixed(1) + '%'
-                        : 'N/A'
-                }</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Expenses</div>
-                <div class="stat-value">$${(window.financesData.expenses?.thisMonth || 0).toFixed(2)}</div>
-                <div class="stat-subtitle">vs Last Month: ${
-                    window.financesData.expenses?.lastMonth > 0
-                        ? (
-                              (window.financesData.expenses?.thisMonth / window.financesData.expenses?.lastMonth - 1) *
-                              100
-                          ).toFixed(1) + '%'
-                        : 'N/A'
-                }</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Profit</div>
-                <div class="stat-value ${(window.financesData.profit?.thisMonth || 0) >= 0 ? 'positive' : 'negative'}">
-                    $${(window.financesData.profit?.thisMonth || 0).toFixed(2)}
-                </div>
-                <div class="stat-subtitle">Profit Margin: ${
-                    window.financesData.revenue?.thisMonth > 0
-                        ? (
-                              (window.financesData.profit?.thisMonth / window.financesData.revenue?.thisMonth) *
-                              100
-                          ).toFixed(1) + '%'
-                        : '0%'
-                }</div>
-            </div>
-        </div>
-    `;
-    monthlyReportContent.appendChild(monthlyStats);
-
-    // --- Transactions Tab Content ---
-    const transactionsContent = tabContents[3];
-
-    // Add a basic filter
-    const transactionFilter = document.createElement('div');
-    transactionFilter.className = 'transaction-filter';
-    transactionFilter.innerHTML = `
-        <div class="filter-row">
-            <div class="filter-group">
-                <label for="transaction-type">Type:</label>
-                <select id="transaction-type">
-                    <option value="">All Types</option>
-                    <option value="income">Income</option>
-                    <option value="expense">Expense</option>
-                </select>
-            </div>
-            <div class="filter-group">
-                <label for="transaction-search">Search:</label>
-                <input type="text" id="transaction-search" placeholder="Search transactions...">
-            </div>
-            <button id="apply-transaction-filter" class="filter-button">Filter</button>
-        </div>
-    `;
-    transactionsContent.appendChild(transactionFilter);
-
-    // Transactions table
-    const transactionsTable = document.createElement('table');
-    transactionsTable.className = 'transactions-table';
-    transactionsTable.innerHTML = `
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Category</th>
-                <th>Amount</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody id="transactions-tbody">
-            ${generateTransactionRows(window.financesData.transactions || [], 20)}
-        </tbody>
-    `;
-    transactionsContent.appendChild(transactionsTable);
-
-    container.appendChild(tabs);
-    mainContent.appendChild(container);
-
-    // Initialize charts
-    initializeCharts();
-
-    // Add event listeners for interactive elements
-    addEventListeners();
-
-    // ===== Helper Functions =====
-
-    // Create a financial summary card
-    function createSummaryCard(title: string, value: string, status: string): HTMLDivElement {
-        const card = document.createElement('div');
-        card.className = `summary-card ${status}`;
-
-        const cardTitle = document.createElement('div');
-        cardTitle.className = 'card-title';
-        cardTitle.textContent = title;
-
-        const cardValue = document.createElement('div');
-        cardValue.className = 'card-value';
-        cardValue.textContent = value;
-
-        card.appendChild(cardTitle);
-        card.appendChild(cardValue);
-
-        return card;
-    }
-
-    // Generate transaction table rows
-    function generateTransactionRows(transactions: Transaction[], limit: number = 20): string {
-        if (!transactions || transactions.length === 0) {
-            return '<tr><td colspan="5">No transactions found</td></tr>';
-        }
-
-        // Sort transactions by date (newest first)
-        const sortedTransactions = [...transactions].sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-        );
-
-        // Take only the first 'limit' transactions
-        const limitedTransactions = sortedTransactions.slice(0, limit);
-
-        return limitedTransactions
-            .map(
-                (t) => `
-            <tr class="${t.type}">
-                <td>${formatDate(t.date)}</td>
-                <td>${capitalizeFirstLetter(t.type)}</td>
-                <td>${capitalizeFirstLetter(t.category)}</td>
-                <td class="${t.type === 'income' ? 'positive' : 'negative'}">
-                    $${t.amount.toFixed(2)}
-                </td>
-                <td>${t.description}</td>
-            </tr>
-        `,
-            )
-            .join('');
-    }
-
-    // Format date
-    function formatDate(date: Date): string {
-        if (!(date instanceof Date)) {
-            date = new Date(date);
-        }
-        return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()} ${padZero(date.getHours())}:${padZero(date.getMinutes())}`;
-    }
-
-    // Pad with zero
-    function padZero(num: number): string {
-        return num.toString().padStart(2, '0');
-    }
-
-    // Capitalize first letter
-    function capitalizeFirstLetter(str: string): string {
-        return str.charAt(0).toUpperCase() + str.slice(1);
-    }
-
-    // Initialize chart.js charts
-    function initializeCharts(): void {
-        // Monthly Financials Chart
-        const monthlyFinancialsCtx = document
-            .querySelector<HTMLCanvasElement>('#monthly-financials-chart')
-            ?.getContext('2d');
-        if (monthlyFinancialsCtx) {
-            const chartData = window.finances.getMonthlyFinancialChartData();
-            new Chart(monthlyFinancialsCtx, {
-                type: 'bar',
-                data: chartData,
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Monthly Revenue, Expenses & Profit',
-                        },
-                    },
-                },
-            });
-        }
-
-        // Daily Sales Chart
-        const dailySalesCtx = document.querySelector<HTMLCanvasElement>('#dailySalesChart')?.getContext('2d');
-        if (dailySalesCtx) {
-            const dailySalesData = window.finances.getDailySalesChartData();
-            new Chart(dailySalesCtx, {
-                type: 'line',
-                data: dailySalesData,
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Hourly Sales for Today',
-                        },
-                    },
-                },
-            });
-        }
-
-        // Monthly Sales Chart
-        const monthlySalesCtx = document.querySelector<HTMLCanvasElement>('#monthlySalesChart')?.getContext('2d');
-        if (monthlySalesCtx) {
-            const monthlySalesData = window.finances.getMonthlySalesChartData();
-            new Chart(monthlySalesCtx, {
-                type: 'bar',
-                data: monthlySalesData,
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Daily Sales for This Month',
-                        },
-                    },
-                },
-            });
+        const now = window.gameState.currentDate;
+        if (activeTab === 0) {
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            plTable('This month', startOfMonth, now, monthPl, { revenue: data.revenue.lastMonth });
+            monthChart = drawChart(monthChart, monthCanvas, monthSeries(), true);
+        } else if (activeTab === 1) {
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            plTable('Today', startOfDay, now, todayPl);
+            todayChart = drawChart(todayChart, todayCanvas, todaySeries(), false);
+        } else {
+            renderTransactions();
         }
     }
 
-    // Add event listeners
-    function addEventListeners(): void {
-        // Apply markup button
-        const applyMarkupBtn = document.getElementById('apply-markup-btn');
-        if (applyMarkupBtn) {
-            applyMarkupBtn.addEventListener('click', function () {
-                const markupInput = document.querySelector<HTMLInputElement>('#global-markup')!;
-                const markup = parseFloat(markupInput.value);
-
-                if (!isNaN(markup) && markup >= 0) {
-                    window.finances.applyMarkupToAllProducts(markup);
-                    alert(`Applied ${markup}% markup to all products.`);
-                } else {
-                    alert('Please enter a valid markup percentage.');
-                }
-            });
-        }
-
-        // Set suggested prices button
-        const suggestedPricesBtn = document.getElementById('set-suggested-prices-btn');
-        if (suggestedPricesBtn) {
-            suggestedPricesBtn.addEventListener('click', function () {
-                window.finances.setToSuggestedPrices();
-                alert('All product prices set to suggested values.');
-            });
-        }
-
-        // Transaction filter button
-        const filterBtn = document.getElementById('apply-transaction-filter');
-        if (filterBtn) {
-            filterBtn.addEventListener('click', function () {
-                const typeFilter = document.querySelector<HTMLSelectElement>('#transaction-type')!.value;
-                const searchFilter = document
-                    .querySelector<HTMLInputElement>('#transaction-search')!
-                    .value.toLowerCase();
-
-                // Filter transactions
-                let filteredTransactions = window.financesData.transactions || [];
-
-                if (typeFilter) {
-                    filteredTransactions = filteredTransactions.filter((t) => t.type === typeFilter);
-                }
-
-                if (searchFilter) {
-                    filteredTransactions = filteredTransactions.filter(
-                        (t) =>
-                            t.description.toLowerCase().includes(searchFilter) ||
-                            t.category.toLowerCase().includes(searchFilter),
-                    );
-                }
-
-                // Update the table
-                const tbody = document.getElementById('transactions-tbody');
-                if (tbody) {
-                    tbody.innerHTML = generateTransactionRows(filteredTransactions, 20);
-                }
-            });
-        }
-    }
-
-    // Add CSS styling
-    const style = document.createElement('style');
-    style.textContent = `
-        .finances-page-container {
-            padding: 20px;
-        }
-        
-        .financial-summary-section {
-            margin-bottom: 20px;
-        }
-        
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-        
-        .summary-card {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .summary-card.good {
-            border-left: 4px solid #4caf50;
-        }
-        
-        .summary-card.warning {
-            border-left: 4px solid #ff9800;
-        }
-        
-        .summary-card.neutral {
-            border-left: 4px solid #2196f3;
-        }
-        
-        .card-title {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 8px;
-        }
-        
-        .card-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .tabs {
-            display: flex;
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 20px;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            background: none;
-            border: none;
-            border-bottom: 3px solid transparent;
-        }
-        
-        .tab.active {
-            border-bottom-color: #1a237e;
-            color: #1a237e;
-            font-weight: bold;
-        }
-        
-        .tab-content {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-        }
-        
-        .overview-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .finance-card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-        }
-        
-        .finance-card h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: #333;
-            font-size: 18px;
-        }
-        
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-        
-        .stat-row.highlight {
-            border-top: 1px solid #eee;
-            padding-top: 8px;
-            font-weight: bold;
-        }
-        
-        .positive {
-            color: #4caf50;
-        }
-        
-        .negative {
-            color: #f44336;
-        }
-        
-        .chart-section {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            margin-bottom: 20px;
-            height: 300px;
-        }
-        
-        .chart-section h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: #333;
-            font-size: 18px;
-        }
-        
-        .control-group {
-            margin-bottom: 15px;
-        }
-        
-        .input-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        
-        .input-group input {
-            width: 80px;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .input-suffix {
-            margin-left: 5px;
-        }
-        
-        .action-button {
-            background-color: #1a237e;
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .today-summary, .monthly-stats {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            margin-top: 20px;
-        }
-        
-        .summary-table {
-            width: 100%;
-        }
-        
-        .summary-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .summary-category {
-            font-weight: bold;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .stat-card {
-            background: #f9f9f9;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-        }
-        
-        .stat-title {
-            color: #666;
-            margin-bottom: 8px;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            margin-bottom: 8px;
-        }
-        
-        .stat-subtitle {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .transaction-filter {
-            margin-bottom: 15px;
-        }
-        
-        .filter-row {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .filter-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .filter-group select, .filter-group input {
-            padding: 6px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        
-        .filter-button {
-            background-color: #1a237e;
-            color: white;
-            border: none;
-            padding: 6px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .transactions-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        .transactions-table th, .transactions-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .transactions-table th {
-            background-color: #f9f9f9;
-            font-weight: bold;
-        }
-        
-        .transactions-table tr.income td:nth-child(4) {
-            color: #4caf50;
-        }
-        
-        .transactions-table tr.expense td:nth-child(4) {
-            color: #f44336;
-        }
-    `;
-    mainContent.appendChild(style);
+    page.on('finances', refresh);
+    tabs.select(0);
 };

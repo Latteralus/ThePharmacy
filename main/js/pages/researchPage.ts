@@ -1,245 +1,152 @@
-// /js/pages/researchPage.js
+// /js/pages/researchPage.js - research levels: where you are, what the next
+// level costs and unlocks, progress while it runs, and everything unlocked.
 
 window.renderResearchPage = function (mainContent: HTMLElement, page: PageScope): void {
-    // Clear existing content
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
 
-    // Create a container for the research page
-    const container = document.createElement('div');
-    container.className = 'research-page-container';
+    const root = kit.page(
+        mainContent,
+        'Research',
+        'Each level takes a few days and unlocks new products and equipment.',
+    );
 
-    // Add a header
-    const header = document.createElement('h2');
-    header.textContent = 'Research & Development';
-    container.appendChild(header);
+    const trackCard = kit.card('Research level');
+    const nextCard = kit.card('Next level');
+    const unlockedCard = kit.card('Unlocked so far');
+    root.append(trackCard.root, nextCard.root, unlockedCard.root);
 
-    // Add a subtitle or info
-    const subtitle = document.createElement('p');
-    subtitle.textContent =
-        "Invest in research to unlock new products, equipment, and improve your pharmacy's capabilities.";
-    container.appendChild(subtitle);
+    const productName = (id: string) => window.productsData.find((p) => p.id === id)?.name;
+    const equipmentName = (id: string) => window.equipmentData.find((e) => e.id === id)?.name;
 
-    // --- Current Research Level ---
-    const currentLevelSection = document.createElement('div');
-    currentLevelSection.className = 'research-section';
-    const currentLevelHeader = document.createElement('h3');
-    currentLevelHeader.textContent = 'Current Research Level';
-    currentLevelSection.appendChild(currentLevelHeader);
-
-    const currentLevelValue = document.createElement('p');
-    currentLevelValue.id = 'current-research-level';
-    currentLevelValue.textContent = `Level: ${window.researchData.currentLevel}`;
-    currentLevelSection.appendChild(currentLevelValue);
-    container.appendChild(currentLevelSection);
-
-    // --- Next Research Level ---
-    const nextLevelSection = document.createElement('div');
-    nextLevelSection.className = 'research-section';
-    const nextLevelHeader = document.createElement('h3');
-    nextLevelHeader.textContent = 'Next Research Level';
-    nextLevelSection.appendChild(nextLevelHeader);
-
-    const nextLevelInfo = document.createElement('div');
-    nextLevelInfo.id = 'next-research-level-info';
-    nextLevelSection.appendChild(nextLevelInfo);
-    container.appendChild(nextLevelSection);
-
-    // --- Research Button ---
-    const researchButtonContainer = document.createElement('div');
-    const researchButton = document.createElement('button');
-    researchButton.id = 'research-button';
-    researchButton.textContent = 'Start Research';
-    researchButtonContainer.appendChild(researchButton);
-    container.appendChild(researchButtonContainer);
-
-    // --- Progress Bar (Hidden Initially) ---
-    const progressBarContainer = document.createElement('div');
-    progressBarContainer.className = 'research-section';
-    progressBarContainer.style.display = 'none'; // Hidden initially
-
-    const progressBarLabel = document.createElement('p');
-    progressBarLabel.textContent = 'Research Progress:';
-    progressBarContainer.appendChild(progressBarLabel);
-
-    const progressBar = document.createElement('div');
-    progressBar.id = 'research-progress-bar';
-    progressBar.className = 'progress-bar';
-    const progressBarFill = document.createElement('div');
-    progressBarFill.className = 'progress-bar-fill';
-    progressBar.appendChild(progressBarFill);
-    progressBarContainer.appendChild(progressBar);
-    container.appendChild(progressBarContainer);
-
-    // --- Unlocked Items ---
-    const unlockedItemsSection = document.createElement('div');
-    unlockedItemsSection.className = 'research-section';
-    const unlockedItemsHeader = document.createElement('h3');
-    unlockedItemsHeader.textContent = 'Unlocked Items (Current Level)';
-    unlockedItemsSection.appendChild(unlockedItemsHeader);
-
-    const unlockedProductsList = document.createElement('ul');
-    unlockedProductsList.id = 'unlocked-products-list';
-    unlockedItemsSection.appendChild(unlockedProductsList);
-
-    const unlockedEquipmentList = document.createElement('ul');
-    unlockedEquipmentList.id = 'unlocked-equipment-list';
-    unlockedItemsSection.appendChild(unlockedEquipmentList);
-
-    container.appendChild(unlockedItemsSection);
-
-    // --- Styling (Optional) ---
-    const style = document.createElement('style');
-    style.textContent = `
-          .research-page-container {
-              padding: 20px;
-          }
-          .research-section {
-              margin-bottom: 20px;
-              border: 1px solid #ccc;
-              border-radius: 4px;
-              padding: 10px;
-              background-color: #fff;
-          }
-          .research-section h3 {
-              margin-top: 0;
-          }
-          .progress-bar {
-              width: 100%;
-              height: 20px;
-              background-color: #e0e0e0;
-              border-radius: 4px;
-              overflow: hidden;
-          }
-          .progress-bar-fill {
-              height: 100%;
-              width: 0%;
-              background-color: #4caf50;
-              transition: width 0.5s ease;
-          }
-      `;
-    container.appendChild(style);
-
-    // --- Event Listener for Research Button ---
-    researchButton.addEventListener('click', () => {
-        if (window.researchData.inProgress) {
-            alert('Research is already in progress.');
-            return;
-        }
-
-        const nextLevel = window.researchData.currentLevel + 1;
-        const nextLevelData = window.researchData.levels[nextLevel];
-
-        if (nextLevelData && window.financesData.cash >= nextLevelData.cost) {
-            // Deducts cash and starts the in-game-day timer -
-            // researchData.inProgress now drives everything below, so
-            // there's no local animation state left to keep in sync.
-            window.research.researchNextLevel();
-            updateResearchUI();
-        } else {
-            alert('Not enough funds to start research or max level reached.');
-        }
-    });
-
-    // --- Function to Update UI ---
-    function updateResearchUI(): void {
-        // Update current research level
-        const currentLevelValue = document.getElementById('current-research-level');
-        if (currentLevelValue) {
-            currentLevelValue.textContent = `Level: ${window.researchData.currentLevel}`;
-        }
-
-        // Update next research level info
-        const nextLevelInfo = document.getElementById('next-research-level-info');
-        if (nextLevelInfo) {
-            nextLevelInfo.innerHTML = '';
-
-            const nextLevel = window.researchData.currentLevel + 1;
-            const nextLevelData = window.researchData.levels[nextLevel];
-            const inProgress = window.researchData.inProgress;
-
-            if (inProgress) {
-                const targetLevelData = window.researchData.levels[inProgress.targetLevel];
-                const daysElapsed = Math.max(0, window.gameState.dayIndex - inProgress.startDayIndex);
-                const percent = Math.min(100, (daysElapsed / inProgress.daysRequired) * 100);
-
-                const statusInfo = document.createElement('p');
-                statusInfo.textContent = `Researching Level ${inProgress.targetLevel}${targetLevelData ? ` (${targetLevelData.description})` : ''}...`;
-                nextLevelInfo.appendChild(statusInfo);
-
-                const daysInfo = document.createElement('p');
-                daysInfo.textContent = `Progress: ${daysElapsed} of ${inProgress.daysRequired} days`;
-                nextLevelInfo.appendChild(daysInfo);
-
-                progressBarFill.style.width = `${percent}%`;
-                progressBarContainer.style.display = 'block';
-
-                researchButton.disabled = true;
-                researchButton.textContent = 'Research In Progress...';
-            } else if (nextLevelData) {
-                const levelInfo = document.createElement('p');
-                levelInfo.textContent = `Level: ${nextLevelData.level}`;
-                nextLevelInfo.appendChild(levelInfo);
-
-                const costInfo = document.createElement('p');
-                costInfo.textContent = `Cost: $${nextLevelData.cost}`;
-                nextLevelInfo.appendChild(costInfo);
-
-                const timeInfo = document.createElement('p');
-                timeInfo.textContent = `Research Time: ${nextLevelData.researchTime} days`;
-                nextLevelInfo.appendChild(timeInfo);
-
-                const descriptionInfo = document.createElement('p');
-                descriptionInfo.textContent = `Description: ${nextLevelData.description}`;
-                nextLevelInfo.appendChild(descriptionInfo);
-
-                progressBarContainer.style.display = 'none';
-
-                // Update research button text and state
-                researchButton.disabled = false;
-                researchButton.textContent = 'Start Research';
-            } else {
-                nextLevelInfo.textContent = 'Maximum research level reached.';
-                progressBarContainer.style.display = 'none';
-                researchButton.disabled = true;
-                researchButton.textContent = 'Research Complete';
-            }
-        }
-
-        // Update list of unlocked products
-        const unlockedProductsList = document.getElementById('unlocked-products-list');
-        if (unlockedProductsList) {
-            unlockedProductsList.innerHTML = '';
-            const unlockedProducts = window.research.getUnlockedProducts();
-            unlockedProducts.forEach((productId) => {
-                const product = window.productsData.find((p) => p.id === productId);
-                if (product) {
-                    const listItem = document.createElement('li');
-                    listItem.textContent = product.name;
-                    unlockedProductsList.appendChild(listItem);
-                }
-            });
-        }
-
-        // Update list of unlocked equipment
-        const unlockedEquipmentList = document.getElementById('unlocked-equipment-list');
-        if (unlockedEquipmentList) {
-            unlockedEquipmentList.innerHTML = '';
-            const unlockedEquipment = window.research.getUnlockedEquipment();
-            unlockedEquipment.forEach((equipmentId) => {
-                const equipment = window.equipmentData.find((e) => e.id === equipmentId);
-                if (equipment) {
-                    const listItem = document.createElement('li');
-                    listItem.textContent = equipment.name;
-                    unlockedEquipmentList.appendChild(listItem);
-                }
-            });
-        }
+    // Names of what a level unlocks that exists in the game
+    function unlocksOf(level: ResearchLevel): string[] {
+        return [...level.unlockedProducts.map(productName), ...level.unlockedEquipment.map(equipmentName)].filter(
+            (name): name is string => !!name,
+        );
     }
 
-    // Append the container to the main content area
-    mainContent.appendChild(container);
+    function chips(names: string[], tone: Tone = 'neutral'): HTMLElement {
+        const wrap = el('div', 'chips');
+        names.forEach((name) => wrap.appendChild(kit.pill(name, tone)));
+        return wrap;
+    }
 
-    // Initial UI update, then again as research moves on (each day, and on completion)
-    updateResearchUI();
-    page.on('research', updateResearchUI);
+    function startResearch(): void {
+        const data = window.researchData;
+        const next = data.levels[data.currentLevel + 1];
+        if (data.inProgress || !next) return;
+        if (window.financesData.cash < next.cost) {
+            window.toast(`Research level ${next.level} costs ${fmt.moneyWhole(next.cost)}.`, 'error');
+            return;
+        }
+        window.research.researchNextLevel();
+        window.toast(`Research on level ${next.level} has started.`, 'success');
+        render();
+    }
+
+    function render(): void {
+        const data = window.researchData;
+        const maxLevel = data.levels.length - 1;
+        const inProgress = data.inProgress;
+
+        // Track: one cell per level
+        trackCard.body.innerHTML = '';
+        const track = el('div', 'level-track');
+        for (let level = 0; level <= maxLevel; level++) {
+            const cell = el('span', '', String(level));
+            if (level <= data.currentLevel) cell.className = 'done';
+            else if (level === (inProgress?.targetLevel ?? data.currentLevel + 1)) cell.className = 'next';
+            cell.title = data.levels[level]?.description ?? '';
+            track.appendChild(cell);
+        }
+        const caption = el('p', 'small muted', `Level ${data.currentLevel} of ${maxLevel}`);
+        caption.id = 'current-research-level';
+        caption.style.marginTop = '6px';
+        trackCard.body.append(track, caption);
+
+        // Next level
+        nextCard.body.innerHTML = '';
+        const nextLevel = data.levels[inProgress?.targetLevel ?? data.currentLevel + 1];
+        if (!nextLevel) {
+            nextCard.body.appendChild(el('p', '', 'Every research level is complete.'));
+        } else {
+            const grid = el('dl', 'definition-grid');
+            const row = (label: string, value: Node | string) => {
+                const dd = el('dd');
+                dd.append(value);
+                grid.append(el('dt', '', label), dd);
+            };
+            row('Level', String(nextLevel.level));
+            row('About', nextLevel.description);
+            row('Cost', fmt.moneyWhole(nextLevel.cost));
+            row('Time', `${nextLevel.researchTime} day${nextLevel.researchTime === 1 ? '' : 's'}`);
+            const unlocks = unlocksOf(nextLevel);
+            row('Unlocks', unlocks.length > 0 ? chips(unlocks, 'brand') : kit.pill('Nothing available yet', 'warn'));
+            nextCard.body.appendChild(grid);
+
+            const actions = el('div', 'toolbar');
+            actions.style.marginTop = '12px';
+            if (inProgress) {
+                const days = Math.max(0, window.gameState.dayIndex - inProgress.startDayIndex);
+                const progress = kit.meterCell(
+                    days / inProgress.daysRequired,
+                    `${days} of ${inProgress.daysRequired} days`,
+                );
+                progress.root.style.width = '320px';
+                progress.root.id = 'research-progress-bar';
+                actions.append(kit.pill('In progress', 'info'), progress.root);
+            } else {
+                const affordable = window.financesData.cash >= nextLevel.cost;
+                const start = kit.button(
+                    `Start research (${fmt.moneyWhole(nextLevel.cost)})`,
+                    'primary',
+                    startResearch,
+                );
+                start.id = 'research-button';
+                start.disabled = !affordable;
+                actions.appendChild(start);
+                if (!affordable) {
+                    actions.appendChild(
+                        el(
+                            'span',
+                            'small critical-text',
+                            `You need ${fmt.moneyWhole(nextLevel.cost - window.financesData.cash)} more.`,
+                        ),
+                    );
+                }
+            }
+            nextCard.body.appendChild(actions);
+        }
+
+        // Everything unlocked
+        unlockedCard.body.innerHTML = '';
+        const products = window.research
+            .getUnlockedProducts()
+            .map(productName)
+            .filter((n): n is string => !!n);
+        const equipment = window.research
+            .getUnlockedEquipment()
+            .map(equipmentName)
+            .filter((n): n is string => !!n);
+        const grid = el('dl', 'definition-grid');
+        grid.append(el('dt', '', `Products (${products.length})`));
+        const productsDd = el('dd');
+        productsDd.appendChild(chips(products));
+        grid.appendChild(productsDd);
+        grid.append(el('dt', '', `Equipment (${equipment.length})`));
+        const equipmentDd = el('dd');
+        equipmentDd.appendChild(chips(equipment));
+        grid.appendChild(equipmentDd);
+        grid.style.alignItems = 'start';
+        unlockedCard.body.appendChild(grid);
+    }
+
+    render();
+    // Each day of progress and completion; cash decides whether you can start
+    page.on('research', render);
+    page.on('finances', () => {
+        if (!window.researchData.inProgress) render();
+    });
 };

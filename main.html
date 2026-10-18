@@ -45,6 +45,8 @@
 
     <!-- Load core game modules -->
     <script src="main/js/ui.js"></script>
+    <!-- Formatters, player words, components and toasts every screen is built from -->
+    <script src="main/components/kit.js"></script>
     <script src="main/js/taskManager.js"></script>
     <script src="main/js/taskAssignment.js"></script>
     <script src="main/js/production.js"></script>
@@ -64,57 +66,41 @@
     <script src="node_modules/chart.js/dist/chart.umd.min.js"></script>
 
     <!-- Load page renderers -->
-    <script src="main/js/pages/dashboardPage.js"></script>
     <script src="main/js/pages/operationsPage.js"></script>
     <script src="main/js/pages/employeesPage.js"></script>
-    <script src="main/js/pages/customersPage.js"></script>
-    <script src="main/js/pages/ordersPage.js"></script>
     <script src="main/js/pages/inventoryPage.js"></script>
     <script src="main/js/pages/marketplacePage.js"></script>
     <script src="main/js/pages/equipmentPage.js"></script>
     <script src="main/js/pages/financesPage.js"></script>
     <script src="main/js/pages/researchPage.js"></script>
-    <script src="main/js/pages/marketingPage.js"></script>
-    <script src="main/js/pages/statisticsPage.js"></script>
     <script src="main/js/pages/settingsPage.js"></script>
 
     <!-- Electron save/load integration (window.saveGame/loadGame, autosave, Ctrl+S/Ctrl+L) -->
     <script src="main/js/electron-integration.js"></script>
 
-    <!-- Global error handler with Electron logging support -->
+    <!-- Uncaught errors: log them and show a toast. The game keeps running, so
+         the page is left alone (game-bootstrap.js has its own screen for a
+         failed start). -->
     <script>
-      window.addEventListener('error', (event) => {
-        document.body.innerHTML = `
-        <div style="color: red; padding: 20px;">
-          <h2>Application Error</h2>
-          <p><strong>Message:</strong> ${event.error.message}</p>
-          <p><strong>Stack:</strong> ${event.error.stack}</p>
-          <button onclick="window.location.href='index.html'" style="margin-top: 20px; padding: 10px 20px; background-color: #1a237e; color: white; border: none; border-radius: 4px; cursor: pointer;">Return to Main Menu</button>
-        </div>
-      `;
-        console.error('Application error:', event.error);
-
-        // Log to main process if available
+      function reportError(message, stack) {
+        console.error('Application error:', message, stack || '');
         if (window.gameAPI && window.gameAPI.logError) {
-          window.gameAPI.logError({
-            message: event.error.message,
-            stack: event.error.stack,
-          });
+          window.gameAPI.logError({ message: String(message), stack: stack || 'No stack trace available' });
         }
+        if (window.toast) {
+          window.toast('Something went wrong: ' + message + '. Saving now is a good idea.', 'error');
+        }
+      }
+
+      window.addEventListener('error', (event) => {
+        // Resource and ResizeObserver errors carry no error object
+        if (!event.error) return;
+        reportError(event.error.message, event.error.stack);
       });
 
-      // Unhandled promise rejection handler
       window.addEventListener('unhandledrejection', (event) => {
-        console.error('Unhandled promise rejection:', event.reason);
-
-        // Log to main process if available
-        if (window.gameAPI && window.gameAPI.logError) {
-          window.gameAPI.logError({
-            message: 'Unhandled promise rejection',
-            details: event.reason.toString(),
-            stack: event.reason.stack || 'No stack trace available',
-          });
-        }
+        const reason = event.reason;
+        reportError(reason && reason.message ? reason.message : String(reason), reason && reason.stack);
       });
     </script>
   </body>

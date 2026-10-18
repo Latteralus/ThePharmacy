@@ -1,497 +1,311 @@
-// /js/pages/inventoryPage.js
+// /js/pages/inventoryPage.js - products (stock against target, prices
+// against the market) and raw materials (stock and auto-order).
+//
+// Typed values apply on change (Enter or leaving the field). Stock, prices
+// and "can make" update in place on 'inventory', and a field the player is
+// typing in is never overwritten.
 
 window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope): void {
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
 
-    const container = document.createElement('div');
-    container.className = 'inventory-page-container';
+    const root = kit.page(
+        mainContent,
+        'Inventory',
+        'Stock against your targets, and prices against what customers expect to pay.',
+    );
 
-    // Title
-    const title = document.createElement('h2');
-    title.textContent = 'Inventory Management';
-    container.appendChild(title);
+    // --------------------- Toolbar ---------------------
+    const toolbar = el('div', 'toolbar');
+    const search = el('input', 'input search');
+    search.type = 'search';
+    search.placeholder = 'Search…';
+    search.setAttribute('aria-label', 'Search inventory');
 
-    // Subtitle
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'View and manage your product and material inventory.';
-    container.appendChild(subtitle);
-
-    // New Section for Setting All Product Prices and Max Inventory
-    const settingsSection = document.createElement('div');
-    settingsSection.className = 'settings-section';
-
-    // Set All Prices
-    const setPricesLabel = document.createElement('label');
-    setPricesLabel.textContent = 'Set All Products:';
-    settingsSection.appendChild(setPricesLabel);
-
-    const suggestedPriceButton = document.createElement('button');
-    suggestedPriceButton.textContent = 'Set to Suggested Price';
-    suggestedPriceButton.onclick = () => {
-        window.finances.setToSuggestedPrices();
-        renderProducts(); // Re-render the products to show updated prices
-    };
-    settingsSection.appendChild(suggestedPriceButton);
-
-    const markupInput = document.createElement('input');
-    markupInput.type = 'number';
-    markupInput.placeholder = 'Markup %';
-    markupInput.min = '0';
-    markupInput.value = '25'; // Default markup
-    settingsSection.appendChild(markupInput);
-
-    const applyMarkupButton = document.createElement('button');
-    applyMarkupButton.textContent = 'Apply Markup';
-    applyMarkupButton.onclick = () => {
-        const markupPercentage = parseFloat(markupInput.value);
-        if (window.finances.applyMarkupToAllProducts(markupPercentage)) {
-            renderProducts(); // Re-render the products to show updated prices
+    const markupInput = kit.numberInput(Math.round((window.globalMarkup - 1) * 100), {
+        min: 0,
+        step: 5,
+        width: '70px',
+        label: 'Markup percent',
+    });
+    const applyMarkup = kit.button('Apply markup', 'secondary', () => {
+        const markup = parseFloat(markupInput.value);
+        if (window.finances.applyMarkupToAllProducts(markup)) {
+            window.toast(`Every price set to cost + ${fmt.int(markup)}%.`, 'success');
         } else {
-            alert('Enter a markup of 0% or more.');
+            window.toast('Enter a markup of 0% or more.', 'error');
         }
-    };
-    settingsSection.appendChild(applyMarkupButton);
-
-    // Set Max Inventory for All Products
-    const setMaxInvLabel = document.createElement('label');
-    setMaxInvLabel.textContent = 'Set Max Inventory for All:';
-    setMaxInvLabel.style.marginLeft = '15px';
-    settingsSection.appendChild(setMaxInvLabel);
-
-    const maxInvInput = document.createElement('input');
-    maxInvInput.type = 'number';
-    maxInvInput.placeholder = 'Max Inventory';
-    maxInvInput.min = '0';
-    maxInvInput.value = '25'; // Default max inventory
-    settingsSection.appendChild(maxInvInput);
-
-    const applyMaxInvButton = document.createElement('button');
-    applyMaxInvButton.textContent = 'Apply to All';
-    applyMaxInvButton.onclick = () => {
-        const maxInventory = parseInt(maxInvInput.value);
-        if (!isNaN(maxInventory)) {
-            window.productsData.forEach((product) => {
-                product.maxInventory = maxInventory;
-            });
-            renderProducts(); // Re-render the products to show updated max inventory
-            console.log(`Max inventory for all products set to ${maxInventory}`);
-        } else {
-            alert('Invalid max inventory entered.');
+    });
+    const suggested = kit.button(
+        'Set to suggested',
+        'secondary',
+        () => {
+            window.finances.setToSuggestedPrices();
+            window.toast('Every price set to the suggested price.', 'success');
+        },
+        { title: 'Cost plus the current markup' },
+    );
+    const maxAllInput = kit.numberInput(5, { min: 0, width: '64px', label: 'Target stock for all products' });
+    const applyMaxAll = kit.button('Set for all', 'secondary', () => {
+        const value = parseInt(maxAllInput.value, 10);
+        if (!Number.isFinite(value) || value < 0) {
+            window.toast('Enter a target of 0 or more.', 'error');
+            return;
         }
-    };
-    settingsSection.appendChild(applyMaxInvButton);
+        window.productsData.forEach((product) => {
+            product.maxInventory = value;
+        });
+        window.updateUI('inventory');
+        window.toast(`Target stock set to ${value} for every product.`, 'success');
+    });
 
-    container.appendChild(settingsSection);
+    const markupField = el('label', 'field', 'Markup');
+    markupField.append(markupInput, '%');
+    const maxField = el('label', 'field', 'Target stock');
+    maxField.appendChild(maxAllInput);
+    // Pricing and target stock only apply to finished products
+    const productControls = el('div', 'toolbar');
+    productControls.append(
+        el('span', 'divider'),
+        markupField,
+        applyMarkup,
+        suggested,
+        el('span', 'divider'),
+        maxField,
+        applyMaxAll,
+    );
+    toolbar.append(search, productControls);
 
-    // Filter/Search Bar
-    const filterRow = document.createElement('div');
-    filterRow.className = 'filter-row';
-    const filterLabel = document.createElement('label');
-    filterLabel.textContent = 'Search:';
-    const filterInput = document.createElement('input');
-    filterInput.type = 'text';
-    filterInput.placeholder = 'Filter by name...';
-    filterLabel.appendChild(filterInput);
-    filterRow.appendChild(filterLabel);
-    container.appendChild(filterRow);
+    // --------------------- Tabs ---------------------
+    const productsCard = kit.card(undefined, { flush: true });
+    const materialsCard = kit.card(undefined, { flush: true });
+    let showingProducts = true;
+    const tabs = kit.tabs(['Finished products', 'Raw materials'], (index) => {
+        showingProducts = index === 0;
+        productsCard.root.style.display = showingProducts ? '' : 'none';
+        materialsCard.root.style.display = showingProducts ? 'none' : '';
+        productControls.style.display = showingProducts ? '' : 'none';
+        render();
+    });
+    root.append(tabs.root, toolbar, productsCard.root, materialsCard.root);
 
-    // Tabs
-    const tabsRow = document.createElement('div');
-    tabsRow.className = 'tabs-row';
-    const productsTab = document.createElement('button');
-    productsTab.className = 'tab-button active';
-    productsTab.textContent = 'Finished Products';
-    const materialsTab = document.createElement('button');
-    materialsTab.className = 'tab-button';
-    materialsTab.textContent = 'Raw Materials';
-    tabsRow.appendChild(productsTab);
-    tabsRow.appendChild(materialsTab);
-    container.appendChild(tabsRow);
-
-    // Grids
-    const productsGrid = document.createElement('div');
-    productsGrid.className = 'products-grid';
-    const materialsGrid = document.createElement('div');
-    materialsGrid.className = 'materials-grid';
-    materialsGrid.style.display = 'none'; // Initially hidden
-
-    container.appendChild(productsGrid);
-    container.appendChild(materialsGrid);
-
-    // Redraw the figures that change during play (stock, price) in place, so
-    // a value the player is typing into a card isn't wiped by a refresh.
+    // Figures that change during play, updated in place on 'inventory'
     let liveFields: Array<() => void> = [];
     page.on('inventory', () => liveFields.forEach((update) => update()));
 
-    // Function to render products
+    // Writes a value into an input unless the player is typing in it
+    function setIdle(input: HTMLInputElement, value: string): void {
+        if (document.activeElement !== input && input.value !== value) input.value = value;
+    }
+
+    function matches(name: string): boolean {
+        const text = search.value.toLowerCase().trim();
+        return !text || name.toLowerCase().includes(text);
+    }
+
+    // --------------------- Products ---------------------
+    function stockState(product: Product): { fraction: number; text: string; tone: Tone } {
+        const max = product.maxInventory || 0;
+        const fraction = max > 0 ? product.inventory / max : product.inventory > 0 ? 1 : 0;
+        const tone: Tone = product.inventory <= 0 ? 'critical' : fraction < 0.5 ? 'warn' : 'good';
+        return { fraction, text: `${fmt.int(product.inventory)} / ${fmt.int(max)}`, tone };
+    }
+
+    // How customers react to the price (finances.quotePrice): everyone pays
+    // up to market, fewer above it, nobody at 3x.
+    function priceCue(product: Product): { text: string; className: string; title: string } {
+        const market = window.finances.marketPrice(product.id);
+        const ratio = market > 0 ? product.price / market : 1;
+        const chance = window.finances.acceptanceChance(ratio);
+        const text = fmt.signedPct(ratio - 1);
+        const className = chance >= 1 ? 'good-text' : chance >= 0.5 ? 'warn-text' : 'critical-text';
+        const title =
+            chance >= 1
+                ? 'At or below market: every customer pays.'
+                : `${fmt.pct(chance)} of customers accept this price. Those who pay are less happy.`;
+        return { text, className, title };
+    }
+
     function renderProducts(): void {
-        productsGrid.innerHTML = '';
+        productsCard.body.innerHTML = '';
         liveFields = [];
-        const filterText = filterInput.value.toLowerCase().trim();
+        const table = kit.table([
+            { label: 'Product' },
+            { label: 'Stock', width: '150px', title: 'In stock / target. Lab technicians restock up to the target.' },
+            { label: 'Target', num: true },
+            { label: 'Cost', num: true, title: 'Materials for one unit at list price' },
+            { label: 'Market', num: true, title: 'What customers expect to pay' },
+            { label: 'Price', num: true },
+            { label: 'vs market', num: true },
+            { label: 'Can make', num: true, title: 'Units your raw materials cover' },
+            { label: 'Compound now', className: 'actions' },
+        ]);
+        productsCard.body.appendChild(table.root);
 
-        window.productsData.forEach((prod) => {
-            if (filterText && !prod.name.toLowerCase().includes(filterText)) {
-                return;
-            }
+        const products = window.productsData.filter((p) => matches(p.name));
+        if (products.length === 0) table.empty('No products match your search.');
 
-            const card = document.createElement('div');
-            card.className = 'product-card';
+        products.forEach((product) => {
+            const stock = stockState(product);
+            const stockCell = kit.meterCell(stock.fraction, stock.text, stock.tone);
 
-            // Title row
-            const titleRow = document.createElement('div');
-            titleRow.className = 'title-row';
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = prod.name;
-            titleRow.appendChild(nameSpan);
-            card.appendChild(titleRow);
-
-            // Cost and Price
-            const cost = window.calculateProductCost(prod.id);
-            const suggestedPrice = cost * window.globalMarkup;
-
-            const costLabel = document.createElement('p');
-            costLabel.textContent = `Cost to Produce: $${cost.toFixed(2)}`;
-            card.appendChild(costLabel);
-
-            const suggestedPriceLabel = document.createElement('p');
-            suggestedPriceLabel.textContent = `Suggested Price: $${suggestedPrice.toFixed(2)}`;
-            card.appendChild(suggestedPriceLabel);
-
-            // What customers compare the price with (finances.quotePrice)
-            const marketPriceLabel = document.createElement('p');
-            marketPriceLabel.textContent = `Market Price: $${window.finances.marketPrice(prod.id).toFixed(2)}`;
-            marketPriceLabel.title =
-                'Customers always pay up to this. Above it, more of them refuse at check-in, and those who pay are less happy.';
-            card.appendChild(marketPriceLabel);
-
-            const currentPriceLabel = document.createElement('p');
-            card.appendChild(currentPriceLabel);
-
-            const newPriceRow = document.createElement('div');
-            newPriceRow.className = 'new-price-row';
-            const newPriceLabel = document.createElement('label');
-            newPriceLabel.textContent = 'New Price:';
-            const newPriceInput = document.createElement('input');
-            newPriceInput.type = 'number';
-            newPriceInput.value = prod.price.toFixed(2);
-            newPriceInput.min = '0.01';
-            newPriceInput.step = '0.01';
-            const updatePriceButton = document.createElement('button');
-            updatePriceButton.textContent = 'Update';
-            updatePriceButton.onclick = () => {
-                const newPrice = parseFloat(newPriceInput.value);
-                if (!window.finances.updateProductPrice(prod.id, newPrice)) {
-                    alert('Enter a price above $0.');
+            const maxInput = kit.numberInput(product.maxInventory || 0, { min: 0, small: true, width: '60px' });
+            maxInput.setAttribute('aria-label', `Target stock for ${product.name}`);
+            maxInput.addEventListener('change', () => {
+                const value = parseInt(maxInput.value, 10);
+                if (!Number.isFinite(value) || value < 0) {
+                    window.toast('Target stock must be 0 or more.', 'error');
+                    maxInput.value = String(product.maxInventory || 0);
+                    return;
                 }
-            };
-            newPriceRow.appendChild(newPriceLabel);
-            newPriceRow.appendChild(newPriceInput);
-            newPriceRow.appendChild(updatePriceButton);
-            card.appendChild(newPriceRow);
+                product.maxInventory = value;
+                window.updateUI('inventory');
+            });
 
-            // Current Stock
-            const stockLabel = document.createElement('p');
-            card.appendChild(stockLabel);
-
-            // Potential Production
-            const potentialLabel = document.createElement('p');
-            card.appendChild(potentialLabel);
-
-            const updateLiveFields = (): void => {
-                currentPriceLabel.textContent = `Current Price: $${prod.price.toFixed(2)}`;
-                stockLabel.textContent = `In Stock: ${prod.inventory}`;
-                potentialLabel.textContent = `Can Make: ${window.helpers.calculatePotentialProduction(prod.id)}`;
-            };
-            updateLiveFields();
-            liveFields.push(updateLiveFields);
-
-            // Quick Order for Compounding
-            const quickOrderDiv = document.createElement('div');
-            quickOrderDiv.className = 'quick-order-row';
-            const quickOrderLabel = document.createElement('strong');
-            quickOrderLabel.textContent = 'Quick Compound:';
-            const quantityInput = document.createElement('input');
-            quantityInput.type = 'number';
-            quantityInput.min = '1';
-            quantityInput.value = '1'; // Default value
-            quantityInput.className = 'quick-order-input';
-            const orderButton = document.createElement('button');
-            orderButton.textContent = 'Compound';
-            orderButton.onclick = () => {
-                const quantity = parseInt(quantityInput.value);
-                if (!isNaN(quantity) && quantity > 0) {
-                    window.production.createCompoundTask(prod, quantity);
-                } else {
-                    alert('Please enter a valid quantity.');
+            const priceInput = kit.numberInput(product.price.toFixed(2), {
+                min: 0.01,
+                step: 0.01,
+                small: true,
+                width: '84px',
+            });
+            priceInput.setAttribute('aria-label', `Price for ${product.name}`);
+            priceInput.addEventListener('change', () => {
+                if (!window.finances.updateProductPrice(product.id, parseFloat(priceInput.value))) {
+                    window.toast('Enter a price above $0.', 'error');
+                    priceInput.value = product.price.toFixed(2);
                 }
-            };
-            quickOrderDiv.appendChild(quickOrderLabel);
-            quickOrderDiv.appendChild(quantityInput);
-            quickOrderDiv.appendChild(orderButton);
-            card.appendChild(quickOrderDiv);
+            });
 
-            // Max Inventory
-            const maxInvRow = document.createElement('div');
-            maxInvRow.className = 'max-inv-row';
-            const maxInvLabel = document.createElement('label');
-            maxInvLabel.textContent = 'Max Inventory:';
-            const maxInvInput = document.createElement('input');
-            maxInvInput.type = 'number';
-            maxInvInput.value = String(prod.maxInventory || 0); // Use existing value or default to 0
-            maxInvInput.min = '0';
-            maxInvInput.step = '1';
-            const updateMaxInvButton = document.createElement('button');
-            updateMaxInvButton.textContent = 'Update';
-            updateMaxInvButton.onclick = () => {
-                const newMaxInv = parseInt(maxInvInput.value);
-                if (!isNaN(newMaxInv)) {
-                    prod.maxInventory = newMaxInv;
-                    console.log(`Max inventory for ${prod.name} updated to ${newMaxInv}`);
-                    window.updateUI('inventory'); // Update the UI to reflect changes
-                } else {
-                    alert('Invalid max inventory entered.');
-                }
-            };
-            maxInvRow.appendChild(maxInvLabel);
-            maxInvRow.appendChild(maxInvInput);
-            maxInvRow.appendChild(updateMaxInvButton);
-            card.appendChild(maxInvRow);
+            const cue = el('span');
+            const canMake = el('span');
 
-            productsGrid.appendChild(card);
+            const qtyInput = kit.numberInput(1, { min: 1, small: true, width: '52px' });
+            qtyInput.setAttribute('aria-label', `Units of ${product.name} to compound`);
+            const compound = kit.button(
+                'Compound',
+                'secondary',
+                () => {
+                    const quantity = parseInt(qtyInput.value, 10);
+                    if (!Number.isFinite(quantity) || quantity < 1) {
+                        window.toast('Enter at least 1 unit.', 'error');
+                        return;
+                    }
+                    window.production.createCompoundTask(product, quantity);
+                    window.toast(`Queued ${quantity} × ${product.name} for the lab.`, 'success');
+                },
+                { small: true },
+            );
+            const compoundCell = el('span', 'toolbar');
+            compoundCell.style.justifyContent = 'flex-end';
+            compoundCell.append(qtyInput, compound);
+
+            const update = (): void => {
+                const s = stockState(product);
+                stockCell.set(s.fraction, s.text, s.tone);
+                setIdle(maxInput, String(product.maxInventory || 0));
+                setIdle(priceInput, product.price.toFixed(2));
+                const c = priceCue(product);
+                cue.textContent = c.text;
+                cue.className = c.className;
+                cue.title = c.title;
+                canMake.textContent = fmt.int(window.helpers.calculatePotentialProduction(product.id));
+            };
+            update();
+            liveFields.push(update);
+
+            const cost = window.calculateProductCost(product.id);
+            const row = table.row([
+                product.name,
+                stockCell.root,
+                maxInput,
+                fmt.money(cost),
+                fmt.money(window.finances.marketPrice(product.id)),
+                priceInput,
+                cue,
+                canMake,
+                compoundCell,
+            ]);
+            row.className = 'product-row';
+            row.dataset.productId = product.id;
         });
     }
 
-    // Function to render materials
+    // --------------------- Materials ---------------------
     function renderMaterials(): void {
-        materialsGrid.innerHTML = '';
+        materialsCard.body.innerHTML = '';
         liveFields = [];
-        const filterText = filterInput.value.toLowerCase().trim();
+        const table = kit.table([
+            { label: 'Material' },
+            { label: 'Unit price', num: true },
+            { label: 'In stock', num: true },
+            { label: '' },
+            { label: 'Reorder below', num: true, title: 'Checked every game hour. 0 turns auto-order off.' },
+            { label: 'Reorder amount', num: true, title: 'Bought at Marketplace prices, bulk discounts included' },
+        ]);
+        materialsCard.body.appendChild(table.root);
 
-        window.materialsData.forEach((mat) => {
-            if (filterText && !mat.name.toLowerCase().includes(filterText)) {
-                return;
-            }
+        const materials = window.materialsData.filter((m) => matches(m.name));
+        if (materials.length === 0) table.empty('No materials match your search.');
 
-            const card = document.createElement('div');
-            card.className = 'material-card';
+        materials.forEach((material) => {
+            const stock = el('span');
+            const status = el('span');
 
-            // Title row
-            const titleRow = document.createElement('div');
-            titleRow.className = 'title-row';
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = mat.name;
-            const costSpan = document.createElement('span');
-            costSpan.textContent = `$${mat.cost.toFixed(2)}`;
-            titleRow.appendChild(nameSpan);
-            titleRow.appendChild(costSpan);
-            card.appendChild(titleRow);
-
-            // Inventory
-            const invRow = document.createElement('div');
-            const invLabel = document.createElement('strong');
-            invLabel.textContent = 'Inventory: ';
-            const inventorySpan = document.createElement('span');
-            invRow.appendChild(invLabel);
-            invRow.appendChild(inventorySpan);
-            card.appendChild(invRow);
-
-            // Auto-Order details
-            const autoOrderRow = document.createElement('div');
-            autoOrderRow.className = 'auto-order-row';
-            autoOrderRow.textContent = `Auto-Order Threshold: ${mat.autoOrderThreshold}, Amount: ${mat.autoOrderAmount}`;
-            card.appendChild(autoOrderRow);
-
-            const updateLiveFields = (): void => {
-                inventorySpan.textContent = `${mat.inventory}`;
+            const settingInput = (key: 'autoOrderThreshold' | 'autoOrderAmount', label: string): HTMLInputElement => {
+                const input = kit.numberInput(material[key] || 0, { min: 0, small: true, width: '76px' });
+                input.setAttribute('aria-label', `${label} for ${material.name}`);
+                input.addEventListener('change', () => {
+                    const value = parseInt(input.value, 10);
+                    if (!Number.isFinite(value) || value < 0) {
+                        window.toast(`${label} must be 0 or more.`, 'error');
+                        input.value = String(material[key] || 0);
+                        return;
+                    }
+                    material[key] = value;
+                    update();
+                });
+                return input;
             };
-            updateLiveFields();
-            liveFields.push(updateLiveFields);
+            const thresholdInput = settingInput('autoOrderThreshold', 'Reorder point');
+            const amountInput = settingInput('autoOrderAmount', 'Reorder amount');
 
-            materialsGrid.appendChild(card);
+            const update = (): void => {
+                stock.textContent = fmt.int(material.inventory);
+                const threshold = material.autoOrderThreshold || 0;
+                const amount = material.autoOrderAmount || 0;
+                status.innerHTML = '';
+                if (threshold > 0 && amount > 0) {
+                    status.appendChild(
+                        material.inventory < threshold
+                            ? kit.pill('Reorder due', 'warn')
+                            : kit.pill('Auto-order on', 'info'),
+                    );
+                } else if (material.inventory <= 0) {
+                    status.appendChild(kit.pill('Out of stock', 'critical'));
+                }
+            };
+            update();
+            liveFields.push(update);
+
+            const row = table.row([
+                material.name,
+                fmt.money(material.cost),
+                stock,
+                status,
+                thresholdInput,
+                amountInput,
+            ]);
+            row.className = 'material-row';
+            row.dataset.materialId = material.id;
         });
     }
 
-    // Tab event listeners
-    productsTab.addEventListener('click', () => {
-        productsTab.classList.add('active');
-        materialsTab.classList.remove('active');
-        productsGrid.style.display = 'grid';
-        materialsGrid.style.display = 'none';
-        renderProducts();
-    });
+    function render(): void {
+        if (showingProducts) renderProducts();
+        else renderMaterials();
+    }
 
-    materialsTab.addEventListener('click', () => {
-        materialsTab.classList.add('active');
-        productsTab.classList.remove('active');
-        productsGrid.style.display = 'none';
-        materialsGrid.style.display = 'grid';
-        renderMaterials();
-    });
-
-    // Filter event listener
-    filterInput.addEventListener('input', () => {
-        if (productsTab.classList.contains('active')) {
-            renderProducts();
-        } else {
-            renderMaterials();
-        }
-    });
-
-    // Initial render
-    mainContent.appendChild(container);
-    renderProducts();
-
-    // Add styling
-    const style = document.createElement('style');
-    style.textContent = `
-        .inventory-page-container {
-            padding: 20px;
-            font-family: Arial, sans-serif;
-        }
-        .filter-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .tabs-row {
-            margin-bottom: 20px;
-        }
-        .tab-button {
-            padding: 10px 20px;
-            border: 1px solid #ccc;
-            border-radius: 4px 4px 0 0;
-            background-color: #f0f0f0;
-            cursor: pointer;
-        }
-        .tab-button.active {
-            background-color: #fff;
-            border-bottom: 1px solid #fff;
-        }
-        .products-grid, .materials-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
-        }
-        .product-card, .material-card {
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 10px;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .title-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .new-price-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .new-price-row input {
-            width: 80px;
-        }
-        .product-name {
-            font-weight: bold;
-        }
-        .info-row {
-            margin-bottom: 10px;
-        }
-        .buy-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .buy-qty-input {
-            width: 60px;
-        }
-        .auto-row {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        .summary-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 20px;
-        }
-        .purchase-button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .purchase-button:hover {
-            background-color: #367c39;
-        }
-        .set-prices-section {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        // New styles for quick order
-        .quick-order-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-.quick-order-row input {
-            width: 60px;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        .quick-order-row button {
-            padding: 5px 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .quick-order-row button:hover {
-            background-color: #367c39;
-        }
-
-        .max-inv-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .max-inv-row input {
-            width: 60px;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        .max-inv-row button {
-            padding: 5px 10px;
-            background-color: #4CAF50; /* Or any suitable color */
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .max-inv-row button:hover {
-            background-color: #367c39; /* Or a darker shade of the button color */
-        }
-    `;
-    mainContent.appendChild(style);
+    search.addEventListener('input', render);
+    tabs.select(0);
 };

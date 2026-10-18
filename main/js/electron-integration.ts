@@ -43,10 +43,13 @@
 
             window.electronAPI.onUpdateDownloaded(() => {
                 console.log('Update downloaded');
-                // Prompt user to restart and install
-                if (window.confirm('The update has been downloaded. Restart the application to apply the update?')) {
-                    window.electronAPI!.quitAndInstall();
-                }
+                // Offer to restart now (in-game prompt: confirm() would block the game loop)
+                window.showConfirmModal(
+                    'An update has been downloaded. Restart now to install it? Save first if you want to keep your progress.',
+                    'Restart',
+                    () => window.electronAPI!.quitAndInstall(),
+                    { title: 'Update ready' },
+                );
             });
         }
 

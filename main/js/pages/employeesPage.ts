@@ -1,887 +1,199 @@
-// /js/pages/employeesPage.js - IMPROVED VERSION
+// /js/pages/employeesPage.js - the staff table and hiring.
+//
+// Daily wages are salary / 365, which is what end of day charges
+// (finances.applyDailyCosts); the page used to show salary / 30.
 
-function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): HTMLElement {
-    mainContent.innerHTML = '';
+const SKILL_COLUMNS: Array<{ key: keyof EmployeeSkills; short: string; long: string }> = [
+    { key: 'compounding', short: 'Comp.', long: 'Compounding' },
+    { key: 'dispensing', short: 'Disp.', long: 'Dispensing' },
+    { key: 'customerService', short: 'Service', long: 'Customer service' },
+    { key: 'inventoryManagement', short: 'Inv.', long: 'Inventory management' },
+    { key: 'sales', short: 'Sales', long: 'Sales' },
+];
 
-    // Main container for the Employees page
-    const container = document.createElement('div');
-    container.className = 'employees-page-container';
+const dailyWage = (employee: Employee): number => employee.salary / 365;
 
-    // Page Title
-    const title = document.createElement('h2');
-    title.textContent = 'Employee Management';
-    container.appendChild(title);
+function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
 
-    const subtitle = document.createElement('p');
-    subtitle.textContent = "Hire, manage, and assign employees to maximize your pharmacy's productivity.";
-    container.appendChild(subtitle);
+    const root = kit.page(mainContent, 'Employees', 'Your staff, what they cost, and hiring.');
 
-    // Tabs Container
-    const tabsContainer = document.createElement('div');
-    tabsContainer.className = 'tabs-container';
-    container.appendChild(tabsContainer);
-
-    // Tab Buttons
-    const employeesTabButton = document.createElement('button');
-    employeesTabButton.className = 'tab-button active';
-    employeesTabButton.textContent = 'Current Staff';
-    tabsContainer.appendChild(employeesTabButton);
-
-    const hireTabButton = document.createElement('button');
-    hireTabButton.className = 'tab-button';
-    hireTabButton.textContent = 'Hire New Staff';
-    tabsContainer.appendChild(hireTabButton);
-
-    // Tab Content Containers
-    const employeesTabContent = document.createElement('div');
-    employeesTabContent.className = 'tab-content employees-content';
-    container.appendChild(employeesTabContent);
-
-    const hireTabContent = document.createElement('div');
-    hireTabContent.className = 'tab-content hire-content';
-    hireTabContent.style.display = 'none';
-    container.appendChild(hireTabContent);
-
-    // --------------------------------------------------------------
-    // EMPLOYEES TAB CONTENT
-    // --------------------------------------------------------------
-
-    // Staff Summary Cards
-    const summaryContainer = document.createElement('div');
-    summaryContainer.className = 'staff-summary-container';
-
-    // Total Staff
-    const totalStaffCard = document.createElement('div');
-    totalStaffCard.className = 'summary-card';
-    totalStaffCard.innerHTML = `
-        <div class="summary-content">
-            <h3>Total Staff</h3>
-            <p class="summary-value">${window.employeesData.length}</p>
-        </div>
-    `;
-    summaryContainer.appendChild(totalStaffCard);
-
-    // Daily Wage
-    const dailyWageTotal = window.employeesData.reduce((total, emp) => total + emp.salary / 30, 0);
-    const dailyWageCard = document.createElement('div');
-    dailyWageCard.className = 'summary-card';
-    dailyWageCard.innerHTML = `
-        <div class="summary-content">
-            <h3>Daily Wages</h3>
-            <p class="summary-value">$${dailyWageTotal.toFixed(2)}</p>
-        </div>
-    `;
-    summaryContainer.appendChild(dailyWageCard);
-
-    // Average Morale
-    const avgMorale = window.employeesData.reduce((total, emp) => total + emp.morale, 0) / window.employeesData.length;
-    const moraleCard = document.createElement('div');
-    moraleCard.className = 'summary-card';
-    moraleCard.innerHTML = `
-        <div class="summary-content">
-            <h3>Avg. Morale</h3>
-            <p class="summary-value">${avgMorale.toFixed(1)}%</p>
-        </div>
-    `;
-    summaryContainer.appendChild(moraleCard);
-
-    employeesTabContent.appendChild(summaryContainer);
-
-    // Search Bar
-    const searchContainer = document.createElement('div');
-    searchContainer.className = 'search-container';
-
-    const searchInput = document.createElement('input');
-    searchInput.type = 'text';
-    searchInput.placeholder = 'Search employees...';
-    searchInput.className = 'search-input';
-    searchContainer.appendChild(searchInput);
-
-    employeesTabContent.appendChild(searchContainer);
-
-    // Employee Cards Container
-    const employeesGrid = document.createElement('div');
-    employeesGrid.className = 'employees-grid';
-    employeesTabContent.appendChild(employeesGrid);
-
-    // --------------------------------------------------------------
-    // HIRE TAB CONTENT
-    // --------------------------------------------------------------
-
-    // Job Posting Section
-    const jobPostingSection = document.createElement('div');
-    jobPostingSection.className = 'job-posting-section';
-
-    const jobPostingTitle = document.createElement('h3');
-    jobPostingTitle.textContent = 'Create Job Posting';
-    jobPostingSection.appendChild(jobPostingTitle);
-
-    const jobPostingDescription = document.createElement('p');
-    jobPostingDescription.textContent = 'Select the role and experience level you want to hire for.';
-    jobPostingSection.appendChild(jobPostingDescription);
-
-    // Role Selection
-    const roleSelectionContainer = document.createElement('div');
-    roleSelectionContainer.className = 'form-group';
-
-    const roleSelectLabel = document.createElement('label');
-    roleSelectLabel.textContent = 'Position:';
-    roleSelectLabel.className = 'form-label';
-    roleSelectionContainer.appendChild(roleSelectLabel);
-
-    const roleSelect = document.createElement('select');
-    roleSelect.className = 'form-select';
-
-    const availableRoles = ['Pharmacist', 'Lab Technician', 'Cashier'];
-    availableRoles.forEach((role) => {
-        const option = document.createElement('option');
-        option.value = role;
-        option.text = role;
-        roleSelect.appendChild(option);
+    const staffView = el('div', 'stack');
+    const hireView = el('div', 'stack');
+    const tabs = kit.tabs(['Staff', 'Hiring'], (index) => {
+        staffView.style.display = index === 0 ? '' : 'none';
+        hireView.style.display = index === 1 ? '' : 'none';
     });
+    root.append(tabs.root, staffView, hireView);
 
-    roleSelectionContainer.appendChild(roleSelect);
-    jobPostingSection.appendChild(roleSelectionContainer);
+    // --------------------- Staff ---------------------
+    const kpis = el('div', 'kpi-row');
+    const staffTile = kit.statTile('Staff');
+    const wagesTile = kit.statTile('Wages per day');
+    const moraleTile = kit.statTile('Average morale');
+    kpis.append(staffTile.root, wagesTile.root, moraleTile.root);
+    staffView.appendChild(kpis);
 
-    // Experience Level Selection
-    const skillLevelContainer = document.createElement('div');
-    skillLevelContainer.className = 'form-group';
+    const staffCard = kit.card('Staff', { flush: true });
+    staffView.appendChild(staffCard.root);
 
-    const skillLevelLabel = document.createElement('label');
-    skillLevelLabel.textContent = 'Experience Level:';
-    skillLevelLabel.className = 'form-label';
-    skillLevelContainer.appendChild(skillLevelLabel);
+    const skillColumns = (): TableColumn[] =>
+        SKILL_COLUMNS.map((s) => ({ label: s.short, num: true, title: `${s.long} (0-100)` }));
 
-    const skillLevelSelect = document.createElement('select');
-    skillLevelSelect.className = 'form-select';
-
-    const skillLevels = [
-        { value: 'Novice', text: 'Entry Level' },
-        { value: 'Intermediate', text: 'Experienced' },
-        { value: 'Skilled', text: 'Senior' },
-    ];
-
-    skillLevels.forEach((level) => {
-        const option = document.createElement('option');
-        option.value = level.value;
-        option.text = level.text;
-        skillLevelSelect.appendChild(option);
-    });
-
-    skillLevelContainer.appendChild(skillLevelSelect);
-    jobPostingSection.appendChild(skillLevelContainer);
-
-    // Hiring Fee Display
-    const hiringFeeContainer = document.createElement('div');
-    hiringFeeContainer.className = 'hiring-fee-container';
-
-    const hiringFeeLabel = document.createElement('span');
-    hiringFeeLabel.textContent = 'Hiring Fee: $500';
-    hiringFeeContainer.appendChild(hiringFeeLabel);
-
-    jobPostingSection.appendChild(hiringFeeContainer);
-
-    // Generate Candidates Button
-    const generateCandidatesButton = document.createElement('button');
-    generateCandidatesButton.className = 'primary-button';
-    generateCandidatesButton.textContent = 'Find Candidates';
-    generateCandidatesButton.onclick = () => {
-        const role = roleSelect.value;
-        const skillLevel = skillLevelSelect.value;
-        window.employees.hireEmployee(role, skillLevel);
-    };
-
-    jobPostingSection.appendChild(generateCandidatesButton);
-
-    hireTabContent.appendChild(jobPostingSection);
-
-    // Candidates Container
-    const candidatesSection = document.createElement('div');
-    candidatesSection.className = 'candidates-section';
-
-    const candidatesTitle = document.createElement('h3');
-    candidatesTitle.textContent = 'Available Candidates';
-    candidatesSection.appendChild(candidatesTitle);
-
-    const candidatesContainer = document.createElement('div');
-    candidatesContainer.className = 'candidates-container';
-    candidatesSection.appendChild(candidatesContainer);
-
-    hireTabContent.appendChild(candidatesSection);
-
-    // --------------------------------------------------------------
-    // RENDERING FUNCTIONS
-    // --------------------------------------------------------------
-
-    // Render Employee Cards
-    function renderEmployees(searchText: string = ''): void {
-        employeesGrid.innerHTML = ''; // Clear existing cards
-
-        const filteredEmployees = window.employeesData.filter((employee) => {
-            if (!searchText) return true;
-
-            const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-            return (
-                fullName.includes(searchText.toLowerCase()) ||
-                employee.role.toLowerCase().includes(searchText.toLowerCase())
-            );
-        });
-
-        if (filteredEmployees.length === 0) {
-            const noResults = document.createElement('div');
-            noResults.className = 'no-results';
-            noResults.textContent = 'No employees match your search criteria.';
-            employeesGrid.appendChild(noResults);
-            return;
-        }
-
-        filteredEmployees.forEach((employee) => {
-            const card = createEmployeeCard(employee);
-            employeesGrid.appendChild(card);
-        });
+    function moraleCell(morale: number): HTMLElement {
+        const tone: Tone = morale >= 70 ? 'good' : morale >= 40 ? 'warn' : 'critical';
+        return kit.meterCell(morale / 100, `${Math.round(morale)}%`, tone).root;
     }
 
-    // Create an employee card
-    function createEmployeeCard(employee: Employee): HTMLDivElement {
-        const card = document.createElement('div');
-        card.className = 'employee-card';
+    function renderStaff(): void {
+        staffCard.body.innerHTML = '';
+        const table = kit.table([
+            { label: 'Employee' },
+            { label: 'Working on', width: '220px' },
+            { label: 'Salary', num: true },
+            { label: 'Morale', width: '120px' },
+            ...skillColumns(),
+            { label: '', className: 'actions' },
+        ]);
+        staffCard.body.appendChild(table.root);
 
-        // Header with name and role
-        const header = document.createElement('div');
-        header.className = 'card-header';
+        const staff = window.employeesData;
+        if (staff.length === 0) table.empty('No staff. Hire someone on the Hiring tab.');
 
-        const name = document.createElement('h3');
-        name.textContent = `${employee.firstName} ${employee.lastName}`;
-        header.appendChild(name);
-
-        const role = document.createElement('div');
-        role.className = 'employee-role';
-        role.textContent = employee.role;
-        header.appendChild(role);
-
-        // Status badge (busy or available)
-        const status = document.createElement('div');
-        status.className = `status-badge ${employee.currentTaskId ? 'busy' : 'available'}`;
-        status.textContent = employee.currentTaskId ? 'Busy' : 'Available';
-        header.appendChild(status);
-
-        card.appendChild(header);
-
-        // Details section
-        const details = document.createElement('div');
-        details.className = 'employee-details';
-
-        // Salary
-        const salary = document.createElement('div');
-        salary.className = 'detail-item';
-        salary.innerHTML = `<span class="label">Salary:</span> $${employee.salary.toLocaleString()}/year`;
-        details.appendChild(salary);
-
-        // Morale with colored indicator and mood emoji
-        const morale = document.createElement('div');
-        morale.className = 'detail-item';
-
-        let moraleColor = '#f44336'; // Red
-        if (employee.morale >= 70)
-            moraleColor = '#4caf50'; // Green
-        else if (employee.morale >= 40) moraleColor = '#ff9800'; // Orange
-
-        morale.innerHTML = `
-            <span class="label">Morale:</span> 
-            <span style="color: ${moraleColor};">${employee.morale}%</span> 
-            <span class="mood-emoji">${employee.mood}</span>`;
-        details.appendChild(morale);
-
-        // Hired date
-        const hired = document.createElement('div');
-        hired.className = 'detail-item';
-        hired.innerHTML = `<span class="label">Hired:</span> ${new Date(employee.hireDate).toLocaleDateString()}`;
-        details.appendChild(hired);
-
-        card.appendChild(details);
-
-        // Skills section
-        const skillsSection = document.createElement('div');
-        skillsSection.className = 'skills-section';
-
-        const skillsHeader = document.createElement('h4');
-        skillsHeader.textContent = 'Skills';
-        skillsSection.appendChild(skillsHeader);
-
-        const skillsGrid = document.createElement('div');
-        skillsGrid.className = 'skills-grid';
-
-        for (const [skill, value] of Object.entries(employee.skills)) {
-            const skillBar = document.createElement('div');
-            skillBar.className = 'skill-bar';
-
-            // Format skill name (camelCase to Title Case)
-            const formattedSkill = skill.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-
-            skillBar.innerHTML = `
-                <div class="skill-name">${formattedSkill}</div>
-                <div class="skill-progress">
-                    <div class="skill-progress-fill" style="width: ${value}%"></div>
-                </div>
-                <div class="skill-value">${value}</div>
-            `;
-
-            skillsGrid.appendChild(skillBar);
-        }
-
-        skillsSection.appendChild(skillsGrid);
-        card.appendChild(skillsSection);
-
-        // Current task section (if any)
-        if (employee.currentTaskId) {
-            const task = window.taskManager.tasks.find((t) => t.id === employee.currentTaskId);
-
+        let idle = 0;
+        staff.forEach((employee) => {
+            const task = employee.currentTaskId ? window.taskManager.getTaskById(employee.currentTaskId) : undefined;
+            const working = el('div');
             if (task) {
-                const taskSection = document.createElement('div');
-                taskSection.className = 'task-section';
-
-                const taskHeader = document.createElement('h4');
-                taskHeader.textContent = 'Current Task';
-                taskSection.appendChild(taskHeader);
-
-                let taskTypeDisplay = task.type;
-                if (task.type === 'fillPrescription') taskTypeDisplay = 'Filling Prescription';
-                else if (task.type === 'customerInteraction') taskTypeDisplay = 'Customer Interaction';
-                else if (task.type === 'consultation') taskTypeDisplay = 'Consultation';
-                else if (task.type === 'compound') taskTypeDisplay = 'Compounding';
-
-                const taskInfo = document.createElement('div');
-                taskInfo.className = 'task-info';
-                taskInfo.textContent = taskTypeDisplay;
-                taskSection.appendChild(taskInfo);
-
-                // Progress bar
-                if (task.status === 'inProgress' && task.totalTime > 0 && window.taskbars) {
-                    taskSection.appendChild(window.taskbars.createProgressBar(task));
-                }
-
-                card.appendChild(taskSection);
+                const label = el('div');
+                label.append(kit.swatch(window.words.taskKind(task)), window.words.taskLabel(task));
+                working.appendChild(label);
+                if (task.status === 'inProgress') working.appendChild(window.taskbars.createProgressBar(task));
+            } else {
+                idle++;
+                working.appendChild(kit.pill('Idle'));
             }
-        }
 
-        // Action buttons
-        const actionsSection = document.createElement('div');
-        actionsSection.className = 'actions-section';
+            const fire = kit.button(
+                'Terminate',
+                'danger',
+                () =>
+                    window.showConfirmModal(
+                        `Terminate ${employee.firstName} ${employee.lastName}? Anything they're working on goes back in the queue.`,
+                        'Terminate',
+                        () => window.employees.fireEmployee(employee.id),
+                        { title: 'Terminate employee', danger: true },
+                    ),
+                { small: true },
+            );
 
-        // Fire button
-        const fireButton = document.createElement('button');
-        fireButton.className = 'action-button fire-button';
-        fireButton.textContent = 'Terminate';
-        fireButton.onclick = () => confirmFireEmployee(employee);
-        actionsSection.appendChild(fireButton);
+            const row = table.row([
+                kit.primaryCell(`${employee.firstName} ${employee.lastName}`, employee.role),
+                working,
+                kit.primaryCell(`${fmt.moneyWhole(employee.salary)}/yr`, `${fmt.money(dailyWage(employee))}/day`),
+                moraleCell(employee.morale),
+                ...SKILL_COLUMNS.map((s) => employee.skills?.[s.key] ?? '—'),
+                fire,
+            ]);
+            row.className = 'employee-card';
+        });
 
-        card.appendChild(actionsSection);
-
-        return card;
+        const wages = staff.reduce((sum, e) => sum + dailyWage(e), 0);
+        const morale = staff.length > 0 ? staff.reduce((sum, e) => sum + e.morale, 0) / staff.length : 0;
+        staffTile.set(fmt.int(staff.length), staff.length > 0 ? `${idle} idle` : '');
+        wagesTile.set(fmt.money(wages), `${fmt.moneyWhole(wages * 365)} a year`);
+        moraleTile.set(staff.length > 0 ? `${Math.round(morale)}%` : '—');
+        staffCard.setCount(staff.length);
     }
 
-    // Function to display employee candidates
-    window.displayEmployeeCandidates = function (candidates) {
-        const candidatesContainer = document.querySelector('.candidates-container');
-        if (!candidatesContainer) {
-            console.error('Candidates container not found!');
-            return;
-        }
+    // --------------------- Hiring ---------------------
+    const HIRING_FEE = 500;
+    const postingCard = kit.card('Post a job');
+    hireView.appendChild(postingCard.root);
 
-        candidatesContainer.innerHTML = ''; // Clear previous candidates
+    const roleSelect = kit.select(
+        ['Pharmacist', 'Lab Technician', 'Cashier'].map((role) => ({ value: role, label: role })),
+        'Pharmacist',
+    );
+    const levelSelect = kit.select(
+        [
+            { value: 'Novice', label: 'Entry level' },
+            { value: 'Intermediate', label: 'Experienced' },
+            { value: 'Skilled', label: 'Senior' },
+        ],
+        'Novice',
+    );
+    const post = kit.button(`Post job (${fmt.moneyWhole(HIRING_FEE)})`, 'primary', () =>
+        window.employees.hireEmployee(roleSelect.value, levelSelect.value),
+    );
+    const form = el('div', 'toolbar');
+    const roleField = el('label', 'field', 'Position');
+    roleField.appendChild(roleSelect);
+    const levelField = el('label', 'field', 'Experience');
+    levelField.appendChild(levelSelect);
+    form.append(roleField, levelField, post);
+    postingCard.body.append(
+        form,
+        el(
+            'p',
+            'small muted',
+            `Posting costs ${fmt.moneyWhole(HIRING_FEE)} whether or not you hire, and shows five candidates. ` +
+                'Pharmacists consult, lab technicians restock and compound, cashiers run the front desk.',
+        ),
+    );
+    form.style.marginBottom = '8px';
+
+    const candidatesCard = kit.card('Candidates', { flush: true });
+    hireView.appendChild(candidatesCard.root);
+    const candidatesBody = el('div');
+    candidatesBody.className = 'candidates-container';
+    candidatesCard.body.appendChild(candidatesBody);
+
+    window.displayEmployeeCandidates = function (candidates) {
+        candidatesBody.innerHTML = '';
+        const table = kit.table([
+            { label: 'Candidate' },
+            { label: 'Salary', num: true },
+            ...skillColumns(),
+            { label: '', className: 'actions' },
+        ]);
+        candidatesBody.appendChild(table.root);
+        candidatesCard.setCount(candidates.length || null);
 
         if (candidates.length === 0) {
-            const noCandidates = document.createElement('p');
-            noCandidates.className = 'no-candidates';
-            noCandidates.textContent = 'No candidates available. Create a job posting to find candidates.';
-            candidatesContainer.appendChild(noCandidates);
+            table.empty('Post a job to see candidates.');
             return;
         }
 
         candidates.forEach((candidate) => {
-            const candidateCard = document.createElement('div');
-            candidateCard.className = 'candidate-card';
-
-            // Candidate header
-            const header = document.createElement('div');
-            header.className = 'candidate-header';
-
-            const name = document.createElement('h3');
-            name.textContent = `${candidate.firstName} ${candidate.lastName}`;
-            header.appendChild(name);
-
-            const role = document.createElement('div');
-            role.className = 'candidate-role';
-            role.textContent = candidate.role;
-            header.appendChild(role);
-
-            candidateCard.appendChild(header);
-
-            // Candidate details
-            const details = document.createElement('div');
-            details.className = 'candidate-details';
-
-            // Salary expectation
-            const salary = document.createElement('div');
-            salary.className = 'detail-item';
-            salary.innerHTML = `<span class="label">Salary:</span> $${candidate.salary.toLocaleString()}/year`;
-            details.appendChild(salary);
-
-            // Skills summary
-            const skills = document.createElement('div');
-            skills.className = 'candidate-skills';
-
-            const skillsHeader = document.createElement('h4');
-            skillsHeader.textContent = 'Key Skills';
-            skills.appendChild(skillsHeader);
-
-            // Find top 3 skills
-            const topSkills = Object.entries(candidate.skills)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
-
-            topSkills.forEach(([skill, value]) => {
-                const skillItem = document.createElement('div');
-                skillItem.className = 'skill-item';
-
-                // Format skill name
-                const formattedSkill = skill.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-
-                skillItem.innerHTML = `
-                    <span class="skill-name">${formattedSkill}:</span>
-                    <span class="skill-value">${value}</span>
-                `;
-
-                skills.appendChild(skillItem);
-            });
-
-            details.appendChild(skills);
-            candidateCard.appendChild(details);
-
-            // Hire button
-            const hireButton = document.createElement('button');
-            hireButton.className = 'hire-button';
-            hireButton.textContent = 'Hire';
-            hireButton.onclick = () => {
-                window.employees.hireSelectedEmployee(candidate);
-                candidatesContainer.removeChild(candidateCard); // Remove the card after hiring
-
-                // Show success message
-                alert(`Successfully hired ${candidate.firstName} ${candidate.lastName} as a ${candidate.role}!`);
-            };
-
-            candidateCard.appendChild(hireButton);
-
-            candidatesContainer.appendChild(candidateCard);
+            const hire = kit.button(
+                'Hire',
+                'primary',
+                () => {
+                    window.employees.hireSelectedEmployee(candidate);
+                    row.remove();
+                },
+                { small: true },
+            );
+            const row = table.row([
+                kit.primaryCell(`${candidate.firstName} ${candidate.lastName}`, candidate.role),
+                kit.primaryCell(`${fmt.moneyWhole(candidate.salary)}/yr`, `${fmt.money(dailyWage(candidate))}/day`),
+                ...SKILL_COLUMNS.map((s) => candidate.skills?.[s.key] ?? '—'),
+                hire,
+            ]);
+            row.className = 'candidate-card';
         });
     };
+    window.displayEmployeeCandidates([]);
 
-    // Function to confirm firing an employee
-    function confirmFireEmployee(employee: Employee): void {
-        if (confirm(`Are you sure you want to terminate ${employee.firstName} ${employee.lastName}?`)) {
-            window.employees.fireEmployee(employee.id);
-        }
-    }
+    // Hires, firings, and staff starting and finishing tasks
+    renderStaff();
+    page.on('employees', renderStaff);
+    page.on('tasks', renderStaff);
 
-    // --------------------------------------------------------------
-    // EVENT LISTENERS
-    // --------------------------------------------------------------
-
-    // Tab event listeners
-    employeesTabButton.addEventListener('click', function () {
-        this.classList.add('active');
-        hireTabButton.classList.remove('active');
-        employeesTabContent.style.display = 'block';
-        hireTabContent.style.display = 'none';
-        renderEmployees(searchInput.value);
-    });
-
-    hireTabButton.addEventListener('click', function () {
-        this.classList.add('active');
-        employeesTabButton.classList.remove('active');
-        hireTabContent.style.display = 'block';
-        employeesTabContent.style.display = 'none';
-    });
-
-    // Search input event listener
-    searchInput.addEventListener('input', function () {
-        renderEmployees(this.value);
-    });
-
-    // Initial rendering, then again on every hire and firing, and as staff
-    // start and finish tasks (the Busy/Available badge)
-    renderEmployees();
-    const refreshEmployees = (): void => renderEmployees(searchInput.value);
-    page.on('employees', refreshEmployees);
-    page.on('tasks', refreshEmployees);
-
-    // Add CSS styling for the page
-    const style = document.createElement('style');
-    style.textContent = `
-        /* Main Container */
-        .employees-page-container {
-            padding: 20px;
-            font-family: sans-serif;
-        }
-        
-        /* Tabs */
-        .tabs-container {
-            display: flex;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .tab-button {
-            padding: 10px 20px;
-            background: none;
-            border: none;
-            border-bottom: 3px solid transparent;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        
-        .tab-button.active {
-            border-bottom-color: #1a237e;
-            color: #1a237e;
-        }
-        
-        /* Summary Cards */
-        .staff-summary-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .summary-card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            padding: 15px;
-        }
-        
-        .summary-card h3 {
-            margin-top: 0;
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .summary-value {
-            font-size: 22px;
-            font-weight: bold;
-            color: #1a237e;
-        }
-        
-        /* Search Bar */
-        .search-container {
-            margin-bottom: 20px;
-        }
-        
-        .search-input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        
-        /* Employee Cards */
-        .employees-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        
-        .employee-card {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .card-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            position: relative;
-        }
-        
-        .card-header h3 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
-        }
-        
-        .employee-role {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .status-badge {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            font-size: 12px;
-            padding: 3px 8px;
-            border-radius: 12px;
-        }
-        
-        .status-badge.busy {
-            background-color: #fff3e0;
-            color: #ff9800;
-        }
-        
-        .status-badge.available {
-            background-color: #e8f5e9;
-            color: #4caf50;
-        }
-        
-        .employee-details {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .detail-item {
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        .label {
-            font-weight: 500;
-            color: #666;
-        }
-        
-        .mood-emoji {
-            margin-left: 5px;
-        }
-        
-        /* Skills Section */
-        .skills-section {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .skills-section h4 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .skills-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 8px;
-        }
-        
-        .skill-bar {
-            display: grid;
-            grid-template-columns: 120px 1fr 30px;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .skill-name {
-            font-size: 13px;
-            color: #666;
-        }
-        
-        .skill-progress {
-            height: 8px;
-            background-color: #eee;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .skill-progress-fill {
-            height: 100%;
-            background-color: #1a237e;
-        }
-        
-        .skill-value {
-            font-size: 13px;
-            font-weight: 500;
-            text-align: right;
-        }
-        
-        /* Task Section */
-        .task-section {
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .task-section h4 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .task-info {
-            font-size: 14px;
-            margin-bottom: 10px;
-            font-weight: 500;
-        }
-        
-        .progress-container {
-            margin-top: 10px;
-        }
-        
-        .progress-label {
-            font-size: 13px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .progress-bar {
-            height: 8px;
-            background-color: #eee;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background-color: #4caf50;
-        }
-        
-        /* Actions Section */
-        .actions-section {
-            padding: 15px;
-            display: flex;
-            justify-content: flex-end;
-        }
-        
-        .action-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        
-        .fire-button {
-            background-color: #ffebee;
-            color: #f44336;
-        }
-        
-        /* Hire Tab Styles */
-        .job-posting-section {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .job-posting-section h3 {
-            margin-top: 0;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        
-        .form-select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-            margin-bottom: 15px;
-        }
-        
-        .hiring-fee-container {
-            margin: 15px 0;
-            font-weight: 500;
-        }
-        
-        .primary-button {
-            padding: 10px 20px;
-            background-color: #1a237e;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        
-        /* Candidates Section */
-        .candidates-section {
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            padding: 20px;
-        }
-        
-        .candidates-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        
-        .candidate-card {
-            border: 1px solid #eee;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .candidate-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            background-color: #f9f9f9;
-        }
-        
-        .candidate-header h3 {
-            margin: 0 0 5px 0;
-            font-size: 18px;
-        }
-        
-        .candidate-role {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .candidate-details {
-            padding: 15px;
-        }
-        
-        .candidate-skills {
-            margin-top: 15px;
-        }
-        
-        .candidate-skills h4 {
-            margin-top: 0;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-        
-        .skill-item {
-            margin-bottom: 5px;
-            font-size: 14px;
-        }
-        
-        .hire-button {
-            width: 100%;
-            padding: 10px;
-            background-color: #1a237e;
-            color: white;
-            border: none;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    `;
-
-    mainContent.appendChild(style);
-    mainContent.appendChild(container);
-
-    return container;
+    tabs.select(0);
 }
 
-// Export the function to make it accessible to other modules
 window.renderEmployeesPage = renderEmployeesPage;

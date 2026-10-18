@@ -187,6 +187,8 @@ interface ChartDataset {
     backgroundColor: string | string[];
     borderColor: string | string[];
     borderWidth: number;
+    // Any other Chart.js dataset option (borderRadius, maxBarThickness, ...)
+    [option: string]: unknown;
 }
 
 interface ChartData {
@@ -242,11 +244,6 @@ interface FinancesApi {
     resetDailyStats: () => void;
     startNewWeek: () => void;
     startNewMonth: () => void;
-    getDailySalesChartData: () => ChartData;
-    getMonthlySalesChartData: () => ChartData;
-    getMonthlyFinancialChartData: () => ChartData;
-    getExpenseCategoriesChartData: () => ChartData;
-    getRevenueCategoriesChartData: () => ChartData;
     getDailySales: (date: Date) => number;
     getDailyProfitLoss: (date: Date) => number;
     getFilteredTransactions: (options?: TransactionFilterOptions) => Transaction[];
@@ -716,6 +713,142 @@ interface TaskbarsApi {
     createProgressBar: (task: Task) => HTMLDivElement;
 }
 
+// ---------------------------------------------------------------
+// The UI kit (main/components/kit.ts, findings section 9.1)
+// ---------------------------------------------------------------
+
+// Colour roles for pills, meters and stat-tile subtitles. Status tones are
+// for state and always sit next to a label or number.
+type Tone = 'neutral' | 'info' | 'brand' | 'good' | 'warn' | 'critical';
+
+// Task kinds, each with a fixed identity colour (--task-*).
+type TaskKind = 'compound' | 'fill' | 'desk' | 'consult';
+
+interface Formatters {
+    money: (amount: number) => string; // $1,234.56
+    moneyWhole: (amount: number) => string; // $1,235
+    int: (n: number) => string; // 1,234
+    pct: (fraction: number, digits?: number) => string; // 0.25 -> 25%
+    signedPct: (fraction: number, digits?: number) => string; // +12% / −5%
+    clock: (date: Date) => string; // 09:26
+    day: (date: Date) => string; // Mon, Jan 2
+    duration: (gameMinutes: number) => string; // 12m / 1h 05m
+}
+
+interface PlayerWords {
+    customerStage: (status: CustomerStatus) => { label: string; tone: Tone };
+    taskKind: (task: Task) => TaskKind;
+    taskLabel: (task: Task) => string;
+    taskStatus: (status: TaskStatus) => string;
+    prescriptionStatus: (status: PrescriptionStatus) => string;
+    mood: (mood: number) => { label: string; tone: Tone };
+}
+
+type TableCell = Node | string | number | null | undefined;
+
+interface TableColumn {
+    label: string;
+    num?: boolean;
+    width?: string;
+    title?: string;
+    className?: string;
+}
+
+interface DataTable {
+    root: HTMLDivElement;
+    table: HTMLTableElement;
+    tbody: HTMLTableSectionElement;
+    row: (cells: TableCell[], className?: string) => HTMLTableRowElement;
+    group: (label: string) => HTMLTableRowElement;
+    empty: (text: string) => void;
+    // A muted full-width row (a summary line inside the table).
+    note: (text: string) => HTMLTableRowElement;
+    clear: () => void;
+}
+
+interface Card {
+    root: HTMLElement;
+    body: HTMLDivElement;
+    setCount: (count: number | string | null) => void;
+}
+
+interface StatTile {
+    root: HTMLDivElement;
+    set: (value: string, sub?: string, subTone?: Tone) => void;
+}
+
+interface MeterCell {
+    root: HTMLDivElement;
+    set: (fraction: number, text: string, tone?: Tone) => void;
+}
+
+interface Segmented<T> {
+    root: HTMLDivElement;
+    set: (value: T) => void;
+}
+
+interface Modal {
+    root: HTMLDivElement;
+    close: () => void;
+}
+
+interface Kit {
+    el: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K];
+    // A page root with its header, appended to container.
+    page: (container: HTMLElement, title: string, subtitle?: string, actions?: Node[]) => HTMLDivElement;
+    card: (title?: string, options?: { actions?: Node[]; flush?: boolean }) => Card;
+    statTile: (label: string) => StatTile;
+    meter: (fraction: number, tone?: Tone) => HTMLDivElement;
+    setMeter: (meter: HTMLElement, fraction: number, tone?: Tone) => void;
+    meterCell: (fraction: number, text: string, tone?: Tone) => MeterCell;
+    pill: (text: string, tone?: Tone) => HTMLSpanElement;
+    button: (
+        label: string,
+        variant?: 'primary' | 'secondary' | 'danger' | 'ghost',
+        onClick?: (event: MouseEvent) => void,
+        options?: { small?: boolean; title?: string },
+    ) => HTMLButtonElement;
+    numberInput: (
+        value: number | string,
+        options?: {
+            min?: number;
+            max?: number;
+            step?: number | string;
+            width?: string;
+            small?: boolean;
+            label?: string;
+        },
+    ) => HTMLInputElement;
+    select: <T extends string | number>(
+        options: Array<{ value: T; label: string }>,
+        current: T,
+        onChange?: (value: string) => void,
+    ) => HTMLSelectElement;
+    segmented: <T>(
+        options: Array<{ value: T; label: string; title?: string }>,
+        current: T,
+        onChange: (value: T) => void,
+    ) => Segmented<T>;
+    tabs: (
+        labels: string[],
+        onChange: (index: number) => void,
+    ) => { root: HTMLDivElement; select: (index: number) => void };
+    table: (columns: TableColumn[]) => DataTable;
+    swatch: (kind: TaskKind) => HTMLSpanElement;
+    // Bold primary text with an optional muted line under it, for table cells.
+    primaryCell: (primary: string, sub?: string) => HTMLSpanElement;
+    modal: (options: {
+        title: string;
+        subtitle?: string;
+        body: Node[];
+        actions: Node[];
+        className?: string;
+        onEscape?: () => void;
+    }) => Modal;
+}
+
+type ToastTone = 'info' | 'success' | 'warn' | 'error';
+
 // What a system announces with window.updateUI(topic) when it changes
 // state a page shows. 'inventory' covers product stock and prices and
 // material stock.
@@ -856,6 +989,10 @@ declare class Chart {
         ctx: CanvasRenderingContext2D,
         config: { type: string; data: ChartData; options?: Record<string, unknown> },
     );
+    data: ChartData;
+    // 'none' redraws without animating
+    update(mode?: string): void;
+    destroy(): void;
 }
 
 interface BootstrapApi {
@@ -868,7 +1005,12 @@ interface Window {
     insuranceData: InsurancePlan[];
     brandReputation: BrandReputationApi;
     showDailySummaryModal: (onNextDay?: () => void) => void;
-    showConfirmModal: (message: string, confirmLabel: string, onConfirm: () => void) => void;
+    showConfirmModal: (
+        message: string,
+        confirmLabel: string,
+        onConfirm: () => void,
+        options?: { title?: string; danger?: boolean },
+    ) => void;
     gameAPI?: GameApi;
     electronAPI?: ElectronApi;
     employeesData: Employee[];
@@ -882,10 +1024,6 @@ interface Window {
     // compile fine against a required type.
     showPage: (pageName: string) => void;
     currentPage: string;
-    // Never actually assigned anywhere in the codebase (topBar.js always
-    // falls back to 'Manager') — a pre-existing "silently does nothing" gap,
-    // not something this migration fixes. See docs/Changelog.md.
-    username?: string;
     // Both owned by electron-integration.ts. `silent` skips the success
     // notification (autosave).
     saveGame?: (options?: { silent?: boolean }) => Promise<boolean>;
@@ -899,11 +1037,6 @@ interface Window {
     // Page renderers. showPage looks them up by name (`render${Page}Page`)
     // and passes each a PageScope for the time it's on screen.
     renderOperationsPage?: PageRenderer;
-    renderDashboardPage?: PageRenderer;
-    renderOrdersPage?: PageRenderer;
-    renderCustomersPage?: PageRenderer;
-    renderMarketingPage?: PageRenderer;
-    renderStatisticsPage?: PageRenderer;
     renderInventoryPage?: PageRenderer;
     renderEquipmentPage?: PageRenderer;
     renderResearchPage?: PageRenderer;
@@ -922,10 +1055,13 @@ interface Window {
     production: ProductionApi;
     taskbars: TaskbarsApi;
     updateTaskProgressBars: () => void;
+    fmt: Formatters;
+    words: PlayerWords;
+    kit: Kit;
+    toast: (message: string, tone?: ToastTone, options?: { sticky?: boolean }) => HTMLDivElement;
     renderTopBar: () => HTMLElement;
     renderSidebar: () => HTMLElement;
     updateActiveNavItem: (pageName: string) => void;
-    updateSidebarReputation: () => void;
     customers: CustomersApi;
     insuranceClaims: InsuranceClaimsApi;
     materialsData: Material[];

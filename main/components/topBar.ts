@@ -1,4 +1,5 @@
-// improved-topBar.js
+// topBar.js - the bar across the top: the pharmacy, its money, the clock
+// with pause and speed (Space, 1-4), Save and notifications.
 
 // Notifications. Timestamps are game time, like everything else the player
 // reads in the game. updateUI finds the badge and list by id, so it does
@@ -66,16 +67,13 @@
 
                         // textContent, not innerHTML - messages can carry
                         // player-supplied text (names, pharmacy name).
-                        const content = document.createElement('div');
-                        content.className = 'notification-content';
                         const messageEl = document.createElement('span');
                         messageEl.className = 'notification-message';
                         messageEl.textContent = notification.message;
                         const timeEl = document.createElement('span');
                         timeEl.className = 'notification-time';
                         timeEl.textContent = window.ui.formatTime(notification.timestamp);
-                        content.append(messageEl, timeEl);
-                        notificationItem.appendChild(content);
+                        notificationItem.append(messageEl, timeEl);
 
                         // Mark as read when clicked
                         notificationItem.addEventListener('click', () => {
@@ -97,9 +95,31 @@ function showUnreadCount(countElem: HTMLElement, unreadCount: number): void {
     countElem.style.display = unreadCount > 0 ? 'block' : 'none';
 }
 
+const GAME_SPEEDS = [0.5, 1, 2, 5];
+
+// Space pauses, 1-4 pick a speed. Ignored while typing, with a modifier
+// held, or while a dialog is open.
+function handleTimeHotkeys(event: KeyboardEvent): void {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const target = event.target as HTMLElement | null;
+    if (target && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName))) return;
+    if (document.querySelector('.modal-backdrop')) return;
+
+    if (event.code === 'Space') {
+        event.preventDefault();
+        window.toggleGamePause();
+        window.ui.updateTime();
+    } else if (/^Digit[1-4]$/.test(event.code)) {
+        window.setGameSpeed(GAME_SPEEDS[Number(event.code.slice(5)) - 1]);
+        window.ui.updateTime();
+    }
+}
+
 let welcomed = false;
 
 window.renderTopBar = function renderTopBar(): HTMLElement {
+    const { el } = window.kit;
+
     // The first top bar of a session greets the player (in game time, so it
     // goes before the badge below is drawn).
     if (!welcomed) {
@@ -107,131 +127,107 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
         window.notifications!.add('Welcome to The Pharmacy!', 'success');
     }
 
-    const topBar = document.createElement('header');
-    topBar.className = 'top-bar';
+    const topBar = el('header', 'top-bar');
 
-    const topBarContent = document.createElement('div');
-    topBarContent.className = 'top-bar-content';
+    // -------- The pharmacy --------
+    const title = el('div', 'top-bar-title');
+    const name = el('span', 'pharmacy-name', window.gameState.pharmacyName || 'Your Pharmacy');
+    name.id = 'pharmacyName';
+    name.title = name.textContent!;
+    title.append(name, el('span', 'game-name', 'The Pharmacy'));
+    topBar.appendChild(title);
 
-    // -------- Left Section --------
-    const leftSection = document.createElement('div');
-    leftSection.className = 'top-bar-left';
+    // -------- Money (ui.ts keeps these current on 'finances') --------
+    const figures = el('div', 'top-bar-figures');
+    const figure = (id: string, label: string, value: number, hint: string): void => {
+        const box = el('div', 'top-figure');
+        box.title = hint;
+        const valueEl = el('span', 'top-figure-value', window.fmt.money(value));
+        valueEl.id = id;
+        box.append(el('span', 'top-figure-label', label), valueEl);
+        figures.appendChild(box);
+    };
+    figure('currentCash', 'Cash', window.financesData.cash, 'Cash on hand');
+    figure('dailyIncome', 'Income today', window.financesData.dailyIncome, 'Everything taken in since opening');
+    figure(
+        'pendingInsurance',
+        'Insurance owed',
+        window.financesData.pendingInsuranceIncome,
+        'Claims filed and not yet paid by insurers',
+    );
+    topBar.appendChild(figures);
 
-    // Logo/Title with icon
-    const titleContainer = document.createElement('div');
-    titleContainer.className = 'title-container';
+    topBar.appendChild(el('div', 'top-bar-spacer'));
 
-    // Pharmacy icon (pill/capsule icon using Unicode)
-    const iconSpan = document.createElement('span');
-    iconSpan.className = 'pharmacy-icon';
-    iconSpan.innerHTML = '💊';
-    titleContainer.appendChild(iconSpan);
+    // -------- Clock, pause and speed --------
+    const clock = el('div', 'top-bar-clock');
 
-    const titleElem = document.createElement('h1');
-    titleElem.className = 'game-title';
-    titleElem.textContent = 'The Pharmacy';
-    titleContainer.appendChild(titleElem);
+    const controls = el('div', 'time-controls');
+    const pauseButton = el('button', 'icon-button');
+    pauseButton.id = 'pauseButton';
+    pauseButton.type = 'button';
+    pauseButton.addEventListener('click', () => {
+        window.toggleGamePause();
+        window.ui.updateTime();
+    });
+    const speed = window.kit.segmented(
+        GAME_SPEEDS.map((value, i) => ({ value, label: `${value}×`, title: `Speed ${value}× (key ${i + 1})` })),
+        window.getGameSpeed(),
+        (value) => {
+            window.setGameSpeed(value);
+            window.ui.updateTime();
+        },
+    );
+    speed.root.id = 'speedControl';
+    controls.append(pauseButton, speed.root);
+    clock.appendChild(controls);
 
-    leftSection.appendChild(titleContainer);
-
-    // Username display
-    const usernameContainer = document.createElement('div');
-    usernameContainer.className = 'username-container';
-
-    const userIcon = document.createElement('span');
-    userIcon.className = 'user-icon';
-    userIcon.innerHTML = '👤';
-    usernameContainer.appendChild(userIcon);
-
-    const usernameDisplay = document.createElement('span');
-    usernameDisplay.id = 'usernameDisplay';
-    usernameDisplay.className = 'username-display';
-    usernameDisplay.textContent = window.username || 'Manager';
-    usernameContainer.appendChild(usernameDisplay);
-
-    leftSection.appendChild(usernameContainer);
-
-    // -------- Right Section --------
-    const rightSection = document.createElement('div');
-    rightSection.className = 'top-bar-right';
-
-    // Financial Summary with icons
-    const financialSummary = document.createElement('div');
-    financialSummary.className = 'financial-summary';
-
-    // Cash display
-    const cashContainer = document.createElement('div');
-    cashContainer.className = 'summary-item-container';
-
-    const cashIcon = document.createElement('span');
-    cashIcon.className = 'summary-icon';
-    cashIcon.innerHTML = '💰';
-    cashContainer.appendChild(cashIcon);
-
-    const currentCash = document.createElement('span');
-    currentCash.id = 'currentCash';
-    currentCash.className = 'summary-item';
-    currentCash.textContent = `$${window.financesData.cash.toFixed(2)}`;
-    cashContainer.appendChild(currentCash);
-
-    financialSummary.appendChild(cashContainer);
-
-    // Daily income
-    const incomeContainer = document.createElement('div');
-    incomeContainer.className = 'summary-item-container';
-
-    const incomeIcon = document.createElement('span');
-    incomeIcon.className = 'summary-icon';
-    incomeIcon.innerHTML = '📈';
-    incomeContainer.appendChild(incomeIcon);
-
-    const dailyIncome = document.createElement('span');
-    dailyIncome.id = 'dailyIncome';
-    dailyIncome.className = 'summary-item';
-    dailyIncome.textContent = `$${window.financesData.dailyIncome.toFixed(2)}`;
-    incomeContainer.appendChild(dailyIncome);
-
-    financialSummary.appendChild(incomeContainer);
-
-    // Pending insurance
-    const insuranceContainer = document.createElement('div');
-    insuranceContainer.className = 'summary-item-container';
-
-    const insuranceIcon = document.createElement('span');
-    insuranceIcon.className = 'summary-icon';
-    insuranceIcon.innerHTML = '🏥';
-    insuranceContainer.appendChild(insuranceIcon);
-
-    const pendingInsurance = document.createElement('span');
-    pendingInsurance.id = 'pendingInsurance';
-    pendingInsurance.className = 'summary-item';
-    pendingInsurance.textContent = `$${window.financesData.pendingInsuranceIncome.toFixed(2)}`;
-    insuranceContainer.appendChild(pendingInsurance);
-
-    financialSummary.appendChild(insuranceContainer);
-
-    // Game time with calendar icon
-    const timeContainer = document.createElement('div');
-    timeContainer.className = 'time-container';
-
-    const timeIcon = document.createElement('span');
-    timeIcon.className = 'time-icon';
-    timeIcon.innerHTML = '📅';
-    timeContainer.appendChild(timeIcon);
-
-    const gameTime = document.createElement('span');
+    const timeBox = el('div', 'top-figure');
+    const gameTime = el('span', 'game-time', window.fmt.clock(window.gameState.currentDate));
     gameTime.id = 'gameTime';
-    gameTime.className = 'game-time';
-    gameTime.textContent = window.ui.formatDateTime(window.gameState.currentDate);
-    timeContainer.appendChild(gameTime);
+    const gameDay = el('span', 'game-day');
+    gameDay.id = 'gameDay';
+    timeBox.append(gameTime, gameDay);
+    clock.appendChild(timeBox);
 
-    rightSection.appendChild(financialSummary);
-    rightSection.appendChild(timeContainer);
+    const storeStatus = el('span');
+    storeStatus.id = 'storeStatus';
+    clock.appendChild(storeStatus);
+    topBar.appendChild(clock);
 
-    // Save button
-    const saveButton = document.createElement('button');
-    saveButton.className = 'save-button';
-    saveButton.innerHTML = '💾 Save';
+    // Pause, speed and open/closed follow the 'time' announcement, which the
+    // render loop makes every frame.
+    const showClockState = (): void => {
+        const paused = !!window.gameState?.isPaused;
+        const label = paused ? '▶ Resume' : '❚❚ Pause';
+        if (pauseButton.textContent !== label) pauseButton.textContent = label;
+        pauseButton.classList.toggle('paused', paused);
+        pauseButton.title = paused ? 'Resume (Space)' : 'Pause (Space)';
+        speed.set(window.getGameSpeed());
+        const open = !!window.gameState?.isDayActive;
+        const status = open ? 'Open' : 'Closed';
+        if (storeStatus.textContent !== status) {
+            storeStatus.textContent = status;
+            storeStatus.className = open ? 'pill good' : 'pill critical';
+        }
+    };
+    showClockState();
+    window.ui.subscribe('time', showClockState);
+    window.ui.updateTime();
+
+    // Bound for as long as this bar is on the page
+    const onKeyDown = (event: KeyboardEvent): void => {
+        if (!topBar.isConnected) {
+            document.removeEventListener('keydown', onKeyDown);
+            return;
+        }
+        handleTimeHotkeys(event);
+    };
+    document.addEventListener('keydown', onKeyDown);
+
+    // -------- Save and notifications --------
+    const saveButton = el('button', 'icon-button save-button', 'Save');
+    saveButton.type = 'button';
     saveButton.title = 'Save game (Ctrl+S)';
     saveButton.addEventListener('click', () => {
         if (typeof window.saveGame === 'function') {
@@ -240,284 +236,49 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
             console.error('window.saveGame is not available');
         }
     });
-    rightSection.appendChild(saveButton);
+    topBar.appendChild(saveButton);
 
-    // Notifications button (new feature)
-    const notificationsButton = document.createElement('button');
-    notificationsButton.className = 'notifications-button';
-    notificationsButton.innerHTML = '🔔';
+    const notificationsButton = el('button', 'icon-button notifications-button', '🔔');
+    notificationsButton.type = 'button';
     notificationsButton.title = 'Notifications';
-
-    // Add notification count badge
-    const notificationCount = document.createElement('span');
-    notificationCount.className = 'notification-count';
+    notificationsButton.setAttribute('aria-label', 'Notifications');
+    const notificationCount = el('span', 'notification-count');
     notificationCount.id = 'notificationCount';
     showUnreadCount(notificationCount, window.notifications!.unreadCount);
     notificationsButton.appendChild(notificationCount);
+    topBar.appendChild(notificationsButton);
 
-    // Notification click handler
-    notificationsButton.addEventListener('click', () => {
-        showNotificationsPanel();
-    });
+    const panel = el('div', 'notifications-panel');
+    panel.id = 'notificationsPanel';
+    panel.style.display = 'none';
+    const panelHeader = el('div', 'notifications-header');
+    panelHeader.appendChild(el('h3', '', 'Notifications'));
+    panelHeader.appendChild(
+        window.kit.button('Mark all read', 'ghost', () => window.notifications!.markAllAsRead(), { small: true }),
+    );
+    panel.appendChild(panelHeader);
+    const list = el('div', 'notifications-list');
+    list.id = 'notificationsList';
+    panel.appendChild(list);
+    topBar.appendChild(panel);
 
-    rightSection.appendChild(notificationsButton);
-
-    // Add sections to topbar
-    topBarContent.appendChild(leftSection);
-    topBarContent.appendChild(rightSection);
-    topBar.appendChild(topBarContent);
-
-    // Add notifications panel (hidden initially)
-    const notificationsPanel = document.createElement('div');
-    notificationsPanel.className = 'notifications-panel';
-    notificationsPanel.id = 'notificationsPanel';
-    notificationsPanel.style.display = 'none';
-
-    const notificationsHeader = document.createElement('div');
-    notificationsHeader.className = 'notifications-header';
-    notificationsHeader.innerHTML = `
-    <h3>Notifications</h3>
-    <button id="closeNotifications">✕</button>
-  `;
-    notificationsPanel.appendChild(notificationsHeader);
-
-    const notificationsList = document.createElement('div');
-    notificationsList.className = 'notifications-list';
-    notificationsList.id = 'notificationsList';
-    notificationsList.innerHTML = '<p class="no-notifications">No new notifications</p>';
-    notificationsPanel.appendChild(notificationsList);
-
-    topBar.appendChild(notificationsPanel);
-
-    // Function to show notifications panel
-    function showNotificationsPanel(): void {
-        const panel = document.getElementById('notificationsPanel');
-        if (panel) {
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-
-            // Update notifications list
-            window.notifications!.updateUI();
-
-            // Set up close button
-            const closeBtn = document.getElementById('closeNotifications');
-            if (closeBtn) {
-                closeBtn.onclick = function () {
-                    panel.style.display = 'none';
-                };
-            }
+    // Clicking anywhere else closes the panel
+    const closePanel = (event: MouseEvent): void => {
+        if (!panel.contains(event.target as Node) && !notificationsButton.contains(event.target as Node)) {
+            panel.style.display = 'none';
+            document.removeEventListener('mousedown', closePanel);
         }
-    }
-
-    // Add CSS for top bar
-    const style = document.createElement('style');
-    style.textContent = `
-    .top-bar {
-      background-color: var(--primary);
-      color: white;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      z-index: 1000;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .top-bar-content {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 20px;
-      height: var(--top-bar-height);
-    }
-
-    .top-bar-left, .top-bar-right {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-    }
-
-    .title-container, .username-container, .summary-item-container, .time-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .game-title {
-      font-size: 1.4rem;
-      font-weight: 600;
-      margin: 0;
-      color: white;
-    }
-
-    .username-display {
-      font-size: 0.9rem;
-      font-weight: 500;
-    }
-
-    .financial-summary {
-      display: flex;
-      gap: 20px;
-    }
-
-    .summary-item {
-      font-size: 0.9rem;
-    }
-
-    .summary-icon, .time-icon, .pharmacy-icon, .user-icon {
-      font-size: 1.2rem;
-    }
-
-    .game-time {
-      font-size: 0.9rem;
-    }
-
-    .save-button {
-      background-color: rgba(255, 255, 255, 0.15);
-      border: none;
-      color: white;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      padding: 6px 12px;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-    }
-
-    .save-button:hover {
-      background-color: rgba(255, 255, 255, 0.28);
-    }
-
-    .notifications-button {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 1.2rem;
-      cursor: pointer;
-      position: relative;
-      margin-left: 10px;
-      transition: transform 0.2s;
-    }
-
-    .notifications-button:hover {
-      transform: scale(1.1);
-    }
-
-    .notification-count {
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      background-color: #ff4b4b;
-      color: white;
-      font-size: 0.7rem;
-      height: 18px;
-      width: 18px;
-      border-radius: 50%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-weight: bold;
-    }
-
-    .notifications-panel {
-      position: absolute;
-      top: var(--top-bar-height);
-      right: 10px;
-      width: 300px;
-      max-height: 400px;
-      background-color: white;
-      border-radius: 0 0 8px 8px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      z-index: 1001;
-      overflow: hidden;
-      display: none;
-    }
-
-    .notifications-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 15px;
-      background-color: var(--primary);
-      color: white;
-    }
-
-    .notifications-header h3 {
-      margin: 0;
-      font-size: 1rem;
-    }
-
-    .notifications-header button {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-
-    .notifications-list {
-      max-height: 350px;
-      overflow-y: auto;
-    }
-
-    .notification-item {
-      padding: 12px 15px;
-      border-bottom: 1px solid #eee;
-      cursor: pointer;
-    }
-
-    .notification-item:hover {
-      background-color: #f9f9f9;
-    }
-
-    .notification-item.unread {
-      border-left: 3px solid #4caf50;
-      background-color: #f0f7ff;
-    }
-
-    .notification-item.read {
-      opacity: 0.7;
-    }
-
-    .notification-content {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .notification-message {
-      font-size: 0.9rem;
-      margin-bottom: 5px;
-    }
-
-    .notification-time {
-      font-size: 0.8rem;
-      color: #666;
-    }
-
-    .no-notifications {
-      padding: 15px;
-      text-align: center;
-      color: #666;
-      font-size: 0.9rem;
-    }
-
-    .notification-item.success {
-      border-left-color: #4caf50;
-    }
-
-    .notification-item.info {
-      border-left-color: #2196f3;
-    }
-
-    .notification-item.warning {
-      border-left-color: #ff9800;
-    }
-
-    .notification-item.error {
-      border-left-color: #f44336;
-    }
-  `;
-
-    document.head.appendChild(style);
+    };
+    notificationsButton.addEventListener('click', () => {
+        const opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'flex' : 'none';
+        if (opening) {
+            window.notifications!.updateUI();
+            document.addEventListener('mousedown', closePanel);
+        } else {
+            document.removeEventListener('mousedown', closePanel);
+        }
+    });
 
     return topBar;
 };

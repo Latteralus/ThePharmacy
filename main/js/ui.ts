@@ -80,16 +80,18 @@ window.ui = (function (): UiApi {
     }
 
     function updateTimeDisplay(): void {
-        if (!window.gameState?.currentDate) return;
-        show('gameTime', formatDateTime(window.gameState.currentDate));
+        const date = window.gameState?.currentDate;
+        if (!date) return;
+        show('gameTime', window.fmt.clock(date));
+        show('gameDay', `Day ${(window.gameState.dayIndex ?? 0) + 1} · ${window.fmt.day(date)}`);
     }
 
-    // Same "$X" format renderTopBar starts with (the icons are the labels).
+    // The same formats renderTopBar starts with.
     function updateFinancialDisplays(): void {
         if (!window.financesData) return;
-        show('currentCash', `$${window.financesData.cash.toFixed(2)}`);
-        show('dailyIncome', `$${window.financesData.dailyIncome.toFixed(2)}`);
-        show('pendingInsurance', `$${window.financesData.pendingInsuranceIncome.toFixed(2)}`);
+        show('currentCash', window.fmt.money(window.financesData.cash));
+        show('dailyIncome', window.fmt.money(window.financesData.dailyIncome));
+        show('pendingInsurance', window.fmt.money(window.financesData.pendingInsuranceIncome));
     }
 
     // ---------------------------------------------------------
@@ -116,6 +118,7 @@ window.ui = (function (): UiApi {
         }
 
         mainContent.innerHTML = '';
+        mainContent.scrollTop = 0;
         window.currentPage = pageName;
 
         const cleanups: Array<() => void> = [];

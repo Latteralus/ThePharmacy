@@ -1,75 +1,41 @@
-// /js/pages/equipmentPage.js
-
-interface EquipmentCardRefs {
-    rootDiv: HTMLDivElement;
-    updateLiveFields: () => void;
-    buyQtyInput: HTMLInputElement;
-    autoThreshInput: HTMLInputElement;
-    autoAmtInput: HTMLInputElement;
-    eqObj: EquipmentItem;
-}
+// /js/pages/equipmentPage.js - buy equipment and set auto-purchase.
+//
+// Auto-purchase settings apply as soon as they're changed (they used to be
+// saved only by a purchase, findings U14). Purchases and wear update owned
+// and condition in place; newly researched equipment redraws the table.
 
 window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope): void {
-    // Clear existing content
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
+    const { fmt } = window;
 
-    // Create a container for the Equipment page
-    const container = document.createElement('div');
-    container.className = 'equipment-page-container';
+    const root = kit.page(mainContent, 'Equipment', 'Buy lab equipment and keep it stocked automatically.');
 
-    // Title
-    const title = document.createElement('h2');
-    title.textContent = 'Equipment Management';
-    container.appendChild(title);
+    const toolbar = el('div', 'toolbar');
+    const search = el('input', 'input search');
+    search.type = 'search';
+    search.placeholder = 'Search equipment…';
+    search.setAttribute('aria-label', 'Search equipment');
+    toolbar.appendChild(search);
+    root.appendChild(toolbar);
 
-    // Subtitle
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'Purchase, manage, and view the status of your equipment here.';
-    container.appendChild(subtitle);
+    const card = kit.card(undefined, { flush: true });
+    root.appendChild(card.root);
 
-    // Filter/Search bar
-    const filterRow = document.createElement('div');
-    filterRow.className = 'filter-row';
-    const filterLabel = document.createElement('label');
-    filterLabel.textContent = 'Search:';
-    const filterInput = document.createElement('input');
-    filterInput.type = 'text';
-    filterInput.placeholder = 'Filter equipment...';
-    filterLabel.appendChild(filterInput);
-    filterRow.appendChild(filterLabel);
-    container.appendChild(filterRow);
+    // equipment id -> quantity to buy, kept across searches
+    const order = new Map<string, number>();
 
-    // Equipment grid container
-    const equipmentGrid = document.createElement('div');
-    equipmentGrid.className = 'equipment-grid';
-    container.appendChild(equipmentGrid);
+    const orderBar = el('div', 'order-bar');
+    const summary = el('span', 'muted');
+    const total = el('span', 'order-total');
+    total.id = 'total-cost-value';
+    const buy = kit.button('Buy equipment', 'primary', confirmPurchase);
+    orderBar.append(summary, total, buy);
+    root.appendChild(orderBar);
 
-    // Array to store references to dynamically updated elements
-    const equipmentCards: EquipmentCardRefs[] = [];
+    let liveFields: Array<() => void> = [];
 
-    // Bottom row for bulk purchase summary
-    const summaryRow = document.createElement('div');
-    summaryRow.className = 'summary-row';
-
-    const totalCostLabel = document.createElement('strong');
-    totalCostLabel.textContent = 'Total Purchase: $';
-    const totalCostValue = document.createElement('span');
-    totalCostValue.id = 'total-cost-value';
-    totalCostValue.textContent = '0.00';
-
-    const purchaseButton = document.createElement('button');
-    purchaseButton.textContent = 'Confirm Purchase';
-    purchaseButton.className = 'purchase-button';
-
-    const purchaseRowLeft = document.createElement('div');
-    purchaseRowLeft.appendChild(totalCostLabel);
-    purchaseRowLeft.appendChild(totalCostValue);
-
-    summaryRow.appendChild(purchaseRowLeft);
-    summaryRow.appendChild(purchaseButton);
-    container.appendChild(summaryRow);
-
-    // Which equipment the grid was drawn for (research unlocks more)
+    // Which equipment the table was drawn for (research unlocks more)
     let renderedUnlocked = '';
     function unlockedIds(): string {
         return window.equipmentData
@@ -78,134 +44,119 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
             .join();
     }
 
-    // Function to render equipment cards
-    function renderEquipment(): void {
-        equipmentGrid.innerHTML = '';
-        equipmentCards.length = 0;
-        renderedUnlocked = unlockedIds();
-
-        const filterText = filterInput.value.toLowerCase().trim();
-
-        window.equipmentData.forEach((eq) => {
-            if (!eq.isUnlocked()) {
-                return; // Skip this equipment if it's not unlocked
-            }
-
-            if (filterText && !eq.name.toLowerCase().includes(filterText)) {
-                return;
-            }
-
-            // Create card element
-            const card = document.createElement('div');
-            card.className = 'equipment-card';
-
-            // Title row with name and cost
-            const titleRow = document.createElement('div');
-            titleRow.className = 'title-row';
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'equipment-name';
-            nameSpan.textContent = eq.name;
-            const costSpan = document.createElement('span');
-            costSpan.className = 'equipment-cost';
-            costSpan.textContent = `$${eq.cost.toFixed(2)}`;
-            titleRow.appendChild(nameSpan);
-            titleRow.appendChild(costSpan);
-            card.appendChild(titleRow);
-
-            // Info row with owned, capacity, and durability
-            const infoRow = document.createElement('div');
-            infoRow.className = 'info-row';
-            const ownedLine = document.createElement('p');
-            const capacityLine = document.createElement('p');
-            capacityLine.textContent = `Capacity: ${eq.capacity}`;
-            const durabilityLine = document.createElement('p');
-            const updateLiveFields = (): void => {
-                ownedLine.textContent = `Owned: ${eq.owned}`;
-                durabilityLine.textContent = `Durability: ${eq.durability}%`;
-            };
-            updateLiveFields();
-            infoRow.appendChild(ownedLine);
-            infoRow.appendChild(capacityLine);
-            infoRow.appendChild(durabilityLine);
-            card.appendChild(infoRow);
-
-            // Buy row
-            const buyRow = document.createElement('div');
-            buyRow.className = 'buy-row';
-            const buyQtyLabel = document.createElement('span');
-            buyQtyLabel.textContent = 'Buy Qty:';
-            const buyQtyInput = document.createElement('input');
-            buyQtyInput.type = 'number';
-            buyQtyInput.value = '0';
-            buyQtyInput.min = '0';
-            buyQtyInput.className = 'buy-qty-input';
-            buyRow.appendChild(buyQtyLabel);
-            buyRow.appendChild(buyQtyInput);
-            card.appendChild(buyRow);
-
-            // Auto-purchase settings row
-            const autoRow = document.createElement('div');
-            autoRow.className = 'auto-row';
-            const autoTitle = document.createElement('strong');
-            autoTitle.textContent = 'Auto-Purchase Settings';
-            const autoThreshWrapper = document.createElement('div');
-            const autoThreshLabel = document.createElement('span');
-            autoThreshLabel.textContent = 'Threshold:';
-            const autoThreshInput = document.createElement('input');
-            autoThreshInput.type = 'number';
-            autoThreshInput.value = String(eq.autoPurchaseThreshold || 0);
-            autoThreshInput.min = '0';
-            autoThreshInput.className = 'auto-thresh-input';
-            autoThreshWrapper.appendChild(autoThreshLabel);
-            autoThreshWrapper.appendChild(autoThreshInput);
-            const autoAmtWrapper = document.createElement('div');
-            const autoAmtLabel = document.createElement('span');
-            autoAmtLabel.textContent = 'Amount:';
-            const autoAmtInput = document.createElement('input');
-            autoAmtInput.type = 'number';
-            autoAmtInput.value = String(eq.autoPurchaseAmount || 0);
-            autoAmtInput.min = '0';
-            autoAmtInput.className = 'auto-amt-input';
-            autoAmtWrapper.appendChild(autoAmtLabel);
-            autoAmtWrapper.appendChild(autoAmtInput);
-            autoRow.appendChild(autoTitle);
-            autoRow.appendChild(autoThreshWrapper);
-            autoRow.appendChild(autoAmtWrapper);
-            card.appendChild(autoRow);
-
-            equipmentGrid.appendChild(card);
-
-            // Store references for later use
-            [buyQtyInput, autoThreshInput, autoAmtInput].forEach((input) => {
-                input.addEventListener('input', updateTotalCostDisplay);
-            });
-
-            equipmentCards.push({
-                rootDiv: card,
-                updateLiveFields,
-                buyQtyInput,
-                autoThreshInput,
-                autoAmtInput,
-                eqObj: eq,
-            });
-        });
+    function condition(eq: EquipmentItem): { fraction: number; tone: Tone } {
+        const fraction = (eq.durability || 0) / 100;
+        return { fraction, tone: fraction > 0.6 ? 'good' : fraction > 0.3 ? 'warn' : 'critical' };
     }
 
-    // Function to calculate the total cost
-    function calculateTotalCost(): number {
+    function render(): void {
+        card.body.innerHTML = '';
+        liveFields = [];
+        renderedUnlocked = unlockedIds();
+
+        const table = kit.table([
+            { label: 'Equipment' },
+            { label: 'Price', num: true },
+            { label: 'Owned', num: true },
+            { label: 'Capacity', num: true },
+            { label: 'Condition', width: '150px' },
+            { label: 'Buy', num: true },
+            {
+                label: 'Auto-buy below',
+                num: true,
+                title: 'Checked every game hour: buys more when you own fewer than this. 0 is off.',
+            },
+            { label: 'Auto-buy amount', num: true },
+        ]);
+        card.body.appendChild(table.root);
+
+        const text = search.value.toLowerCase().trim();
+        const items = window.equipmentData.filter(
+            (eq) => eq.isUnlocked() && (!text || eq.name.toLowerCase().includes(text)),
+        );
+        if (items.length === 0) table.empty('No equipment matches your search.');
+
+        items.forEach((eq) => {
+            const owned = el('span');
+            const cond = kit.meterCell(0, '');
+
+            const buyQty = kit.numberInput(order.get(eq.id) ?? 0, { min: 0, small: true, width: '64px' });
+            buyQty.className += ' buy-qty-input';
+            buyQty.setAttribute('aria-label', `Number of ${eq.name} to buy`);
+            buyQty.addEventListener('input', () => {
+                const value = parseInt(buyQty.value, 10);
+                if (Number.isFinite(value) && value > 0) order.set(eq.id, value);
+                else order.delete(eq.id);
+                updateTotal();
+            });
+
+            const setting = (key: 'autoPurchaseThreshold' | 'autoPurchaseAmount', label: string): HTMLInputElement => {
+                const input = kit.numberInput(eq[key] || 0, { min: 0, small: true, width: '64px' });
+                input.setAttribute('aria-label', `${label} for ${eq.name}`);
+                input.addEventListener('change', () => {
+                    const value = parseInt(input.value, 10);
+                    if (!Number.isFinite(value) || value < 0) {
+                        window.toast(`${label} must be 0 or more.`, 'error');
+                        input.value = String(eq[key] || 0);
+                        return;
+                    }
+                    eq[key] = value;
+                });
+                return input;
+            };
+
+            const update = (): void => {
+                owned.textContent = fmt.int(eq.owned);
+                if (eq.owned > 0) {
+                    const c = condition(eq);
+                    cond.set(c.fraction, `${Math.round(eq.durability)}%`, c.tone);
+                    cond.root.style.visibility = '';
+                } else {
+                    cond.root.style.visibility = 'hidden';
+                }
+            };
+            update();
+            liveFields.push(update);
+
+            const row = table.row([
+                eq.name,
+                fmt.moneyWhole(eq.cost),
+                owned,
+                fmt.int(eq.capacity),
+                cond.root,
+                buyQty,
+                setting('autoPurchaseThreshold', 'Auto-buy point'),
+                setting('autoPurchaseAmount', 'Auto-buy amount'),
+            ]);
+            row.className = 'equipment-card';
+            row.dataset.equipmentId = eq.id;
+        });
+        updateTotal();
+    }
+
+    function orderTotal(): number {
         let sum = 0;
-        equipmentCards.forEach((entry) => {
-            const qty = parseInt(entry.buyQtyInput.value, 10) || 0;
-            if (qty > 0) {
-                sum += qty * entry.eqObj.cost;
-            }
+        order.forEach((qty, id) => {
+            const eq = window.equipmentData.find((e) => e.id === id);
+            if (eq) sum += qty * eq.cost;
         });
         return sum;
     }
 
-    // Function to confirm the purchase
+    function updateTotal(): void {
+        const sum = orderTotal();
+        let units = 0;
+        order.forEach((qty) => (units += qty));
+        summary.textContent = units > 0 ? `${units} item${units === 1 ? '' : 's'}` : 'Nothing to buy yet';
+        total.textContent = fmt.money(sum);
+        const short = sum > window.financesData.cash;
+        total.className = short ? 'order-total critical-text' : 'order-total';
+        buy.disabled = units === 0 || short;
+    }
+
     function confirmPurchase(): void {
-        const totalCost = calculateTotalCost();
+        const totalCost = orderTotal();
+        if (totalCost <= 0) return;
         const paid = window.finances.transact({
             type: 'expense',
             category: 'equipment',
@@ -214,126 +165,25 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
             requireFunds: true,
         });
         if (!paid) {
-            alert('Insufficient funds to complete the purchase.');
+            window.toast('Not enough cash for this purchase.', 'error');
             return;
         }
-
-        equipmentCards.forEach((entry) => {
-            const qty = parseInt(entry.buyQtyInput.value, 10) || 0;
-            if (qty > 0) {
-                entry.eqObj.owned += qty;
-                entry.buyQtyInput.value = '0';
-            }
-
-            entry.eqObj.autoPurchaseThreshold = parseInt(entry.autoThreshInput.value, 10) || 0;
-            entry.eqObj.autoPurchaseAmount = parseInt(entry.autoAmtInput.value, 10) || 0;
+        order.forEach((qty, id) => {
+            const eq = window.equipmentData.find((e) => e.id === id);
+            if (eq) eq.owned += qty;
         });
-
+        order.clear();
         window.updateUI('equipment');
-        updateTotalCostDisplay();
-
-        alert(`Purchase successful! Total cost: $${totalCost.toFixed(2)}`);
+        render();
+        window.toast(`Bought equipment for ${fmt.money(totalCost)}.`, 'success');
     }
 
-    // Function to update the total cost display
-    function updateTotalCostDisplay(): void {
-        const sum = calculateTotalCost();
-        totalCostValue.textContent = sum.toFixed(2);
-    }
-
-    // Purchases and wear update the cards in place, keeping anything the
-    // player has typed; newly researched equipment redraws the grid.
     page.on('equipment', () => {
-        if (unlockedIds() !== renderedUnlocked) {
-            renderEquipment();
-            updateTotalCostDisplay();
-        } else {
-            equipmentCards.forEach((entry) => entry.updateLiveFields());
-        }
+        if (unlockedIds() !== renderedUnlocked) render();
+        else liveFields.forEach((update) => update());
     });
+    page.on('finances', updateTotal);
+    search.addEventListener('input', render);
 
-    // Event listener for filter input
-    filterInput.addEventListener('input', () => {
-        renderEquipment();
-        updateTotalCostDisplay();
-    });
-
-    // Event listener for purchase button
-    purchaseButton.addEventListener('click', confirmPurchase);
-
-    // Initial rendering
-    mainContent.appendChild(container);
-    renderEquipment();
-    updateTotalCostDisplay();
-
-    // Add CSS styling
-    const style = document.createElement('style');
-    style.textContent = `
-      .equipment-page-container {
-          padding: 20px;
-          font-family: Arial, sans-serif;
-      }
-      .filter-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 20px;
-      }
-      .equipment-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 20px;
-      }
-      .equipment-card {
-          border: 1px solid #ccc;
-          border-radius: 4px;
-          padding: 10px;
-          background-color: #fff;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      .title-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-      }
-      .equipment-name {
-          font-weight: bold;
-      }
-      .info-row {
-          margin-bottom: 10px;
-      }
-      .buy-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 10px;
-      }
-      .buy-qty-input {
-          width: 60px;
-      }
-      .auto-row {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-      }
-      .summary-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-top: 20px;
-      }
-      .purchase-button {
-          padding: 10px 20px;
-          background-color: #4CAF50;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-      }
-      .purchase-button:hover {
-          background-color: #367c39;
-      }
-  `;
-    mainContent.appendChild(style);
+    render();
 };

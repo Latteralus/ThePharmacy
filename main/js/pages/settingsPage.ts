@@ -1,359 +1,122 @@
-// /js/pages/settingsPage.js
+// /js/pages/settingsPage.js - player settings only (no cheats, findings H5):
+// pause and speed (also in the top bar, with Space and 1-4), and the two
+// difficulty multipliers.
 
 window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope): void {
-    // Clear existing content
-    mainContent.innerHTML = '';
+    const kit = window.kit;
+    const { el } = kit;
 
-    // Create a container for the Settings page
-    const container = document.createElement('div');
-    container.className = 'settings-page-container';
+    const root = kit.page(
+        mainContent,
+        'Settings',
+        'Game speed and difficulty. Changes apply at once and are saved with your game.',
+    );
+    root.classList.add('settings-page-container');
+    root.style.maxWidth = '760px';
 
-    // Page Title and Description
-    const title = document.createElement('h2');
-    title.textContent = 'Game Settings';
-    container.appendChild(title);
+    function settingsCard(title: string): HTMLDivElement {
+        const card = kit.card(title);
+        root.appendChild(card.root);
+        const grid = el('div', 'settings-grid');
+        card.body.appendChild(grid);
+        return grid;
+    }
 
-    const subtitle = document.createElement('p');
-    subtitle.textContent = 'Configure game settings and simulation parameters.';
-    container.appendChild(subtitle);
+    function row(grid: HTMLElement, label: string, control: Node, hint?: string): void {
+        grid.append(el('div', 'label', label), control);
+        if (hint) grid.appendChild(el('div', 'hint', hint));
+    }
 
-    // Settings Sections Container
-    const settingsSections = document.createElement('div');
-    settingsSections.className = 'settings-sections';
-    container.appendChild(settingsSections);
+    // --------------------- Time ---------------------
+    const time = settingsCard('Time');
 
-    // 1. Game Time Controls
-    const timeSection = createSettingsSection('Game Time Controls');
-
-    // Whether the store is open (read-only: days end at closing time)
-    const dayActiveControl = createSettingItem('Store:');
-
-    const dayStatus = document.createElement('span');
-    dayStatus.id = 'day-status-indicator';
-    updateDayStatus(dayStatus);
-    dayActiveControl.appendChild(dayStatus);
-
-    timeSection.appendChild(dayActiveControl);
-
-    // Game Pause Setting
-    const pauseControl = createSettingItem('Game Status:');
-
-    const pauseStatus = document.createElement('span');
-    pauseStatus.id = 'pause-status-indicator';
-    updatePauseStatus(pauseStatus);
-    pauseControl.appendChild(pauseStatus);
-
-    const togglePauseButton = document.createElement('button');
-    togglePauseButton.textContent = window.gameState?.isPaused ? 'Resume Game' : 'Pause Game';
-    togglePauseButton.className = 'settings-button';
-    togglePauseButton.onclick = function () {
-        toggleGamePause();
-        updatePauseStatus(pauseStatus);
-        togglePauseButton.textContent = window.gameState?.isPaused ? 'Resume Game' : 'Pause Game';
-    };
-    pauseControl.appendChild(togglePauseButton);
-
-    timeSection.appendChild(pauseControl);
-
-    // Simulation Speed Setting
-    const speedControl = createSettingItem('Simulation Speed:');
-
-    const speedSelect = document.createElement('select');
-    speedSelect.className = 'settings-select';
-
-    const speedOptions = [
-        { value: 0.5, label: '0.5x (Slow)' },
-        { value: 1.0, label: '1.0x (Normal)' },
-        { value: 2.0, label: '2.0x (Fast)' },
-        { value: 5.0, label: '5.0x (Very Fast)' },
-    ];
-
-    speedOptions.forEach((option) => {
-        const optElement = document.createElement('option');
-        optElement.value = String(option.value);
-        optElement.textContent = option.label;
-
-        optElement.selected = option.value === window.getGameSpeed();
-
-        speedSelect.appendChild(optElement);
-    });
-
-    speedSelect.onchange = function () {
-        window.setGameSpeed(parseFloat(speedSelect.value));
-    };
-
-    speedControl.appendChild(speedSelect);
-    timeSection.appendChild(speedControl);
-
-    // Current Time Display
-    const currentTimeItem = createSettingItem('Current Game Time:');
-    const timeDisplay = document.createElement('span');
+    const timeDisplay = el('span', 'num');
     timeDisplay.id = 'current-time-display';
-    timeDisplay.className = 'settings-value';
-    updateTimeDisplay(timeDisplay);
-    currentTimeItem.appendChild(timeDisplay);
-    timeSection.appendChild(currentTimeItem);
+    timeDisplay.style.textAlign = 'left';
+    const dayStatus = el('span');
+    dayStatus.id = 'day-status-indicator';
+    const timeCell = el('div', 'toolbar');
+    timeCell.append(timeDisplay, dayStatus);
+    row(time, 'Current time', timeCell, 'The store opens at 07:00 and closes at 22:00.');
 
-    // Add time section to page
-    settingsSections.appendChild(timeSection);
-
-    // 2. Game Difficulty Settings
-    const difficultySection = createSettingsSection('Difficulty Settings');
-
-    // Customer Frequency
-    const customerFreqControl = createSettingItem('Customer Frequency:');
-
-    const customerFreqSelect = document.createElement('select');
-    customerFreqSelect.className = 'settings-select';
-
-    const customerFreqOptions = [
-        { value: 0.5, label: 'Low' },
-        { value: 1.0, label: 'Normal' },
-        { value: 1.5, label: 'High' },
-        { value: 2.0, label: 'Very High' },
-    ];
-
-    customerFreqOptions.forEach((option) => {
-        const optElement = document.createElement('option');
-        optElement.value = String(option.value);
-        optElement.textContent = option.label;
-
-        optElement.selected = option.value === (window.customerFrequencyMultiplier ?? 1);
-
-        customerFreqSelect.appendChild(optElement);
+    const pauseStatus = el('span');
+    pauseStatus.id = 'pause-status-indicator';
+    const pauseButton = kit.button('Pause', 'secondary', () => {
+        window.toggleGamePause();
+        window.ui.updateTime();
     });
+    const pauseCell = el('div', 'toolbar');
+    pauseCell.append(pauseStatus, pauseButton);
+    row(time, 'Game', pauseCell, 'Space pauses and resumes from any page.');
 
-    customerFreqSelect.onchange = function () {
-        setCustomerFrequency(parseFloat(customerFreqSelect.value));
-    };
+    const speedSelect = kit.select(
+        [
+            { value: 0.5, label: '0.5× (slow)' },
+            { value: 1, label: '1× (normal)' },
+            { value: 2, label: '2× (fast)' },
+            { value: 5, label: '5× (very fast)' },
+        ],
+        window.getGameSpeed(),
+        (value) => {
+            window.setGameSpeed(parseFloat(value));
+            window.ui.updateTime();
+        },
+    );
+    row(time, 'Speed', speedSelect, 'Keys 1-4 pick a speed. At 1×, one real second is one game minute.');
 
-    customerFreqControl.appendChild(customerFreqSelect);
-    difficultySection.appendChild(customerFreqControl);
+    // --------------------- Difficulty ---------------------
+    const difficulty = settingsCard('Difficulty');
+    row(
+        difficulty,
+        'Customer frequency',
+        kit.select(
+            [
+                { value: 0.5, label: 'Low' },
+                { value: 1, label: 'Normal' },
+                { value: 1.5, label: 'High' },
+                { value: 2, label: 'Very high' },
+            ],
+            window.customerFrequencyMultiplier ?? 1,
+            (value) => setCustomerFrequency(parseFloat(value)),
+        ),
+        'How many customers arrive each hour, on top of what your reputation brings.',
+    );
+    row(
+        difficulty,
+        'Operating costs',
+        kit.select(
+            [
+                { value: 0.5, label: 'Low' },
+                { value: 1, label: 'Normal' },
+                { value: 1.5, label: 'High' },
+            ],
+            window.operatingCostMultiplier ?? 1,
+            (value) => setOperatingCosts(parseFloat(value)),
+        ),
+        'Scales the overhead charged at closing each day.',
+    );
 
-    // Operating Costs
-    const costsControl = createSettingItem('Operating Costs:');
+    // --------------------- Live status ---------------------
+    function showStatus(): void {
+        const date = window.gameState?.currentDate;
+        if (date) timeDisplay.textContent = `${window.fmt.day(date)} · ${window.fmt.clock(date)}`;
 
-    const costsSelect = document.createElement('select');
-    costsSelect.className = 'settings-select';
+        const open = !!window.gameState?.isDayActive;
+        dayStatus.textContent = open ? 'Open' : 'Closed';
+        dayStatus.className = open ? 'pill good' : 'pill critical';
 
-    const costsOptions = [
-        { value: 0.5, label: 'Low' },
-        { value: 1.0, label: 'Normal' },
-        { value: 1.5, label: 'High' },
-    ];
+        const paused = !!window.gameState?.isPaused;
+        pauseStatus.textContent = paused ? 'Paused' : 'Running';
+        pauseStatus.className = paused ? 'pill warn' : 'pill good';
+        pauseButton.textContent = paused ? 'Resume' : 'Pause';
 
-    costsOptions.forEach((option) => {
-        const optElement = document.createElement('option');
-        optElement.value = String(option.value);
-        optElement.textContent = option.label;
-
-        optElement.selected = option.value === (window.operatingCostMultiplier ?? 1);
-
-        costsSelect.appendChild(optElement);
-    });
-
-    costsSelect.onchange = function () {
-        setOperatingCosts(parseFloat(costsSelect.value));
-    };
-
-    costsControl.appendChild(costsSelect);
-    difficultySection.appendChild(costsControl);
-
-    // Add difficulty section to page
-    settingsSections.appendChild(difficultySection);
-
-    // Add the container to the main content
-    mainContent.appendChild(container);
-
-    // Add CSS styling
-    addStyles(mainContent);
-
-    // Keep the time and status current (the top bar's clock announces
-    // 'time' every frame, paused or not)
-    page.on('time', () => {
-        updateTimeDisplay(timeDisplay);
-        updateDayStatus(dayStatus);
-        updatePauseStatus(pauseStatus);
-    });
-
-    // -----------------------------------
-    // Helper Functions
-    // -----------------------------------
-
-    // Create a settings section with title
-    function createSettingsSection(title: string): HTMLDivElement {
-        const section = document.createElement('div');
-        section.className = 'settings-section';
-
-        const sectionTitle = document.createElement('h3');
-        sectionTitle.textContent = title;
-        section.appendChild(sectionTitle);
-
-        return section;
+        const speed = String(window.getGameSpeed());
+        if (speedSelect.value !== speed && document.activeElement !== speedSelect) speedSelect.value = speed;
     }
+    showStatus();
 
-    // Create a setting item with label
-    function createSettingItem(label: string): HTMLDivElement {
-        const item = document.createElement('div');
-        item.className = 'settings-item';
-
-        const itemLabel = document.createElement('div');
-        itemLabel.className = 'settings-label';
-        itemLabel.textContent = label;
-        item.appendChild(itemLabel);
-
-        const itemControls = document.createElement('div');
-        itemControls.className = 'settings-controls';
-        item.appendChild(itemControls);
-
-        return itemControls;
-    }
-
-    // Update day status indicator
-    function updateDayStatus(element: HTMLElement | null): void {
-        if (!element) return;
-
-        const isActive = window.gameState?.isDayActive || false;
-        element.textContent = isActive ? '🟢 Open' : '🔴 Closed';
-        element.style.color = isActive ? '#4caf50' : '#f44336';
-        element.className = 'settings-value';
-    }
-
-    // Update pause status indicator
-    function updatePauseStatus(element: HTMLElement | null): void {
-        if (!element) return;
-
-        const isPaused = window.gameState?.isPaused || false;
-        element.textContent = isPaused ? '⏸️ Paused' : '▶️ Running';
-        element.style.color = isPaused ? '#ff9800' : '#4caf50';
-        element.className = 'settings-value';
-    }
-
-    // Update time display
-    function updateTimeDisplay(element: HTMLElement | null): void {
-        if (!element || !window.gameState?.currentDate) return;
-
-        element.textContent = window.ui.formatDateTime(window.gameState.currentDate);
-    }
-
-    // Add styles for the settings page
-    function addStyles(mainContent: HTMLElement): void {
-        const style = document.createElement('style');
-        style.textContent = `
-            .settings-page-container {
-                padding: 20px;
-                max-width: 800px;
-                margin: 0 auto;
-            }
-            
-            .settings-sections {
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-            }
-            
-            .settings-section {
-                background: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                padding: 20px;
-            }
-            
-            .settings-section h3 {
-                margin-top: 0;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #eee;
-                color: var(--primary);
-            }
-            
-            .settings-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
-                padding-bottom: 15px;
-                border-bottom: 1px solid #f5f5f5;
-            }
-            
-            .settings-label {
-                font-weight: 500;
-                flex: 1;
-            }
-            
-            .settings-controls {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                flex: 2;
-            }
-            
-            .settings-value {
-                font-weight: 500;
-                margin-right: 10px;
-                min-width: 100px;
-            }
-            
-            .settings-button {
-                background-color: var(--primary);
-                color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-            }
-            
-            .settings-button:hover {
-                background-color: var(--secondary);
-            }
-            
-            .settings-select {
-                padding: 8px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                min-width: 150px;
-            }
-        `;
-
-        mainContent.appendChild(style);
-    }
-};
-
-// -----------------------------------
-// Game Settings Functions
-// -----------------------------------
-
-// Toggle game pause
-//
-// Declared as `const ... = function` rather than `function toggleGamePause()`
-// deliberately: settingsPage.js loads after main.js in main.html, and a
-// top-level `function` declaration in a plain (non-module) script becomes a
-// `window` property, same as `window.toggleGamePause = ...` would. That was
-// silently clobbering main.ts's real `window.toggleGamePause` on every page
-// load — found while converting this file to TS (main.ts's own assignment
-// stopped type-checking against the resulting merged global type). `const`
-// keeps this local-only, matching what every caller of the bare identifier
-// here already got in practice (this file's own onclick handlers only ever
-// called the local one). See docs/Changelog.md.
-const toggleGamePause = function (): boolean {
-    if (!window.gameState) {
-        console.error('Game state not found');
-        return false;
-    }
-
-    window.gameState.isPaused = !window.gameState.isPaused;
-    console.log(`Game is now ${window.gameState.isPaused ? 'paused' : 'running'}`);
-
-    // If unpaused, reset timing variables to prevent large time jumps
-    if (!window.gameState.isPaused) {
-        const now = performance.now();
-        if (window.gameState.lastFrameTime !== undefined) window.gameState.lastFrameTime = now;
-        if (window.gameState.lastSimulationTime !== undefined) window.gameState.lastSimulationTime = now;
-        if (window.gameState.simulationAccumulator !== undefined) window.gameState.simulationAccumulator = 0;
-    }
-
-    return true;
+    // The render loop announces 'time' every frame, paused or not
+    page.on('time', showStatus);
 };
 
 // Set customer frequency multiplier (brandReputation.calcCustomers reads it)
