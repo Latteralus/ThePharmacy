@@ -1,5 +1,5 @@
 # tsc output from main/**/*.ts
-main/**/*.js
+build/
 dist/
 test-results/
 playwright-report/

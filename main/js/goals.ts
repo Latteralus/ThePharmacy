@@ -1,28 +1,43 @@
-// goals.js - milestones, and the win (Phase 8).
+// goals.js - milestones, and the win (Phase 8; a ladder for a long game
+// in Phase 10, #13).
 //
 // Checked once a day, at closing. Each goal is reached once, on the day
 // recorded in gameState.goalsReached; reaching the last of them wins the
-// game (gameState.wonOnDay), and play goes on. Targets are first guesses,
-// set from a simulated game: a steady player reaches the first few in the
-// first week or two. The money goals were $250,000 and $1,000,000, set when
-// a store netted $9-20k a day; a well-run one now nets about $1,500
-// (balance pass, 2026-10-23), so they're around day 50 and day 150.
+// game (gameState.wonOnDay), and play goes on. The ladder runs for years: a
+// steady player reaches the first few in the first weeks, $300,000 in the
+// bank in the first year or so (a well-run store nets about $1,500 a day,
+// balance pass 2026-10-23), and the last, five years open, can't come
+// sooner. Later phases add theirs before it: a second location (Phase 18),
+// a 503B licence (19), an approved drug (20). Ids are saved, so keep them:
+// the ten goals from before Phase 10 kept theirs, so a save's reached goals
+// carry over.
+
+const DAYS_A_YEAR = 365;
+
+// Cash less everything owed to the bank (the line of credit and term loans)
+function netCash(): number {
+    return window.financesData.cash - window.stakes.debt();
+}
+
+function daysOpen(): number {
+    return (window.gameState.lastEndedDayIndex ?? -1) + 1;
+}
+
+function servedCustomers(): number {
+    return window.records.totalCustomers('served');
+}
+
+function totalStaff(): number {
+    return window.company.locations.reduce((sum, loc) => sum + loc.employees.length, 0);
+}
+
+function reportsWhere(kind: PeriodReport['kind']): PeriodReport[] {
+    return (window.reports?.list ?? []).filter((r) => r.kind === kind);
+}
 
 const GOALS: GoalDef[] = [
-    {
-        id: 'week',
-        label: 'Open for a week',
-        target: 7,
-        unit: 'days',
-        value: () => (window.gameState.lastEndedDayIndex ?? -1) + 1,
-    },
-    {
-        id: 'served500',
-        label: 'Serve 500 customers',
-        target: 500,
-        unit: 'customers',
-        value: () => window.records.totalCustomers('served'),
-    },
+    { id: 'week', label: 'Open for a week', target: 7, unit: 'days', value: daysOpen },
+    { id: 'served500', label: 'Serve 500 customers', target: 500, unit: 'customers', value: servedCustomers },
     {
         id: 'reputation50',
         label: 'Reach reputation 50',
@@ -31,33 +46,28 @@ const GOALS: GoalDef[] = [
         value: () => window.brandReputation.reputationScore,
     },
     {
+        id: 'profitMonth',
+        label: 'Make a profit over a month',
+        target: 1,
+        unit: 'months',
+        value: () => reportsWhere('month').filter((r) => r.net > 0).length,
+    },
+    {
         id: 'research2',
         label: 'Reach research level 2',
         target: 2,
         unit: 'level',
         value: () => window.researchData.currentLevel,
     },
-    {
-        id: 'staff8',
-        label: 'Build a team of 8',
-        target: 8,
-        unit: 'staff',
-        value: () => window.employeesData.length,
-    },
+    { id: 'staff8', label: 'Build a team of 8', target: 8, unit: 'staff', value: totalStaff },
     {
         id: 'bank150k',
-        label: 'Have $150,000 in the bank',
+        label: 'Have $150,000 in the bank, net of loans',
         target: 150000,
         unit: 'money',
-        value: () => window.financesData.cash - window.stakes.loanBalance(),
+        value: netCash,
     },
-    {
-        id: 'served2500',
-        label: 'Serve 2,500 customers',
-        target: 2500,
-        unit: 'customers',
-        value: () => window.records.totalCustomers('served'),
-    },
+    { id: 'served2500', label: 'Serve 2,500 customers', target: 2500, unit: 'customers', value: servedCustomers },
     {
         id: 'reputation75',
         label: 'Reach reputation 75',
@@ -72,13 +82,37 @@ const GOALS: GoalDef[] = [
         unit: 'level',
         value: () => window.researchData.currentLevel,
     },
+    { id: 'year1', label: 'Open for a year', target: DAYS_A_YEAR, unit: 'days', value: daysOpen },
     {
         id: 'bank300k',
-        label: 'Have $300,000 in the bank',
+        label: 'Have $300,000 in the bank, net of loans',
         target: 300000,
         unit: 'money',
-        value: () => window.financesData.cash - window.stakes.loanBalance(),
+        value: netCash,
     },
+    {
+        id: 'profitYear250k',
+        label: 'Net $250,000 profit in a year',
+        target: 250000,
+        unit: 'money',
+        value: () => Math.max(0, ...reportsWhere('year').map((r) => r.net)),
+    },
+    { id: 'served10k', label: 'Serve 10,000 customers', target: 10000, unit: 'customers', value: servedCustomers },
+    {
+        id: 'reputation90',
+        label: 'Reach reputation 90',
+        target: 90,
+        unit: 'reputation',
+        value: () => window.brandReputation.reputationScore,
+    },
+    {
+        id: 'bank1m',
+        label: 'Have $1,000,000 in the bank, net of loans',
+        target: 1000000,
+        unit: 'money',
+        value: netCash,
+    },
+    { id: 'years5', label: 'Open for five years', target: 5 * DAYS_A_YEAR, unit: 'days', value: daysOpen },
 ];
 
 window.goals = {

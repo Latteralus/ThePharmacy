@@ -4,8 +4,8 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    // main/**/*.js is tsc output from the .ts sources (see .gitignore).
-    ignores: ['main/**/*.js', 'node_modules/', 'dist/', 'test-results/', 'playwright-report/'],
+    // build/ is tsc output from the .ts sources (see .gitignore).
+    ignores: ['build/', 'node_modules/', 'dist/', 'test-results/', 'playwright-report/'],
   },
 
   js.configs.recommended,

@@ -24,6 +24,7 @@ test.afterEach(() => {
 // See saveLoad.spec.js: unpackaged runs dock DevTools beside the page.
 async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
+    if (process.env.THEPHARMACY_HIDDEN === '1') return; // no window, no DevTools
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -73,9 +74,12 @@ test('closing in the red, bankruptcy, and loading the last save', async () => {
   // 21:59:59 would run it, and the test needs this save to stay put.
   await page.evaluate(() => window.autoSave.stop());
   await page.click('.save-button');
-  const saveFile = path.join(userDataDir, 'saves', 'pharmacy_save.json');
+  // The game's own save, named after it (Phase 10 save slots)
+  await expect.poll(() => page.evaluate(() => window.saveSession.slot)).toMatch(/^stakes-pharmacy-/);
+  const slot = await page.evaluate(() => window.saveSession.slot);
+  const saveFile = path.join(userDataDir, 'saves', `${slot}.json`);
   await expect.poll(() => fs.existsSync(saveFile)).toBe(true);
-  const savedCash = JSON.parse(fs.readFileSync(saveFile, 'utf8')).financesData.cash;
+  const savedCash = JSON.parse(fs.readFileSync(saveFile, 'utf8')).company.finances.cash;
 
   // --- In the red: the summary warns ---
   await page.evaluate(() => {
@@ -96,10 +100,17 @@ test('closing in the red, bankruptcy, and loading the last save', async () => {
 
   // Saving is refused, so the save on disk is untouched
   expect(await page.evaluate(() => window.saveGame())).toBe(false);
-  expect(JSON.parse(fs.readFileSync(saveFile, 'utf8')).financesData.cash).toBe(savedCash);
+  expect(JSON.parse(fs.readFileSync(saveFile, 'utf8')).company.finances.cash).toBe(savedCash);
 
-  // --- Load last save: back in business ---
+  // --- Load a save from before the trouble: back in business ---
   await page.click('.game-over .btn-primary');
+  // The named save, and an autosave from the first day's closing
+  const saves = page.locator('.saves-modal');
+  const named = saves.locator('tbody tr').filter({ hasNotText: 'Autosave' });
+  await expect(named).toHaveCount(1);
+  await expect(saves).not.toContainText('in the red');
+  await named.locator('button', { hasText: 'Load' }).click();
+  await page.locator('.confirm-modal button', { hasText: 'Load' }).click();
   await expect(page.locator('.game-over')).toHaveCount(0);
   const restored = await page.evaluate(() => ({
     bankrupt: window.gameState.bankrupt,

@@ -20,11 +20,13 @@ beforeEach(() => {
   window.updateUI = jest.fn();
   window.employeesData = [];
 
-  require('../../main/js/ids.js');
-  require('../../main/js/data/materials.js');
-  require('../../main/js/data/products.js');
-  require('../../main/js/data/finances.js');
-  require('../../main/js/insuranceClaims.js');
+  require('../../build/main/js/ids.js');
+  require('../../build/main/js/data/materials.js');
+  require('../../build/main/js/data/products.js');
+  require('../../build/main/js/data/finances.js');
+  require('../../build/main/js/insuranceClaims.js');
+  require('../../build/main/js/data/properties.js');
+  require('../../build/main/js/company.js');
   window.financesData.cash = 1000;
 });
 
@@ -89,7 +91,7 @@ describe('finances.transact', () => {
 
   test('daily costs are charged even when they take cash negative', () => {
     window.employeesData = [{ firstName: 'A', lastName: 'B', role: 'Cashier', salary: 365000 }];
-    window.financesData.overhead = 500;
+    window.company.dailyServices = () => 500;
 
     window.finances.applyDailyCosts();
 
@@ -100,6 +102,18 @@ describe('finances.transact', () => {
     expect(data.expenseCategories.overhead).toBe(500);
     expect(data.expenses.today).toBe(1750);
     expect(data.transactions).toHaveLength(2);
+    // Both are the location's
+    expect(data.transactions.map((t) => t.locationId)).toEqual(['loc-1', 'loc-1']);
+  });
+
+  test('utilities and services come from the building: a flat part and a part by floor space (Phase 10)', () => {
+    const location = window.company.active();
+    // The first listing: 2,000 sq ft in the suburbs
+    expect(location.building.sqft).toBe(2000);
+    expect(window.company.dailyServices(location)).toBe(350 + 200);
+    // A city is dearer, a small town cheaper
+    expect(window.properties.servicesPerDay('urban', 2000)).toBe(Math.round(550 * 1.15));
+    expect(window.properties.servicesPerDay('rural', 2000)).toBe(Math.round(550 * 0.8));
   });
 
   test('hours past 8 are overtime, paid at 1.5x the hourly rate at closing', () => {
@@ -107,7 +121,7 @@ describe('finances.transact', () => {
       { firstName: 'A', lastName: 'B', role: 'Cashier', salary: 365000, minutesWorkedToday: 10 * 60 },
       { firstName: 'C', lastName: 'D', role: 'Cashier', salary: 365000, minutesWorkedToday: 8 * 60 },
     ];
-    window.financesData.overhead = 0;
+    window.company.dailyServices = () => 0;
 
     window.finances.applyDailyCosts();
 
@@ -119,6 +133,52 @@ describe('finances.transact', () => {
     expect(overtimeEntries).toHaveLength(1);
     expect(overtimeEntries[0]).toMatchObject({ category: 'wages', amount: expect.closeTo(overtime) });
     expect(overtimeEntries[0].description).toBe('Overtime for A B: 2.0h at 1.5x');
+  });
+});
+
+describe('the ledger over a long game (Phase 10)', () => {
+  test('keeps every entry, newest first, with no cap, each for a location or the company', () => {
+    for (let i = 0; i < 1500; i++) {
+      window.gameState.currentDate = new Date(2023, 0, 2, 10, 0, i);
+      window.finances.transact({ type: 'income', category: 'copays', amount: 1, description: `sale ${i}` });
+    }
+    window.finances.transact({
+      type: 'expense',
+      category: 'interest',
+      amount: 1,
+      description: 'interest',
+      locationId: null,
+    });
+    const log = window.financesData.transactions;
+    expect(log).toHaveLength(1501);
+    expect(log[0].description).toBe('interest');
+    expect(log[1].description).toBe('sale 1499');
+    expect(log[0].locationId).toBeNull();
+    expect(log[1].locationId).toBe('loc-1');
+  });
+
+  test('category totals can be for one location, or the company alone', () => {
+    window.finances.transact({ type: 'income', category: 'copays', amount: 40, description: 'sale' });
+    window.finances.transact({
+      type: 'expense',
+      category: 'interest',
+      amount: 5,
+      description: 'interest',
+      locationId: null,
+    });
+    const now = window.gameState.currentDate.getTime();
+    expect(window.finances.categoryTotals(0, now)).toEqual({ revenue: { copays: 40 }, expenses: { interest: 5 } });
+    expect(window.finances.categoryTotals(0, now, 'loc-1')).toEqual({ revenue: { copays: 40 }, expenses: {} });
+    expect(window.finances.categoryTotals(0, now, null)).toEqual({ revenue: {}, expenses: { interest: 5 } });
+  });
+
+  test('the lease deposit moves cash but is not a cost', () => {
+    window.finances.transact({ type: 'expense', category: 'deposit', amount: 300, description: 'deposit' });
+    expect(window.financesData.cash).toBe(700);
+    expect(window.financesData.expenses.today).toBe(0);
+    expect(window.finances.isFinancing('deposit')).toBe(true);
+    const now = window.gameState.currentDate.getTime();
+    expect(window.finances.categoryTotals(0, now).expenses).toEqual({});
   });
 });
 

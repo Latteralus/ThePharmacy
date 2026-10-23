@@ -9,6 +9,37 @@
 // Pages build markup from these and never set colours inline or inject
 // <style> blocks.
 
+// Ledger categories in the player's words, and the order a P&L lists them
+// (the Finances page, the monthly and yearly reports): words.category,
+// words.REVENUE_CATEGORIES and words.EXPENSE_CATEGORIES
+const CATEGORY_LABELS: Record<string, string> = {
+    copays: 'Copays',
+    insurance: 'Insurance payments',
+    wages: 'Wages',
+    rent: 'Rent',
+    overhead: 'Utilities and services',
+    materials: 'Materials',
+    equipment: 'Equipment',
+    research: 'Research',
+    hiring: 'Hiring',
+    interest: 'Loan interest',
+    loan: 'Bank loans',
+    deposit: 'Lease deposit',
+    other: 'Other',
+};
+const REVENUE_CATEGORIES = ['copays', 'insurance', 'other'];
+const EXPENSE_CATEGORIES = [
+    'wages',
+    'rent',
+    'overhead',
+    'materials',
+    'equipment',
+    'research',
+    'hiring',
+    'interest',
+    'other',
+];
+
 (function () {
     // ---------------------------------------------------------
     // Formatters
@@ -36,6 +67,7 @@
         },
         clock: (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`,
         day: (date) => date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        date: (date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
         duration: (minutes) => {
             const total = Math.max(0, Math.round(minutes));
             if (total < 60) return `${total}m`;
@@ -56,6 +88,11 @@
 
     window.words = {
         customerStage: (status) => STAGES[status] ?? { label: String(status), tone: 'neutral' },
+
+        category: (key) => CATEGORY_LABELS[key] ?? key,
+        isCategory: (key) => key in CATEGORY_LABELS,
+        REVENUE_CATEGORIES,
+        EXPENSE_CATEGORIES,
 
         taskKind(task) {
             if (task.type === 'compound') return 'compound';

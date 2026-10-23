@@ -4,6 +4,11 @@
 // research levels) come from the data files on every launch, and the saved
 // state is merged onto them, so rebalancing a data file reaches old saves.
 //
+// From v10 (Phase 10) a save is the company (cash and the ledger, the bank,
+// reputation, research, claims, day records and reports) and its locations
+// (each with its building, lease, staff, stock, equipment, tasks, customers,
+// prescriptions and visits), plus the clock, notifications and settings.
+//
 // Changing the shape: bump SAVE_VERSION, add a step to `migrations` that
 // upgrades the previous version, and revive any new Date field in
 // reviveDates (JSON turns Dates into strings).
@@ -12,7 +17,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 9;
+    const SAVE_VERSION = 10;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -54,34 +59,56 @@ window.saveFile = (function (): SaveFileApi {
         });
     }
 
+    function freshDefinitions(): Pick<StoreLocation, 'products' | 'materials' | 'equipment'> {
+        return {
+            products: clone(defaults.products),
+            materials: clone(defaults.materials),
+            equipment: clone(defaults.equipment),
+        };
+    }
+
+    function serializeLocation(location: StoreLocation): SavedLocation {
+        const { products, materials, equipment, ...rest } = location;
+        return {
+            ...rest,
+            products: products.map((p) => pickState(p, PRODUCT_STATE)),
+            materials: materials.map((m) => pickState(m, MATERIAL_STATE)),
+            equipment: equipment.map((e) => pickState(e, EQUIPMENT_STATE)),
+        };
+    }
+
     function serialize(): SaveFile {
         // Frame-loop bookkeeping holds performance.now() timestamps that
         // mean nothing in another session.
         const { lastFrameTime, lastSimulationTime, simulationAccumulator, renderInfo, ...gameState } = window.gameState;
+        const notifications = window.notifications;
 
         return {
             version: SAVE_VERSION,
             timestamp: Date.now(),
             gameState,
-            financesData: window.financesData,
-            employeesData: window.employeesData,
-            brandReputation: { reputationScore: window.brandReputation.reputationScore },
-            products: window.productsData.map((p) => pickState(p, PRODUCT_STATE)),
-            materials: window.materialsData.map((m) => pickState(m, MATERIAL_STATE)),
-            equipment: window.equipmentData.map((e) => pickState(e, EQUIPMENT_STATE)),
-            research: {
-                currentLevel: window.researchData.currentLevel,
-                inProgress: window.researchData.inProgress,
+            company: {
+                name: window.company.name,
+                activeLocationId: window.company.activeId,
+                finances: window.financesData,
+                reputation: window.brandReputation.reputationScore,
+                research: {
+                    currentLevel: window.researchData.currentLevel,
+                    inProgress: window.researchData.inProgress,
+                },
+                insuranceClaims: {
+                    pending: window.insuranceClaims.pendingClaims,
+                    processed: window.insuranceClaims.processedClaims,
+                },
+                records: { days: window.records.days, pruned: window.records.pruned },
+                reports: window.reports.list,
             },
-            tasks: window.taskManager.tasks,
-            customers: window.customers.activeCustomers,
-            activePrescriptions: window.prescriptions.activePrescriptions,
-            refillRegistry: window.prescriptions.refillRegistry,
-            insuranceClaims: {
-                pending: window.insuranceClaims.pendingClaims,
-                processed: window.insuranceClaims.processedClaims,
+            locations: window.company.locations.map(serializeLocation),
+            notifications: {
+                items: notifications?.items ?? [],
+                unreadCount: notifications?.unreadCount ?? 0,
+                nextId: notifications?.nextId ?? 1,
             },
-            records: { days: window.records.days, visits: window.records.visits },
             settings: {
                 gameSpeed: window.getGameSpeed(),
                 globalMarkup: window.globalMarkup,
@@ -91,14 +118,15 @@ window.saveFile = (function (): SaveFileApi {
 
     // Upgrades a save of version N to N + 1.
     const migrations: {
-        1: (save: SaveFileV1) => SaveFile;
-        2: (save: SaveFile) => SaveFile;
-        3: (save: SaveFile) => SaveFile;
-        4: (save: SaveFile) => SaveFile;
-        5: (save: SaveFile) => SaveFile;
-        6: (save: SaveFile) => SaveFile;
-        7: (save: SaveFile) => SaveFile;
-        8: (save: SaveFile) => SaveFile;
+        1: (save: SaveFileV1) => SaveFileV9;
+        2: (save: SaveFileV9) => SaveFileV9;
+        3: (save: SaveFileV9) => SaveFileV9;
+        4: (save: SaveFileV9) => SaveFileV9;
+        5: (save: SaveFileV9) => SaveFileV9;
+        6: (save: SaveFileV9) => SaveFileV9;
+        7: (save: SaveFileV9) => SaveFileV9;
+        8: (save: SaveFileV9) => SaveFileV9;
+        9: (save: SaveFileV9) => SaveFile;
     } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
@@ -213,21 +241,20 @@ window.saveFile = (function (): SaveFileApi {
         },
 
         // v6 had difficulty levels, and Settings multipliers for customers an
-        // hour and overhead. Every game now plays at Normal: overhead goes
-        // back to the location's and the multipliers are dropped. Cash and
-        // reputation are the player's, so they stay.
+        // hour and overhead. Every game now plays at Normal: the multipliers
+        // are dropped (the overhead itself is replaced by rent and utilities
+        // in v10). Cash and reputation are the player's, so they stay.
         6(save) {
-            const { difficulty, ...gameState } = save.gameState as GameState & { difficulty?: string };
-            const financesData = { ...save.financesData, overhead: window.finances.dailyOverhead(gameState.location) };
+            const { difficulty, ...gameState } = save.gameState as SaveFileV9['gameState'] & { difficulty?: string };
             const settings = { gameSpeed: save.settings.gameSpeed, globalMarkup: save.settings.globalMarkup };
-            return { ...save, version: 7, gameState, financesData, settings };
+            return { ...save, version: 7, gameState, settings };
         },
 
         // v7 prices were set when materials cost 4x what they do now
         // (balance pass, 2026-10-23), so every one would be far over market
         // and every self-pay customer would walk out. Prices go back to the
-        // player's markup on today's costs, and overhead to today's rent.
-        // Cash, salaries and claims owed are the player's, so they stay.
+        // player's markup on today's costs. Cash, salaries and claims owed
+        // are the player's, so they stay.
         7(save) {
             const markup = save.settings.globalMarkup;
             const known = new Set(defaults.products.map((p) => p.id));
@@ -236,11 +263,7 @@ window.saveFile = (function (): SaveFileApi {
                     ? p
                     : { ...p, price: window.calculateProductCost(p.id) * markup },
             );
-            const financesData = {
-                ...save.financesData,
-                overhead: window.finances.dailyOverhead(save.gameState.location),
-            };
-            return { ...save, version: 8, products, financesData };
+            return { ...save, version: 8, products };
         },
 
         // v8 predates store controls and the overtime rules (Phase 9). The
@@ -258,22 +281,100 @@ window.saveFile = (function (): SaveFileApi {
             const settings = { ...save.settings, gameSpeed: Math.max(1, save.settings.gameSpeed) };
             return { ...save, version: 9, gameState, employeesData, settings };
         },
+
+        // v9 was one pharmacy with no building (Phase 10). It becomes a
+        // company with one location: the default listing for its old area
+        // type (urban, suburban or rural), on a 3-year lease from its first
+        // day, with no deposit paid and no startup loan. The flat overhead
+        // gives way to monthly rent and utilities by floor space. Its ledger
+        // entries are the location's, apart from the line of credit's. Goals
+        // reached keep their ids in the longer ladder; a win under the old,
+        // shorter one is dropped, so the new one can be won.
+        9(save) {
+            const { pharmacyName, location, ...gameState } = save.gameState;
+            delete gameState.wonOnDay;
+            const area: AreaType = location === 'urban' || location === 'rural' ? location : 'suburban';
+            const listing = window.properties.defaultListing(area);
+
+            // The game's first opening, 07:00 on day 0
+            const opened = new Date(save.gameState.currentDate);
+            opened.setDate(opened.getDate() - save.gameState.dayIndex);
+            opened.setHours(7, 0, 0, 0);
+            const end = new Date(opened);
+            end.setFullYear(end.getFullYear() + 3);
+            const id = 'loc-1';
+
+            const { overhead, ...finances } = save.financesData;
+            finances.loans = [];
+            finances.expenseCategories = { ...finances.expenseCategories, rent: 0 };
+            finances.transactions.forEach((t) => {
+                t.locationId = t.category === 'loan' || t.category === 'interest' ? null : id;
+            });
+
+            return {
+                version: 10,
+                timestamp: save.timestamp,
+                gameState: { ...gameState, gameId: `game-${save.timestamp.toString(36)}` },
+                company: {
+                    name: pharmacyName || 'Your Pharmacy',
+                    activeLocationId: id,
+                    finances,
+                    reputation: save.brandReputation.reputationScore,
+                    research: save.research,
+                    insuranceClaims: save.insuranceClaims,
+                    records: { days: save.records.days, pruned: {} },
+                    reports: [],
+                },
+                locations: [
+                    {
+                        id,
+                        name: listing.address,
+                        businessType: 'retail',
+                        address: listing.address,
+                        area,
+                        footTraffic: listing.footTraffic,
+                        competitors: listing.competitors,
+                        building: clone(listing.building),
+                        lease: {
+                            listingId: listing.id,
+                            monthlyRent: window.properties.monthlyRent(listing, 3),
+                            termYears: 3,
+                            start: opened.getTime(),
+                            end: end.getTime(),
+                            deposit: 0,
+                        },
+                        openedOnDay: 0,
+                        employees: save.employeesData,
+                        products: save.products,
+                        materials: save.materials,
+                        equipment: save.equipment,
+                        tasks: save.tasks,
+                        customers: save.customers,
+                        prescriptions: save.activePrescriptions,
+                        refills: save.refillRegistry,
+                        visits: save.records.visits,
+                    },
+                ],
+                notifications: { items: [], unreadCount: 0, nextId: 1 },
+                settings: save.settings,
+            };
+        },
     };
 
     function migrate(raw: unknown): SaveFile {
-        if (!raw || typeof raw !== 'object' || !('gameState' in raw) || !('financesData' in raw)) {
+        if (!raw || typeof raw !== 'object' || !('gameState' in raw) || !('financesData' in raw || 'company' in raw)) {
             throw new Error('Not a save file');
         }
-        let save = raw as SaveFile;
+        let save = raw as { version?: number };
         let version = typeof save.version === 'number' ? save.version : 1;
         if (version > SAVE_VERSION) {
             throw new Error(`Save version ${version} is newer than this game (${SAVE_VERSION})`);
         }
         while (version < SAVE_VERSION) {
-            save = (migrations[version as keyof typeof migrations] as (s: unknown) => SaveFile)(save);
-            version = save.version;
+            save = (migrations[version as keyof typeof migrations] as (s: unknown) => { version: number })(save);
+            version = save.version!;
         }
-        return save;
+        return save as SaveFile;
     }
 
     // JSON turns every Date into a string. A transaction date left as a
@@ -281,16 +382,36 @@ window.saveFile = (function (): SaveFileApi {
     function reviveDates(save: SaveFile): void {
         save.gameState.currentDate = new Date(save.gameState.currentDate);
         if (save.gameState.dateCreated) save.gameState.dateCreated = new Date(save.gameState.dateCreated);
-        save.financesData.transactions.forEach((t) => {
+        save.company.finances.transactions.forEach((t) => {
             t.date = new Date(t.date);
         });
-        save.employeesData.forEach((emp) => {
-            if (emp.hireDate) emp.hireDate = new Date(emp.hireDate);
+        save.locations.forEach((location) => {
+            location.employees.forEach((emp) => {
+                if (emp.hireDate) emp.hireDate = new Date(emp.hireDate);
+            });
         });
-        [...save.insuranceClaims.pending, ...save.insuranceClaims.processed].forEach((claim) => {
+        const claims = save.company.insuranceClaims;
+        [...claims.pending, ...claims.processed].forEach((claim) => {
             claim.submittedDate = new Date(claim.submittedDate);
             if (claim.processedDate) claim.processedDate = new Date(claim.processedDate);
         });
+        save.notifications.items.forEach((item) => {
+            item.timestamp = new Date(item.timestamp);
+        });
+    }
+
+    // A saved location, live: static definitions overlaid with its state,
+    // and customers given the current definition of their insurance plan.
+    function liveLocation(saved: SavedLocation): StoreLocation {
+        saved.customers.forEach((customer) => {
+            customer.insurance = window.customers.getInsuranceByPlanName(customer.insurance.planName);
+        });
+        return {
+            ...saved,
+            products: mergeState(clone(defaults.products), saved.products, PRODUCT_STATE),
+            materials: mergeState(clone(defaults.materials), saved.materials, MATERIAL_STATE),
+            equipment: mergeState(clone(defaults.equipment), saved.equipment, EQUIPMENT_STATE),
+        };
     }
 
     // Restores a save (any version) into the live globals.
@@ -306,52 +427,44 @@ window.saveFile = (function (): SaveFileApi {
             simulationAccumulator: 0,
             renderInfo: { fps: 0, frameCount: 0, lastFpsUpdate: 0 },
         };
-        window.financesData = save.financesData;
-        window.employeesData = save.employeesData;
+        const company = save.company;
+        window.financesData = company.finances;
 
         // Merge rather than replace, so the module's methods survive.
-        window.brandReputation.reputationScore = save.brandReputation.reputationScore;
+        window.brandReputation.reputationScore = company.reputation;
 
-        window.productsData = mergeState(clone(defaults.products), save.products, PRODUCT_STATE);
-        window.materialsData = mergeState(clone(defaults.materials), save.materials, MATERIAL_STATE);
-        window.equipmentData = mergeState(clone(defaults.equipment), save.equipment, EQUIPMENT_STATE);
         window.researchData = {
             ...clone(defaults.research),
-            currentLevel: save.research.currentLevel,
-            inProgress: save.research.inProgress,
+            currentLevel: company.research.currentLevel,
+            inProgress: company.research.inProgress,
         };
-        if (save.research.refund) {
-            window.finances.transact({
-                type: 'income',
-                category: 'other',
-                amount: save.research.refund,
-                description: 'Refund: research toward a level that no longer exists',
-            });
-        }
 
         // Customers the current session has scheduled to arrive belong to
         // it, not to the loaded game.
         window.timeEvents?.cancelPendingArrivals();
 
-        // In place: taskManager's closure holds this array.
-        const tasks = window.taskManager.tasks;
-        tasks.length = 0;
-        tasks.push(...save.tasks);
+        // Every location's lists, with the per-location globals (employeesData,
+        // productsData, taskManager.tasks, ...) viewing the active one's
+        window.company.reset(company.name, save.locations.map(liveLocation), company.activeLocationId);
 
-        // Customers get the current definition of their insurance plan.
-        save.customers.forEach((customer) => {
-            customer.insurance = window.customers.getInsuranceByPlanName(customer.insurance.planName);
-        });
-        window.customers.activeCustomers = save.customers;
-        window.prescriptions.activePrescriptions = save.activePrescriptions;
-        window.prescriptions.refillRegistry = save.refillRegistry;
+        if (company.research.refund) {
+            window.finances.transact({
+                type: 'income',
+                category: 'other',
+                amount: company.research.refund,
+                description: 'Refund: research toward a level that no longer exists',
+                locationId: null,
+            });
+        }
 
-        window.insuranceClaims.pendingClaims = save.insuranceClaims.pending;
-        window.insuranceClaims.processedClaims = save.insuranceClaims.processed;
+        window.insuranceClaims.pendingClaims = company.insuranceClaims.pending;
+        window.insuranceClaims.processedClaims = company.insuranceClaims.processed;
         window.insuranceClaims.syncPendingTotals();
 
-        window.records.days = save.records.days;
-        window.records.visits = save.records.visits;
+        window.records.days = company.records.days;
+        window.records.pruned = company.records.pruned;
+        window.reports.list = company.reports;
+        window.notifications?.restore(save.notifications);
 
         const settings = save.settings;
         window.setGameSpeed(settings.gameSpeed);
@@ -359,8 +472,8 @@ window.saveFile = (function (): SaveFileApi {
 
         // Gives every loaded customer the tasks their status needs (and
         // v2 fills their stock). A current save needs nothing.
-        window.customers.reconcileTasks();
+        window.company.forEachLocation(() => window.customers.reconcileTasks());
     }
 
-    return { version: SAVE_VERSION, serialize, migrate, apply };
+    return { version: SAVE_VERSION, serialize, migrate, apply, freshDefinitions };
 })();

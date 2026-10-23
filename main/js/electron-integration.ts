@@ -65,11 +65,24 @@
                 }
                 try {
                     // Plain data only (see saveFile.ts), so it crosses IPC's
-                    // structured-clone boundary.
-                    const result = await window.gameAPI!.saveGame!(window.saveFile.serialize());
+                    // structured-clone boundary. An autosave goes to the
+                    // game's next autosave slot; a save to this session's
+                    // slot, or a new one when it's given a name.
+                    const session = window.saveSession;
+                    const result = await window.gameAPI!.saveGame!(
+                        window.saveFile.serialize(),
+                        options.auto
+                            ? { auto: true }
+                            : options.name
+                              ? { name: options.name }
+                              : { slot: session.slot, name: session.name || window.company.name },
+                    );
 
                     if (result && result.success) {
                         console.log('Game saved successfully');
+                        if (!options.auto && result.slot) {
+                            window.saveSession = { slot: result.slot, name: options.name || session.name };
+                        }
 
                         // Show notification to user (not for autosaves)
                         if (window.notifications && !options.silent) {
@@ -91,9 +104,9 @@
             };
 
             // Add load game function to window
-            window.loadGame = async function () {
+            window.loadGame = async function (slot) {
                 try {
-                    const gameData = await window.gameAPI!.loadGame!();
+                    const gameData = await window.gameAPI!.loadGame!(slot);
 
                     if (gameData) {
                         // Same restore path as the main-menu load
@@ -152,7 +165,7 @@
             function startAutoSave(intervalGameMinutes: number = 300): void {
                 stopAutoSave();
                 autoSaveJob = window.clock.every(intervalGameMinutes, () => {
-                    window.saveGame!({ silent: true });
+                    window.saveGame!({ silent: true, auto: true });
                 });
                 console.log(`Auto-save enabled (every ${intervalGameMinutes} game minutes)`);
             }
@@ -196,13 +209,12 @@
                     window.saveGame!();
                 }
 
-                // Ctrl+L for load. Asks first: loading throws away everything
-                // since the last save.
+                // Ctrl+L: this game's saves and autosaves, to pick one to
+                // load (each asks first: loading throws away everything
+                // since the last save)
                 if (event.ctrlKey && event.key === 'l') {
                     event.preventDefault();
-                    window.showConfirmModal('Load your last save? Anything since then will be lost.', 'Load', () =>
-                        window.loadGame!(),
-                    );
+                    window.showSavesModal({ gameOnly: true });
                 }
             });
         }

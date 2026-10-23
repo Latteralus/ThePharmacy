@@ -41,33 +41,41 @@ function loadGame() {
   window.showGameOverModal = jest.fn();
   window.showVictoryModal = jest.fn();
 
-  require('../../main/js/clock.js');
-  require('../../main/js/ids.js');
-  require('../../main/components/kit.js'); // fmt
-  require('../../main/js/data/names.js');
-  require('../../main/js/data/employees.js');
+  require('../../build/main/js/clock.js');
+  require('../../build/main/js/ids.js');
+  require('../../build/main/components/kit.js'); // fmt
+  require('../../build/main/js/data/names.js');
+  require('../../build/main/js/data/employees.js');
   window.employeesData = [employee('cashier', 'Cashier'), employee('pharmacist', 'Pharmacist')];
-  require('../../main/js/data/materials.js');
-  require('../../main/js/data/products.js');
-  require('../../main/js/data/equipment.js');
-  require('../../main/js/data/research.js');
-  require('../../main/js/data/helpers.js');
-  require('../../main/js/data/insurance.js');
-  require('../../main/js/data/finances.js');
-  require('../../main/js/insuranceClaims.js');
-  require('../../main/js/taskManager.js');
-  require('../../main/js/taskAssignment.js');
-  require('../../main/js/production.js');
-  require('../../main/js/customers.js');
-  require('../../main/js/prescriptions.js');
-  require('../../main/js/timeEvents.js');
-  require('../../main/js/brandReputation.js');
-  require('../../main/js/records.js');
-  require('../../main/js/stakes.js');
-  require('../../main/js/goals.js');
+  require('../../build/main/js/data/materials.js');
+  require('../../build/main/js/data/products.js');
+  require('../../build/main/js/data/equipment.js');
+  require('../../build/main/js/data/research.js');
+  require('../../build/main/js/data/helpers.js');
+  require('../../build/main/js/data/insurance.js');
+  require('../../build/main/js/data/properties.js');
+  require('../../build/main/js/data/lending.js');
+  require('../../build/main/js/data/finances.js');
+  require('../../build/main/js/insuranceClaims.js');
+  require('../../build/main/js/taskManager.js');
+  require('../../build/main/js/taskAssignment.js');
+  require('../../build/main/js/production.js');
+  require('../../build/main/js/customers.js');
+  require('../../build/main/js/prescriptions.js');
+  require('../../build/main/js/timeEvents.js');
+  require('../../build/main/js/brandReputation.js');
+  require('../../build/main/js/records.js');
+  require('../../build/main/js/stakes.js');
+  require('../../build/main/js/goals.js');
+  require('../../build/main/js/company.js');
+  require('../../build/main/js/building.js');
+  require('../../build/main/js/reports.js');
 
   window.financesData.cash = 10000;
-  window.financesData.overhead = 1000;
+  // $1,000 a day of utilities and services, and no rent, so a day's fixed
+  // costs are the wages, that and any interest (rent is the 1st's: company.test.js)
+  window.company.dailyServices = () => 1000;
+  window.company.active().lease.monthlyRent = 0;
 }
 
 function income(amount, category = 'copays') {

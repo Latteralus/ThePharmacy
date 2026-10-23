@@ -2,12 +2,38 @@
  * Tests for the save file format (review findings A2, C5): a save holds only
  * player state, round-trips through JSON with every Date revived, restores
  * tasks/customers/claims/settings, keeps custom prices, takes static data
- * from the data files, and upgrades v1 saves.
+ * from the data files, and upgrades older saves. From v10 (Phase 10) a save
+ * is the company and its locations, with its notifications.
  */
 
 // What game-integration.js does to a save on its way to disk and back.
 function throughDisk(save) {
   return JSON.parse(JSON.stringify(save));
+}
+
+// A current save in the one-pharmacy shape saves had up to v9, to build
+// older saves from (then each test takes it back to its version).
+function asV9(save) {
+  const location = save.locations[0];
+  return throughDisk({
+    version: 9,
+    timestamp: save.timestamp,
+    gameState: { ...save.gameState, pharmacyName: save.company.name, location: location.area },
+    financesData: { ...save.company.finances, overhead: 700 },
+    employeesData: location.employees,
+    brandReputation: { reputationScore: save.company.reputation },
+    products: location.products,
+    materials: location.materials,
+    equipment: location.equipment,
+    research: save.company.research,
+    tasks: location.tasks,
+    customers: location.customers,
+    activePrescriptions: location.prescriptions,
+    refillRegistry: location.refills,
+    insuranceClaims: save.company.insuranceClaims,
+    records: { days: save.company.records.days, visits: location.visits },
+    settings: save.settings,
+  });
 }
 
 function loadModules() {
@@ -17,8 +43,7 @@ function loadModules() {
     dayIndex: 3,
     isDayActive: true,
     isPaused: false,
-    pharmacyName: 'Test Pharmacy',
-    location: 'suburban',
+    gameId: 'game-test',
     lastFrameTime: 12345,
     lastSimulationTime: 12345,
     simulationAccumulator: 7,
@@ -34,19 +59,19 @@ function loadModules() {
   };
   window.brandReputation = { reputationScore: 10, calcCustomers: () => 2 };
 
-  const tasks = [];
-  window.taskManager = { tasks };
+  window.taskManager = { tasks: [] };
 
-  require('../../main/js/ids.js');
-  require('../../main/js/data/materials.js');
-  require('../../main/js/data/products.js');
-  require('../../main/js/data/equipment.js');
-  require('../../main/js/data/insurance.js');
-  require('../../main/js/data/research.js');
-  require('../../main/js/data/finances.js');
-  require('../../main/js/insuranceClaims.js');
-  require('../../main/js/saveFile.js');
-  require('../../main/js/records.js');
+  require('../../build/main/js/ids.js');
+  require('../../build/main/js/data/materials.js');
+  require('../../build/main/js/data/products.js');
+  require('../../build/main/js/data/equipment.js');
+  require('../../build/main/js/data/insurance.js');
+  require('../../build/main/js/data/research.js');
+  require('../../build/main/js/data/properties.js');
+  require('../../build/main/js/data/finances.js');
+  require('../../build/main/js/insuranceClaims.js');
+  require('../../build/main/js/saveFile.js');
+  require('../../build/main/js/records.js');
 
   window.customers = {
     activeCustomers: [],
@@ -54,6 +79,11 @@ function loadModules() {
     reconcileTasks: jest.fn(() => 0),
   };
   window.prescriptions = { activePrescriptions: [], refillRegistry: [] };
+
+  // After every list it makes a view of
+  require('../../build/main/js/company.js');
+  require('../../build/main/js/reports.js');
+  window.company.name = 'Test Pharmacy';
 }
 
 // A game in progress: a customer mid-visit, their tasks, a pending claim,
@@ -112,6 +142,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+  delete window.notifications;
 });
 
 describe('serialize', () => {
@@ -122,20 +153,45 @@ describe('serialize', () => {
     expect(save.version).toBe(window.saveFile.version);
     expect(save.gameState.lastSimulationTime).toBeUndefined();
     expect(save.gameState.renderInfo).toBeUndefined();
-    expect(save.products.find((p) => p.id === 'pd001')).toEqual({
+    const [location] = save.locations;
+    expect(location.products.find((p) => p.id === 'pd001')).toEqual({
       id: 'pd001',
       price: 123.45,
       inventory: expect.any(Number),
       maxInventory: expect.any(Number),
     });
-    expect(Object.keys(save.equipment[0]).sort()).toEqual(
+    expect(Object.keys(location.equipment[0]).sort()).toEqual(
       ['autoPurchaseAmount', 'autoPurchaseThreshold', 'durability', 'id', 'owned'].sort(),
     );
-    expect(save.research).toEqual({ currentLevel: 1, inProgress: null });
+    expect(save.company.research).toEqual({ currentLevel: 1, inProgress: null });
     // gameAPI.saveGame sends this over IPC, so it must survive the
     // structured clone algorithm (v8.serialize uses it; jsdom has no
     // structuredClone). A function anywhere in it would throw.
     expect(() => require('v8').serialize(save)).not.toThrow();
+  });
+
+  test('is the company and its locations (Phase 10)', () => {
+    playABit();
+    const save = window.saveFile.serialize();
+    expect(save.company).toMatchObject({
+      name: 'Test Pharmacy',
+      activeLocationId: 'loc-1',
+      reputation: 33,
+      reports: [],
+      records: { days: [], pruned: {} },
+    });
+    expect(save.company.finances.cash).toBe(window.financesData.cash);
+    expect(save.locations).toHaveLength(1);
+    const [location] = save.locations;
+    expect(location).toMatchObject({ id: 'loc-1', businessType: 'retail', area: 'suburban' });
+    expect(location.building.zones.lab).toBeGreaterThan(0);
+    expect(location.employees.map((e) => e.id)).toEqual(['emp1']);
+    expect(location.customers.map((c) => c.id)).toEqual(['cust-1', 'cust-2']);
+    expect(location.tasks.map((t) => t.id)).toEqual(['checkin-cust-1']);
+    // Nothing is left at the top level from the one-pharmacy shape
+    expect(save.financesData).toBeUndefined();
+    expect(save.employeesData).toBeUndefined();
+    expect(save.gameState.pharmacyName).toBeUndefined();
   });
 });
 
@@ -146,19 +202,20 @@ describe('save -> disk -> load round trip', () => {
     playABit();
     save = throughDisk(window.saveFile.serialize());
     loadModules(); // a fresh launch
+    window.company.name = 'Another Session';
     window.saveFile.apply(save);
   });
 
   test('restores game state with Dates revived and loop timestamps zeroed', () => {
     expect(window.gameState.currentDate).toEqual(new Date(2023, 0, 4, 15, 30));
-    expect(window.gameState.pharmacyName).toBe('Test Pharmacy');
+    expect(window.company.name).toBe('Test Pharmacy');
     expect(window.gameState.lastSimulationTime).toBe(0);
     expect(window.gameState.simulationAccumulator).toBe(0);
     expect(window.financesData.transactions[0].date).toBeInstanceOf(Date);
     expect(window.employeesData[0].hireDate).toBeInstanceOf(Date);
   });
 
-  test('restores tasks in place, with employees still pointing at them', () => {
+  test('restores tasks, with employees still pointing at them', () => {
     expect(window.taskManager.tasks).toHaveLength(1);
     expect(window.taskManager.tasks[0]).toMatchObject({ id: 'checkin-cust-1', progress: 1.5, assignedTo: 'emp1' });
     expect(window.employeesData[0].currentTaskId).toBe('checkin-cust-1');
@@ -207,18 +264,114 @@ describe('save -> disk -> load round trip', () => {
     expect(window.getGameSpeed()).toBe(2);
     expect(window.globalMarkup).toBe(1.5);
   });
+
+  test("the per-location globals are views of the location's lists", () => {
+    const location = window.company.active();
+    expect(window.employeesData).toBe(location.employees);
+    expect(window.productsData).toBe(location.products);
+    expect(window.taskManager.tasks).toBe(location.tasks);
+    expect(window.customers.activeCustomers).toBe(location.customers);
+    expect(window.prescriptions.activePrescriptions).toBe(location.prescriptions);
+    expect(window.records.visits).toBe(location.visits);
+  });
+});
+
+describe('the company and its locations (Phase 10, #10)', () => {
+  // A second location, with its own staff and stock
+  function twoLocations() {
+    const first = window.company.active();
+    const listing = window.properties.find('oak-street');
+    const second = window.company.fromListing(listing, 5, window.gameState.currentDate.getTime(), 3);
+    second.id = 'loc-2';
+    second.employees.push({ id: 'emp9', firstName: 'Cy', lastName: 'Ng', role: 'Pharmacist', salary: 120000 });
+    second.products.find((p) => p.id === 'pd001').inventory = 42;
+    window.company.reset(window.company.name, [first, second], 'loc-1');
+    return { first, second };
+  }
+
+  test('withLocation runs code against another location, then switches back', () => {
+    playABit();
+    const { second } = twoLocations();
+    expect(window.employeesData.map((e) => e.id)).toEqual(['emp1']);
+    const seen = window.company.withLocation('loc-2', () => ({
+      staff: window.employeesData.map((e) => e.id),
+      stock: window.productsData.find((p) => p.id === 'pd001').inventory,
+    }));
+    expect(seen).toEqual({ staff: ['emp9'], stock: 42 });
+    expect(window.company.activeId).toBe('loc-1');
+    // Writes go to the active location too
+    window.company.withLocation('loc-2', () => {
+      window.customers.activeCustomers = [{ id: 'cust-x' }];
+    });
+    expect(second.customers).toEqual([{ id: 'cust-x' }]);
+    expect(window.customers.activeCustomers.map((c) => c.id)).toEqual(['cust-1', 'cust-2']);
+  });
+
+  test('every location round-trips through a save, and the active one stays active', () => {
+    playABit();
+    twoLocations();
+    window.company.select('loc-2');
+    const save = throughDisk(window.saveFile.serialize());
+    expect(save.locations.map((l) => l.id)).toEqual(['loc-1', 'loc-2']);
+
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.company.locations.map((l) => l.id)).toEqual(['loc-1', 'loc-2']);
+    expect(window.company.activeId).toBe('loc-2');
+    expect(window.employeesData.map((e) => e.id)).toEqual(['emp9']);
+    expect(window.productsData.find((p) => p.id === 'pd001').inventory).toBe(42);
+    expect(window.company.get('loc-2').lease.termYears).toBe(5);
+    expect(window.company.withLocation('loc-1', () => window.employeesData.map((e) => e.id))).toEqual(['emp1']);
+    // Every location's customers get the tasks their status needs
+    expect(window.customers.reconcileTasks).toHaveBeenCalledTimes(2);
+  });
+
+  test('notifications are saved with the game, read or not (C5)', () => {
+    window.notifications = {
+      items: [
+        { id: 4, message: 'Old news', type: 'info', timestamp: new Date(2023, 0, 3, 9), read: true },
+        { id: 5, message: 'Cash is low', type: 'warning', timestamp: new Date(2023, 0, 4, 9), read: false },
+      ],
+      unreadCount: 1,
+      nextId: 6,
+      restore: jest.fn(),
+    };
+    const save = throughDisk(window.saveFile.serialize());
+    expect(save.notifications).toMatchObject({ unreadCount: 1, nextId: 6 });
+    expect(save.notifications.items).toHaveLength(2);
+
+    loadModules();
+    window.notifications = { restore: jest.fn() };
+    window.saveFile.apply(save);
+    const [restored] = window.notifications.restore.mock.calls[0];
+    expect(restored.items.map((n) => n.message)).toEqual(['Old news', 'Cash is low']);
+    expect(restored.items[0].timestamp).toBeInstanceOf(Date);
+  });
+
+  test('reports, pruned customer counts and term loans are saved', () => {
+    window.reports.list.push({ kind: 'month', period: '2023-01', net: 5 });
+    window.records.pruned = { served: 12 };
+    window.financesData.loans = [{ id: 'loan-1', name: 'Startup loan', balance: 1000 }];
+    const save = throughDisk(window.saveFile.serialize());
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.reports.list).toEqual([{ kind: 'month', period: '2023-01', net: 5 }]);
+    expect(window.records.pruned).toEqual({ served: 12 });
+    expect(window.financesData.loans[0]).toMatchObject({ name: 'Startup loan', balance: 1000 });
+  });
 });
 
 describe('static data comes from the data files', () => {
   test('static fields in a save are ignored, and unknown or missing items are handled', () => {
     const save = throughDisk(window.saveFile.serialize());
     const realName = window.productsData.find((p) => p.id === 'pd001').name;
+    const products = save.locations[0].products;
     Object.assign(
-      save.products.find((p) => p.id === 'pd001'),
+      products.find((p) => p.id === 'pd001'),
       { name: 'Old Name', cost: 1, inventory: 9 },
     );
-    save.products.push({ id: 'pd-removed', price: 1, inventory: 1, maxInventory: 1 });
-    save.products = save.products.filter((p) => p.id !== 'pd002');
+    products.push({ id: 'pd-removed', price: 1, inventory: 1, maxInventory: 1 });
+    save.locations[0].products = products.filter((p) => p.id !== 'pd002');
     const pd002Default = window.productsData.find((p) => p.id === 'pd002').inventory;
 
     loadModules();
@@ -240,6 +393,8 @@ describe('static data comes from the data files', () => {
 
     window.saveFile.apply(save);
     expect(window.productsData.find((p) => p.id === 'pd001').price).toBe(123.45);
+    // and a new location gets them too
+    expect(window.saveFile.freshDefinitions().products.find((p) => p.id === 'pd001').price).not.toBe(999);
   });
 });
 
@@ -267,7 +422,12 @@ describe('migrating v1 saves', () => {
     productsData.find((p) => p.id === 'pd001').name = 'Frozen Old Name';
 
     return throughDisk({
-      gameState: { ...window.gameState, lastSimulationTime: 999999 },
+      gameState: {
+        ...window.gameState,
+        pharmacyName: 'Old Pharmacy',
+        location: 'suburban',
+        lastSimulationTime: 999999,
+      },
       financesData,
       employeesData: [{ id: 'emp1', firstName: 'A', lastName: 'B', currentTaskId: 'gone', hireDate: '2023-01-01' }],
       productsData,
@@ -284,7 +444,7 @@ describe('migrating v1 saves', () => {
   test('upgrades to the current version', () => {
     const save = window.saveFile.migrate(v1Save());
     expect(save.version).toBe(window.saveFile.version);
-    expect(save.tasks).toEqual([]);
+    expect(save.locations[0].tasks).toEqual([]);
     expect(save.settings.gameSpeed).toBe(1);
   });
 
@@ -312,11 +472,12 @@ describe('migrating v1 saves', () => {
     expect(window.researchData.currentLevel).toBe(2);
     expect(window.brandReputation.reputationScore).toBe(21);
     expect(window.gameState.lastSimulationTime).toBe(0);
+    expect(window.company.name).toBe('Old Pharmacy');
   });
 
   test('a v2 save loses its duplicate fill tasks and labels check-in and checkout', () => {
     playABit();
-    const v2 = throughDisk(window.saveFile.serialize());
+    const v2 = asV9(window.saveFile.serialize());
     v2.version = 2;
     const task = (id, type, customerId) => ({ id, type, customerId, status: 'pending', progress: 0, totalTime: 3 });
     v2.tasks = [
@@ -328,17 +489,18 @@ describe('migrating v1 saves', () => {
 
     const save = window.saveFile.migrate(v2);
     expect(save.version).toBe(window.saveFile.version);
-    expect(save.tasks.map((t) => [t.id, t.interaction])).toEqual([
+    const tasks = save.locations[0].tasks;
+    expect(tasks.map((t) => [t.id, t.interaction])).toEqual([
       ['checkin-cust-1', 'checkIn'],
       ['checkout-cust-2-1700000000000', 'checkout'],
       ['fill-pres-1', undefined],
     ]);
-    expect(save.tasks[2].status).toBe('inProgress');
+    expect(tasks[2].status).toBe('inProgress');
   });
 
   test('a v3 save puts compounds under way back in the queue, since they hold no materials', () => {
     playABit();
-    const v3 = throughDisk(window.saveFile.serialize());
+    const v3 = asV9(window.saveFile.serialize());
     v3.version = 3;
     v3.employeesData.push({
       ...v3.employeesData[0],
@@ -361,13 +523,14 @@ describe('migrating v1 saves', () => {
     const save = window.saveFile.migrate(v3);
 
     expect(save.version).toBe(window.saveFile.version);
-    expect(save.tasks.find((t) => t.id === 'compound-pres-1')).toMatchObject({
+    const [location] = save.locations;
+    expect(location.tasks.find((t) => t.id === 'compound-pres-1')).toMatchObject({
       status: 'pending',
       assignedTo: null,
       progress: 4,
     });
-    expect(save.tasks.find((t) => t.id === 'checkin-cust-1')).toMatchObject({ status: 'inProgress' });
-    expect(save.employeesData.map((e) => e.currentTaskId)).toEqual(['checkin-cust-1', null]);
+    expect(location.tasks.find((t) => t.id === 'checkin-cust-1')).toMatchObject({ status: 'inProgress' });
+    expect(location.employees.map((e) => e.currentTaskId)).toEqual(['checkin-cust-1', null]);
   });
 
   test('loading gives customers whatever tasks their status needs', () => {
@@ -427,7 +590,7 @@ describe('ids (M9)', () => {
 
 describe('v4 saves (Phase 7: the research tree is levels 0-4)', () => {
   function v4Save({ level, target }) {
-    const save = throughDisk(window.saveFile.serialize());
+    const save = asV9(window.saveFile.serialize());
     save.version = 4;
     save.research = {
       currentLevel: level,
@@ -441,7 +604,7 @@ describe('v4 saves (Phase 7: the research tree is levels 0-4)', () => {
   test('a level past the last one keeps everything there is', () => {
     const save = window.saveFile.migrate(v4Save({ level: 7 }));
     expect(save.version).toBe(window.saveFile.version);
-    expect(save.research).toEqual({ currentLevel: 4, inProgress: null });
+    expect(save.company.research).toEqual({ currentLevel: 4, inProgress: null });
   });
 
   test('research under way toward a level that no longer exists is cancelled and refunded', () => {
@@ -478,7 +641,7 @@ describe('v4 saves (Phase 7: the research tree is levels 0-4)', () => {
 describe('v5 saves and the history (Phase 8)', () => {
   test('a v5 save gets an empty history, no loan, an interest bucket and no goals', () => {
     playABit();
-    const save = throughDisk(window.saveFile.serialize());
+    const save = asV9(window.saveFile.serialize());
     save.version = 5;
     delete save.records;
     delete save.financesData.loanBalance;
@@ -488,9 +651,10 @@ describe('v5 saves and the history (Phase 8)', () => {
 
     const upgraded = window.saveFile.migrate(throughDisk(save));
     expect(upgraded.version).toBe(window.saveFile.version);
-    expect(upgraded.records).toEqual({ days: [], visits: [] });
-    expect(upgraded.financesData.loanBalance).toBe(0);
-    expect(upgraded.financesData.expenseCategories.interest).toBe(0);
+    expect(upgraded.company.records).toEqual({ days: [], pruned: {} });
+    expect(upgraded.locations[0].visits).toEqual([]);
+    expect(upgraded.company.finances.loanBalance).toBe(0);
+    expect(upgraded.company.finances.expenseCategories.interest).toBe(0);
     expect(upgraded.gameState).toMatchObject({ daysInRed: 0, goalsReached: {} });
 
     window.saveFile.apply(save);
@@ -519,7 +683,7 @@ describe('v5 saves and the history (Phase 8)', () => {
 describe('v6 saves (difficulty removed: every game plays at Normal)', () => {
   function v6Save({ difficulty, location, overhead }) {
     playABit();
-    const save = throughDisk(window.saveFile.serialize());
+    const save = asV9(window.saveFile.serialize());
     save.version = 6;
     save.gameState.difficulty = difficulty;
     save.gameState.location = location;
@@ -533,12 +697,14 @@ describe('v6 saves (difficulty removed: every game plays at Normal)', () => {
     return save;
   }
 
-  test("overhead goes back to the location's, and the difficulty and multipliers are dropped", () => {
+  test('the difficulty and multipliers are dropped', () => {
     const save = window.saveFile.migrate(v6Save({ difficulty: 'hard', location: 'urban', overhead: 1950 }));
     expect(save.version).toBe(window.saveFile.version);
     expect(save.gameState.difficulty).toBeUndefined();
-    expect(save.financesData.overhead).toBe(910); // urban rent, no Hard or multiplier
     expect(save.settings).toEqual({ gameSpeed: 2, globalMarkup: 1.5 });
+    // and the flat overhead gives way to the city's default property (v10)
+    expect(save.company.finances.overhead).toBeUndefined();
+    expect(save.locations[0].lease.listingId).toBe('market-street');
   });
 
   test('cash and reputation are kept', () => {
@@ -546,7 +712,6 @@ describe('v6 saves (difficulty removed: every game plays at Normal)', () => {
     loadModules();
     window.saveFile.apply(v6);
     expect(window.financesData.cash).toBe(v6.financesData.cash);
-    expect(window.financesData.overhead).toBe(700);
     expect(window.brandReputation.reputationScore).toBe(33);
   });
 });
@@ -554,7 +719,7 @@ describe('v6 saves (difficulty removed: every game plays at Normal)', () => {
 describe('v7 saves (balance pass: materials a quarter of the price)', () => {
   function v7Save() {
     playABit();
-    const save = throughDisk(window.saveFile.serialize());
+    const save = asV9(window.saveFile.serialize());
     save.version = 7;
     save.gameState.location = 'rural';
     save.financesData.overhead = 2100; // the old rural rent
@@ -564,14 +729,15 @@ describe('v7 saves (balance pass: materials a quarter of the price)', () => {
     return save;
   }
 
-  test("prices go back to the player's markup on today's costs, and overhead to today's rent", () => {
+  test("prices go back to the player's markup on today's costs", () => {
     const save = window.saveFile.migrate(v7Save());
     expect(save.version).toBe(window.saveFile.version);
-    const price = (id) => save.products.find((p) => p.id === id).price;
+    const products = save.locations[0].products;
+    const price = (id) => products.find((p) => p.id === id).price;
     expect(price('pd001')).toBeCloseTo(window.calculateProductCost('pd001') * 1.5);
     expect(price('pd002')).toBeCloseTo(window.calculateProductCost('pd002') * 1.5);
     expect(price('pd-removed')).toBe(1); // left alone; apply() drops it
-    expect(save.financesData.overhead).toBe(490);
+    expect(save.locations[0].lease.listingId).toBe('cedar-falls');
   });
 
   test('cash, salaries and the claims owed are kept', () => {
@@ -587,7 +753,7 @@ describe('v7 saves (balance pass: materials a quarter of the price)', () => {
 describe('v8 saves (Phase 9: store controls and overtime)', () => {
   function v8Save() {
     playABit();
-    const save = throughDisk(window.saveFile.serialize());
+    const save = asV9(window.saveFile.serialize());
     save.version = 8;
     delete save.gameState.frontOpen;
     save.employeesData.forEach((emp) => {
@@ -606,7 +772,7 @@ describe('v8 saves (Phase 9: store controls and overtime)', () => {
     const save = window.saveFile.migrate(v8);
     expect(save.version).toBe(window.saveFile.version);
     expect(save.gameState.frontOpen).toBe(true);
-    save.employeesData.forEach((emp) => {
+    save.locations[0].employees.forEach((emp) => {
       expect(emp).toMatchObject({ minutesWorkedThisWeek: 0, straightMinutesThisWeek: 0, noOvertime: false });
       expect(emp.offUntilDay).toBeUndefined();
     });
@@ -638,5 +804,106 @@ describe('v8 saves (Phase 9: store controls and overtime)', () => {
       offUntilDay: 4,
       noOvertime: true,
     });
+  });
+});
+
+describe('v9 saves (Phase 10: the company and its locations)', () => {
+  function v9Save({ location = 'suburban' } = {}) {
+    playABit();
+    const save = asV9(window.saveFile.serialize());
+    save.gameState.location = location;
+    save.gameState.dayIndex = 40;
+    save.gameState.currentDate = new Date(2023, 1, 10, 15, 30).toISOString();
+    save.gameState.goalsReached = { week: 6, served500: 30 };
+    save.gameState.wonOnDay = 35;
+    save.timestamp = 1_700_000_000_000;
+    save.financesData.loanBalance = 10000;
+    save.financesData.transactions.push(
+      {
+        id: 't-loan',
+        date: '2023-02-01T12:00:00.000Z',
+        type: 'income',
+        category: 'loan',
+        amount: 10000,
+        description: 'Bank loan',
+      },
+      {
+        id: 't-int',
+        date: '2023-02-01T23:00:00.000Z',
+        type: 'expense',
+        category: 'interest',
+        amount: 10,
+        description: 'Loan interest',
+      },
+    );
+    return save;
+  }
+
+  test("becomes a company with one location: the area's default property, on a 3-year lease from day 0", () => {
+    const save = window.saveFile.migrate(v9Save({ location: 'urban' }));
+    expect(save.version).toBe(10);
+    expect(save.company.name).toBe('Test Pharmacy');
+    expect(save.company.reputation).toBe(33);
+    expect(save.locations).toHaveLength(1);
+    const [location] = save.locations;
+    const listing = window.properties.find('market-street');
+    expect(location).toMatchObject({
+      id: 'loc-1',
+      businessType: 'retail',
+      area: 'urban',
+      address: listing.address,
+      footTraffic: listing.footTraffic,
+      competitors: listing.competitors,
+      openedOnDay: 0,
+    });
+    expect(location.building).toEqual(listing.building);
+    // Opened 40 days before Feb 10: Jan 1, 07:00; no deposit was ever paid
+    expect(location.lease).toMatchObject({
+      termYears: 3,
+      monthlyRent: window.properties.monthlyRent(listing, 3),
+      deposit: 0,
+    });
+    expect(new Date(location.lease.start)).toEqual(new Date(2023, 0, 1, 7, 0));
+    expect(new Date(location.lease.end)).toEqual(new Date(2026, 0, 1, 7, 0));
+    expect(location.employees.map((e) => e.id)).toEqual(['emp1']);
+    expect(location.customers.map((c) => c.id)).toEqual(['cust-1', 'cust-2']);
+  });
+
+  test('the flat overhead gives way to rent and utilities; no startup loan; entries get their location', () => {
+    const save = window.saveFile.migrate(v9Save());
+    const finances = save.company.finances;
+    expect(finances.overhead).toBeUndefined();
+    expect(finances.loans).toEqual([]);
+    expect(finances.expenseCategories.rent).toBe(0);
+    expect(finances.loanBalance).toBe(10000); // the line of credit stays
+    const byId = Object.fromEntries(finances.transactions.map((t) => [t.id ?? t.description, t.locationId]));
+    expect(byId['t-loan']).toBeNull();
+    expect(byId['t-int']).toBeNull();
+    expect(finances.transactions.find((t) => t.category === 'copays').locationId).toBe('loc-1');
+  });
+
+  test('goals reached carry over; a win under the old, shorter ladder is dropped', () => {
+    const save = window.saveFile.migrate(v9Save());
+    expect(save.gameState.goalsReached).toEqual({ week: 6, served500: 30 });
+    expect(save.gameState.wonOnDay).toBeUndefined();
+    expect(save.gameState.location).toBeUndefined();
+    expect(save.gameState.pharmacyName).toBeUndefined();
+    // Its saves are listed together from now on
+    expect(save.gameState.gameId).toBe(`game-${(1_700_000_000_000).toString(36)}`);
+    expect(save.notifications).toEqual({ items: [], unreadCount: 0, nextId: 1 });
+    expect(save.company.reports).toEqual([]);
+  });
+
+  test('loads into the company, with the globals viewing its one location', () => {
+    const v9 = v9Save({ location: 'rural' });
+    loadModules();
+    window.saveFile.apply(v9);
+    expect(window.company.name).toBe('Test Pharmacy');
+    expect(window.company.active().lease.listingId).toBe('cedar-falls');
+    expect(window.employeesData).toBe(window.company.active().employees);
+    expect(window.financesData.loanBalance).toBe(10000);
+    expect(window.company.dailyServices(window.company.active())).toBe(
+      window.properties.servicesPerDay('rural', window.properties.find('cedar-falls').building.sqft),
+    );
   });
 });

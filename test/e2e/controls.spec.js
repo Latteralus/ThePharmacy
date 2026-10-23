@@ -1,7 +1,7 @@
 // Player-facing controls after the cleanup of earlier phases' loose ends:
-// the Load menu shows the one save slot, not every *.json in the folder
-// (H7); the Settings page has no cheats (H5); Ctrl+L asks before throwing
-// away unsaved progress (H7).
+// the Load menu shows the game's saves, not every *.json in the folder
+// (H7); the Settings page has no cheats (H5); Ctrl+L lists the game's saves
+// and asks before throwing away unsaved progress (H7, Phase 10 save slots).
 
 const path = require('path');
 const os = require('os');
@@ -24,6 +24,7 @@ test.afterEach(() => {
 // See saveLoad.spec.js: unpackaged runs dock DevTools beside the page.
 async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
+    if (process.env.THEPHARMACY_HIDDEN === '1') return; // no window, no DevTools
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -33,7 +34,7 @@ async function closeDevTools(app) {
 }
 
 test('the Load menu, Settings page and Ctrl+L', async () => {
-  // A stray JSON file in the saves folder isn't a save slot.
+  // A stray JSON file in the saves folder isn't a save.
   const savesDir = path.join(userDataDir, 'saves');
   fs.mkdirSync(savesDir, { recursive: true });
   fs.writeFileSync(
@@ -63,11 +64,15 @@ test('the Load menu, Settings page and Ctrl+L', async () => {
   expect(await page.evaluate(() => window.gameAPI.isDev)).toBe(true);
   await expect(page.locator('#debug-toggle')).toHaveCount(1);
 
-  // No cheats on the Settings page or the console.
+  // No cheats on the Settings page or the console: pause, and the saves.
   await page.evaluate(() => window.showPage('settings'));
   await page.waitForSelector('.settings-page-container');
   const buttons = await page.locator('.settings-page-container button').allTextContents();
-  expect(buttons).toEqual([await page.evaluate(() => (window.gameState.isPaused ? 'Resume' : 'Pause'))]);
+  expect(buttons).toEqual([
+    await page.evaluate(() => (window.gameState.isPaused ? 'Resume' : 'Pause')),
+    'Save',
+    'Saves…',
+  ]);
   expect(
     await page.evaluate(() => ({
       forceTimeForward: typeof window.forceTimeForward,
@@ -84,8 +89,13 @@ test('the Load menu, Settings page and Ctrl+L', async () => {
     window.finances.transact({ type: 'expense', category: 'other', amount: 500, description: 'e2e spend' }),
   );
 
-  // Ctrl+L asks first; Cancel keeps the unsaved progress.
+  // Ctrl+L lists the game's saves; loading one asks first, and Cancel
+  // keeps the unsaved progress.
   await page.keyboard.press('Control+l');
+  const saves = page.locator('.saves-modal');
+  await expect(saves.locator('tbody tr')).toHaveCount(1);
+  await expect(saves).toContainText('Controls Pharmacy');
+  await saves.locator('button', { hasText: 'Load' }).click();
   const prompt = page.locator('.confirm-modal');
   await expect(prompt).toBeVisible();
   await prompt.locator('button', { hasText: 'Cancel' }).click();
@@ -93,13 +103,16 @@ test('the Load menu, Settings page and Ctrl+L', async () => {
   expect(await cash()).toBe(savedCash - 500);
 
   // Confirming loads the save.
-  await page.keyboard.press('Control+l');
+  await saves.locator('button', { hasText: 'Load' }).click();
   await prompt.locator('button', { hasText: 'Load' }).click();
   await expect.poll(cash).toBe(savedCash);
+  await expect(saves).toHaveCount(0);
 
-  // The Load menu now lists the save slot, and only it.
+  // The Load menu lists the save, and only it.
   const savedGames = await page.evaluate(() => window.gameAPI.getSavedGames());
-  expect(savedGames.map((s) => s.name)).toEqual(['pharmacy_save.json']);
+  expect(savedGames.map((s) => [s.name, s.kind, s.companyName])).toEqual([
+    ['Controls Pharmacy', 'manual', 'Controls Pharmacy'],
+  ]);
 
   await app.close();
 });

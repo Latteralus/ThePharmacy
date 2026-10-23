@@ -54,31 +54,36 @@ function loadGame({ employees = FULL_STAFF(), stock = 5 } = {}) {
   window.showVictoryModal = jest.fn();
   window.appSettings = { skipDailySummary: false };
 
-  require('../../main/js/clock.js');
-  require('../../main/js/ids.js');
-  require('../../main/components/kit.js'); // fmt
-  require('../../main/js/data/names.js');
-  require('../../main/js/data/employees.js');
+  require('../../build/main/js/clock.js');
+  require('../../build/main/js/ids.js');
+  require('../../build/main/components/kit.js'); // fmt
+  require('../../build/main/js/data/names.js');
+  require('../../build/main/js/data/employees.js');
   window.employeesData = employees;
-  require('../../main/js/data/materials.js');
-  require('../../main/js/data/products.js');
-  require('../../main/js/data/equipment.js');
-  require('../../main/js/data/research.js'); // goals read the level
+  require('../../build/main/js/data/materials.js');
+  require('../../build/main/js/data/products.js');
+  require('../../build/main/js/data/equipment.js');
+  require('../../build/main/js/data/research.js'); // goals read the level
   window.research.getUnlockedProducts = () => ['pd001'];
-  require('../../main/js/data/helpers.js');
-  require('../../main/js/data/insurance.js');
-  require('../../main/js/data/finances.js');
-  require('../../main/js/insuranceClaims.js');
-  require('../../main/js/taskManager.js');
-  require('../../main/js/taskAssignment.js');
-  require('../../main/js/production.js');
-  require('../../main/js/customers.js');
-  require('../../main/js/prescriptions.js');
-  require('../../main/js/timeEvents.js');
-  require('../../main/js/brandReputation.js');
-  require('../../main/js/records.js');
-  require('../../main/js/stakes.js');
-  require('../../main/js/goals.js');
+  require('../../build/main/js/data/helpers.js');
+  require('../../build/main/js/data/insurance.js');
+  require('../../build/main/js/data/properties.js');
+  require('../../build/main/js/data/lending.js');
+  require('../../build/main/js/data/finances.js');
+  require('../../build/main/js/insuranceClaims.js');
+  require('../../build/main/js/taskManager.js');
+  require('../../build/main/js/taskAssignment.js');
+  require('../../build/main/js/production.js');
+  require('../../build/main/js/customers.js');
+  require('../../build/main/js/prescriptions.js');
+  require('../../build/main/js/timeEvents.js');
+  require('../../build/main/js/brandReputation.js');
+  require('../../build/main/js/records.js');
+  require('../../build/main/js/stakes.js');
+  require('../../build/main/js/goals.js');
+  require('../../build/main/js/company.js');
+  require('../../build/main/js/building.js');
+  require('../../build/main/js/reports.js');
 
   window.materialsData.forEach((m) => {
     m.inventory = 10000;
@@ -86,7 +91,8 @@ function loadGame({ employees = FULL_STAFF(), stock = 5 } = {}) {
   product().inventory = stock;
   product().price = 10;
   window.financesData.cash = 100000;
-  window.financesData.overhead = 1000;
+  // $1,000 a day of utilities and services; rent is the 1st's (company.test.js)
+  window.company.dailyServices = () => 1000;
 
   jest.spyOn(Math, 'random').mockReturnValue(0);
 }
@@ -462,7 +468,7 @@ describe('skipping the daily summary (#49)', () => {
 describe('game speeds (#49)', () => {
   test('1x, 2x (the default), 5x and 10x; anything else becomes the next one up', () => {
     jest.resetModules();
-    require('../../main/js/main.js');
+    require('../../build/main/js/main.js');
     expect(window.GAME_SPEEDS).toEqual([1, 2, 5, 10]);
     expect(window.getGameSpeed()).toBe(2);
     window.setGameSpeed(10);

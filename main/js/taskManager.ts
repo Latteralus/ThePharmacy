@@ -4,8 +4,9 @@
 type TaskEventListener = (data: unknown) => void;
 
 window.taskManager = (function (): TaskManagerApi {
-    // Main task storage - the source of truth for task state
-    const tasks: Task[] = [];
+    // The active location's task queue (company.ts makes
+    // window.taskManager.tasks a view of it), read afresh on every use.
+    const queue = (): Task[] => window.taskManager.tasks;
 
     // Every status change goes through setStatus, which allows only these.
     // pending -> pending-dependent: a fill that turns out to lack stock
@@ -75,7 +76,7 @@ window.taskManager = (function (): TaskManagerApi {
         task.lastProgressTime = task.createdAt;
 
         // Add the task to the array
-        tasks.push(task);
+        queue().push(task);
         console.log(`[taskManager.js] Task added: ${task.type} - ${task.id}`);
 
         // Log additional customer-related information
@@ -115,8 +116,8 @@ window.taskManager = (function (): TaskManagerApi {
     }
 
     function removeTask(task: Task): void {
-        const index = tasks.indexOf(task);
-        if (index > -1) tasks.splice(index, 1);
+        const index = queue().indexOf(task);
+        if (index > -1) queue().splice(index, 1);
     }
 
     function cancelTask(taskId: string): void {
@@ -138,13 +139,15 @@ window.taskManager = (function (): TaskManagerApi {
         taskEvents.emit('taskCancelled', task);
 
         // A fill waiting on this compound would never start.
-        tasks.filter((t) => t.dependencyTaskId === task.id).forEach((dependent) => cancelTask(dependent.id));
+        queue()
+            .filter((t) => t.dependencyTaskId === task.id)
+            .forEach((dependent) => cancelTask(dependent.id));
     }
 
     // A compound finished: the fills waiting on it take their stock (it
     // made exactly what they need) and become ready.
     function releaseDependents(task: Task): void {
-        tasks
+        queue()
             .filter((t) => t.dependencyTaskId === task.id && t.status === 'pending-dependent')
             .forEach((dependent) => window.prescriptions.supplyFill(dependent));
     }
@@ -169,22 +172,22 @@ window.taskManager = (function (): TaskManagerApi {
     // Get a task by ID - optimized with caching
     function getTaskById(taskId: string): Task | undefined {
         // Use find since we don't maintain a lookup map
-        return tasks.find((t) => t.id === taskId);
+        return queue().find((t) => t.id === taskId);
     }
 
     // Get all tasks that are unassigned and pending
     function getUnassignedTasks(): Task[] {
-        return tasks.filter((t) => !t.assignedTo && t.status === 'pending');
+        return queue().filter((t) => !t.assignedTo && t.status === 'pending');
     }
 
     // Get all tasks assigned to a specific employee
     function getTasksForEmployee(empId: string): Task[] {
-        return tasks.filter((t) => t.assignedTo === empId && t.status !== 'completed');
+        return queue().filter((t) => t.assignedTo === empId && t.status !== 'completed');
     }
 
     // Get all tasks for a specific customer
     function getTasksForCustomer(customerId: string): Task[] {
-        return tasks.filter((t) => t.customerId === customerId && t.status !== 'completed');
+        return queue().filter((t) => t.customerId === customerId && t.status !== 'completed');
     }
 
     // Update task progress based on elapsed game time
@@ -200,8 +203,8 @@ window.taskManager = (function (): TaskManagerApi {
         const now = window.clock.now();
 
         // Process each task in the array
-        for (let i = 0; i < tasks.length; i++) {
-            const task = tasks[i];
+        for (let i = 0; i < queue().length; i++) {
+            const task = queue()[i];
 
             // Only process tasks that are in progress and have an assigned employee
             if (task.status === 'inProgress' && task.assignedTo) {
@@ -314,11 +317,11 @@ window.taskManager = (function (): TaskManagerApi {
     // Debug function to track task status
     function debugTaskStatus(): void {
         console.log('=== TASK SYSTEM DEBUG ===');
-        console.log(`Total tasks: ${tasks.length}`);
+        console.log(`Total tasks: ${queue().length}`);
 
         // Count tasks by type and status
         const taskCounts: Record<string, number> = {};
-        tasks.forEach((task) => {
+        queue().forEach((task) => {
             if (!task) return; // Skip null/undefined tasks
             const key = `${task.type}_${task.status}`;
             taskCounts[key] = (taskCounts[key] || 0) + 1;
@@ -330,7 +333,7 @@ window.taskManager = (function (): TaskManagerApi {
         if (window.customers && window.customers.activeCustomers) {
             const customersWithNoTasks = window.customers.activeCustomers.filter((customer) => {
                 if (!customer) return false;
-                const customerTasks = tasks.filter(
+                const customerTasks = queue().filter(
                     (t) => t && t.customerId === customer.id && t.status !== 'completed',
                 );
                 return customerTasks.length === 0;
@@ -354,7 +357,7 @@ window.taskManager = (function (): TaskManagerApi {
             // Check for employees with invalid task assignments
             const employeesWithInvalidTasks = window.employeesData.filter((emp) => {
                 if (!emp || !emp.currentTaskId) return false; // No task assigned
-                const task = tasks.find((t) => t && t.id === emp.currentTaskId);
+                const task = queue().find((t) => t && t.id === emp.currentTaskId);
                 return !task || task.assignedTo !== emp.id;
             });
 
@@ -395,7 +398,7 @@ window.taskManager = (function (): TaskManagerApi {
 
     // Expose the public API
     return {
-        tasks,
+        tasks: [],
         addTask,
         getTaskById,
         getUnassignedTasks,

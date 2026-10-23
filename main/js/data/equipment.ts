@@ -2,9 +2,14 @@
 //
 // Lab equipment. Products list what they need (Product.equipmentNeeded);
 // production.ts only compounds a product when all of it is owned and not
-// broken. capacity is how many compounds one unit handles at a time.
-// Research (research.ts) decides which items can be bought. Only items some
-// product needs are here: nine that no product used were removed in Phase 7.
+// broken. capacity is how many compounds one unit handles at a time. Each
+// unit takes floor space in the lab (Phase 10, #11): a bench-top item a
+// couple of square feet, a floor-standing machine 15-40 with its working
+// room. Buying refuses what won't fit (building.ts). Today's sterile items
+// stand in the lab too; Phase 11's equipment list moves sterile work into a
+// cleanroom. Research (research.ts) decides which items can be bought. Only
+// items some product needs are here: nine that no product used were
+// removed in Phase 7.
 
 window.equipmentData = [
     {
@@ -16,6 +21,8 @@ window.equipmentData = [
         capacity: 1, // compounds one unit handles at a time
         autoPurchaseThreshold: 0, // if owned < this, auto-buy
         autoPurchaseAmount: 0, // how many to buy when auto-purchase triggers
+        zone: 'lab', // where it goes in the building (building.ts)
+        sqft: 2, // floor space, with room to work around it
     },
     {
         id: 'eq002',
@@ -26,6 +33,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 25,
     },
     {
         id: 'eq003',
@@ -36,6 +45,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 20,
     },
     {
         id: 'eq004',
@@ -46,6 +57,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 12,
     },
     {
         id: 'eq005',
@@ -56,6 +69,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 3,
     },
     {
         id: 'eq006',
@@ -66,6 +81,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 2,
     },
     {
         id: 'eq007',
@@ -76,6 +93,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 15,
     },
     {
         id: 'eq008',
@@ -86,6 +105,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 15,
     },
     {
         id: 'eq013',
@@ -96,6 +117,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 1,
     },
     {
         id: 'eq015',
@@ -106,6 +129,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 30,
     },
     {
         id: 'eq016',
@@ -116,6 +141,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 15,
     },
     {
         id: 'eq017',
@@ -126,6 +153,8 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 12,
     },
     {
         id: 'eq019',
@@ -136,5 +165,7 @@ window.equipmentData = [
         capacity: 1,
         autoPurchaseThreshold: 0,
         autoPurchaseAmount: 0,
+        zone: 'lab',
+        sqft: 40,
     },
 ];

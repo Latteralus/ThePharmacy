@@ -2,10 +2,14 @@
 // yesterday, the bank and how long the cash lasts, the goals, and net
 // profit over the last two weeks (Phase 8). Yesterday and the trend come
 // from the day records (records.ts), as does Recent days, which reopens each
-// closing's summary (Phase 9: summaries can be skipped at closing).
+// closing's summary (Phase 9: summaries can be skipped at closing), and
+// Reports the monthly and yearly reports (Phase 10). Goals show the next
+// few on the ladder, or all of them.
 
 const TREND_DAYS = 14;
 const RECENT_DAYS = 7;
+const RECENT_REPORTS = 3;
+const NEXT_GOALS = 6;
 
 window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -16,7 +20,7 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
     const root = kit.page(
         mainContent,
         'Dashboard',
-        'Today against yesterday, the bank, and your goals. Wages, overhead and interest are charged at closing.',
+        'Today against yesterday, the bank, and your goals. Wages and utilities are charged at closing, rent and loan payments on the 1st.',
     );
 
     // No pharmacist, or no one to fill and compound (#3)
@@ -58,7 +62,18 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
     left.append(bankCard.root, trendCard.root);
 
     // --------------------- Goals ---------------------
-    const goalsCard = kit.card('Goals', { flush: true });
+    let allGoals = false;
+    const goalsToggle = kit.button(
+        'Show all',
+        'ghost',
+        () => {
+            allGoals = !allGoals;
+            goalsToggle.textContent = allGoals ? 'Show next' : 'Show all';
+            refresh();
+        },
+        { small: true },
+    );
+    const goalsCard = kit.card('Goals', { flush: true, actions: [goalsToggle] });
     const goalsTable = kit.table([
         { label: 'Goal' },
         { label: 'Progress', width: '220px' },
@@ -78,12 +93,25 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
     ]);
     daysCard.body.appendChild(daysTable.root);
 
+    // --------------------- Reports ---------------------
+    const reportsCard = kit.card('Reports', {
+        flush: true,
+        actions: [kit.button('Finances', 'ghost', () => window.showPage('finances'), { small: true })],
+    });
+    const reportsTable = kit.table([
+        { label: 'Report' },
+        { label: 'Net', num: true },
+        { label: '', className: 'actions' },
+    ]);
+    reportsCard.body.appendChild(reportsTable.root);
+
     const right = el('div', 'stack');
-    right.append(goalsCard.root, daysCard.root);
+    right.append(goalsCard.root, daysCard.root, reportsCard.root);
     columns.append(left, right);
 
     function goalValue(goal: GoalProgress, value: number): string {
         if (goal.unit === 'money') return fmt.moneyWhole(value);
+        if (goal.unit === 'days' && goal.target >= 365) return `${fmt.int(Math.floor(value / 365))} yr`;
         if (goal.unit === 'reputation') return String(Math.round(value));
         return fmt.int(value);
     }
@@ -124,7 +152,9 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         // How many days of fixed costs the cash covers
         const fixed = stakes.fixedDailyCosts();
         const runway = fixed > 0 ? data.cash / fixed : Infinity;
-        const owed = stakes.loanBalance();
+        const owed = stakes.debt();
+        const line = stakes.loanBalance();
+        const term = stakes.termLoanBalance();
         cashTile.set(
             fmt.money(data.cash),
             owed > 0 ? `Owed to the bank ${fmt.moneyWhole(owed)}` : '',
@@ -147,8 +177,20 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
                 'Insurance owed to you',
                 `${fmt.money(data.pendingInsuranceIncome)} (paid on day ${window.insuranceClaims.nextPayday()})`,
             ],
-            ['Owed to the bank', owed > 0 ? `${fmt.money(owed)} of ${fmt.moneyWhole(stakes.LOAN_LIMIT)}` : 'Nothing'],
-            ['Fixed costs a day', `${fmt.money(fixed)} (wages, overhead${owed > 0 ? ', interest' : ''})`],
+            [
+                'Owed to the bank',
+                owed <= 0
+                    ? 'Nothing'
+                    : [
+                          term > 0 ? `${fmt.money(term)} in loans` : '',
+                          line > 0
+                              ? `${fmt.money(line)} of the ${fmt.moneyWhole(stakes.LOAN_LIMIT)} line of credit`
+                              : '',
+                      ]
+                          .filter(Boolean)
+                          .join(', '),
+            ],
+            ['Fixed costs a day', `${fmt.money(fixed)} (wages, rent, utilities${owed > 0 ? ', loans' : ''})`],
             [
                 'Cash covers',
                 data.cash <= 0 ? 'No days' : runway >= 100 ? '100+ days' : `${Math.floor(runway)} days of fixed costs`,
@@ -158,11 +200,13 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         ];
         rows.forEach(([label, value, tone]) => bankGrid.append(el('dt', '', label), el('dd', tone ?? '', value)));
 
-        // Goals
+        // Goals: the next few not yet reached, or all of them
         goalsTable.clear();
         const goals = window.goals.list();
-        goalsCard.setCount(`${goals.filter((g) => g.reachedOn !== null).length} of ${goals.length}`);
-        goals.forEach((goal) => {
+        const reachedCount = goals.filter((g) => g.reachedOn !== null).length;
+        goalsCard.setCount(`${reachedCount} of ${goals.length}`);
+        const shownGoals = allGoals ? goals : goals.filter((g) => g.reachedOn === null).slice(0, NEXT_GOALS);
+        shownGoals.forEach((goal) => {
             const done = goal.reachedOn !== null;
             const shown = Math.max(0, Math.min(goal.value, goal.target));
             const progress = kit.meterCell(
@@ -178,9 +222,25 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         });
         if (window.gameState.wonOnDay !== undefined) {
             goalsTable.note(`Every goal reached on day ${window.gameState.wonOnDay + 1}. You won.`);
+        } else if (!allGoals && reachedCount > 0) {
+            goalsTable.note(`${reachedCount} reached so far. Goals are checked at closing.`);
         } else {
             goalsTable.note('Goals are checked at closing.');
         }
+
+        // The latest reports, each reopened from its record
+        reportsTable.clear();
+        const reports = [...window.reports.list]
+            .sort((a, b) => b.lastDay - a.lastDay || (a.kind === 'year' ? -1 : 1))
+            .slice(0, RECENT_REPORTS);
+        if (reports.length === 0) reportsTable.empty('A report is written at the last closing of each month.');
+        reports.forEach((report) => {
+            reportsTable.row([
+                report.kind === 'year' ? `${report.label} in review` : report.label,
+                el('span', report.net < 0 ? 'critical-text' : '', fmt.money(report.net)),
+                kit.button('Open', 'ghost', () => window.showReportModal(report.kind, report.period), { small: true }),
+            ]);
+        });
 
         const warnings = window.employees.staffingWarnings();
         staffingWarning.style.display = warnings.length > 0 ? '' : 'none';

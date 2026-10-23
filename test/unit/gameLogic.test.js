@@ -8,11 +8,11 @@
 describe('game data & finance logic', () => {
   beforeEach(() => {
     jest.resetModules();
-    require('../../main/js/data/materials.js');
-    require('../../main/js/data/products.js');
-    require('../../main/js/ui.js');
-    require('../../main/js/data/finances.js');
-    require('../../main/js/data/helpers.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/ui.js');
+    require('../../build/main/js/data/finances.js');
+    require('../../build/main/js/data/helpers.js');
   });
 
   test('materials.js populates window.materialsData with valid entries', () => {

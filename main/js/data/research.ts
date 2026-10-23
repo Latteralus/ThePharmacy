@@ -76,7 +76,7 @@ window.research = {
     // Starts research toward the next level. Cash is deducted immediately,
     // but the level itself only unlocks once checkResearchCompletion()
     // observes that enough in-game days have passed - see
-    // ResearchInProgress in global.d.ts.
+    // ResearchInProgress in types/catalog.d.ts.
     researchNextLevel: function () {
         if (window.researchData.inProgress) {
             console.log('Research already in progress.');

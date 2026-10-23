@@ -23,6 +23,10 @@ window.timeEvents = (function (): TimeEventsApi {
     // customers don't walk into the loaded game.
     const pendingArrivals = new Set<number>();
 
+    // The day the player was last told storage was too full to auto-order
+    // (once a day)
+    let storageFullWarnedDay = -1;
+
     // Event system for time-related events
     const events = {
         listeners: {} as Record<string, TimeEventListener[]>,
@@ -79,24 +83,40 @@ window.timeEvents = (function (): TimeEventsApi {
         gameState.lastEndedDayIndex = gameState.dayIndex;
 
         // The day goes into the history, then goals and the bank have their
-        // say (Phase 8). Three closings in a row in the red is bankruptcy,
-        // and the game ends here.
+        // say (Phase 8). The last closing of a month writes its report (and
+        // December's, the year's) from the history (Phase 10, #13). Three
+        // closings in a row in the red is bankruptcy, and the game ends here.
         window.records?.recordDay();
-        const goals = window.goals?.check();
+        const reached = window.goals?.check();
+        const written = window.reports?.closeDay() ?? [];
+        // A report can complete a goal (a profitable month or year)
+        const fromReports = written.length > 0 ? window.goals?.check() : undefined;
+        const won = !!reached?.won || !!fromReports?.won;
         if (window.stakes?.closeDay()) {
             window.updateUI('finances');
             window.showGameOverModal?.();
             return;
         }
 
-        // Show the daily summary, then wait for the user to start next day
-        // (after the winning dialog, the day all goals are reached). With
-        // the summary skipped (#49), the next day starts by itself: the
-        // day's record keeps the summary for the Dashboard, and the closing
+        // Show the daily summary, then wait for the user to start next day:
+        // after it come the month's and year's reports, if written today,
+        // and the winning dialog on the day all goals are reached. With the
+        // summary skipped (#49), the next day starts by itself: the day's
+        // record keeps the summary for the Dashboard, and the closing
         // warnings (in the red, low cash, staff quitting) are notifications
-        // already (stakes.closeDay, employees.endOfDay).
+        // already (stakes.closeDay, employees.endOfDay). A skipped report is
+        // kept, to open from the Dashboard or Finances page.
         const nextDay = (): void => skipToNextDay(gameState);
-        const afterSummary = goals?.won && window.showVictoryModal ? () => window.showVictoryModal(nextDay) : nextDay;
+        const afterReports = won && window.showVictoryModal ? () => window.showVictoryModal(nextDay) : nextDay;
+        const afterSummary = written.reduceRight<() => void>((next, report) => {
+            const skip =
+                report.kind === 'month' ? window.appSettings?.skipMonthlyReport : window.appSettings?.skipYearlyReport;
+            if (skip || !window.showReportModal) {
+                window.notifications?.add(`The ${report.label} report is ready on the Finances page.`, 'info');
+                return next;
+            }
+            return () => window.showReportModal(report.kind, report.period, next);
+        }, afterReports);
         if (window.appSettings?.skipDailySummary) {
             afterSummary();
         } else if (window.showDailySummaryModal) {
@@ -182,6 +202,11 @@ window.timeEvents = (function (): TimeEventsApi {
         // Roll over today / this week / this month, and the daily counters
         if (window.finances && window.finances.startNewDay) {
             window.finances.startNewDay(previousDate, gameState.currentDate);
+        }
+        // The 1st: rent and term-loan payments (Phase 10)
+        if (gameState.currentDate.getMonth() !== previousDate.getMonth()) {
+            window.company?.payRent();
+            window.stakes?.payTermLoans();
         }
         if (window.financesData) {
             window.financesData.pendingOrders = 0;
@@ -345,6 +370,12 @@ window.timeEvents = (function (): TimeEventsApi {
                 mat.autoOrderAmount > 0
             ) {
                 if (mat.inventory < mat.autoOrderThreshold) {
+                    // Only what storage has shelves for (#11)
+                    const refusal = window.building?.refuseMaterials({ [mat.id]: mat.autoOrderAmount }) ?? '';
+                    if (refusal) {
+                        warnStorageFull(mat.name);
+                        return;
+                    }
                     const cost = window.calculateMaterialCost(mat.id, mat.autoOrderAmount);
 
                     const paid = window.finances.transact({
@@ -385,6 +416,17 @@ window.timeEvents = (function (): TimeEventsApi {
         }
     }
 
+    function warnStorageFull(materialName: string): void {
+        const day = window.gameState.dayIndex;
+        if (storageFullWarnedDay === day) return;
+        storageFullWarnedDay = day;
+        window.notifications?.add(
+            `Storage is full, so ${materialName} couldn't be reordered. Free some shelves (the Building page shows ` +
+                'what takes them), or lower reorder amounts on the Inventory page.',
+            'warning',
+        );
+    }
+
     // ---------------------------------------------------------
     // Check if we need to auto-purchase equipment (same pattern as
     // autoOrderCheck, for equipment.autoPurchaseThreshold/autoPurchaseAmount
@@ -402,6 +444,11 @@ window.timeEvents = (function (): TimeEventsApi {
 
         window.equipmentData.forEach((eq) => {
             if (eq.autoPurchaseThreshold > 0 && eq.autoPurchaseAmount > 0 && eq.owned < eq.autoPurchaseThreshold) {
+                // Only what the building has room for (#11)
+                if (window.building?.refuseEquipment({ [eq.id]: eq.autoPurchaseAmount })) {
+                    console.warn(`[autoPurchaseEquipmentCheck] No room for ${eq.name}`);
+                    return;
+                }
                 const cost = eq.cost * eq.autoPurchaseAmount;
 
                 const paid = window.finances.transact({

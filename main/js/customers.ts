@@ -36,6 +36,8 @@ const SERVED_GAIN_CONTENT = 0.15;
 // Products a turned-away customer has been reported for, with the day, so
 // the player hears about each product once a day rather than per customer.
 const turnedAwayReported = new Map<string, number>();
+// The day the player was last told the front store was full (once a day)
+let storeFullReportedDay = -1;
 
 // The customer's prescription can't be supplied (no stock for the dosage,
 // and the equipment to make it is missing or broken), so they go elsewhere.
@@ -170,6 +172,23 @@ window.customers = {
         };
 
         this.activeCustomers.push(newCustomer);
+
+        // The front store holds so many at once (building.ts, Phase 10 #11);
+        // past that, they go elsewhere, counted as turned away
+        const capacity = window.building?.customerCapacity() ?? Infinity;
+        if (this.activeCustomers.length > capacity) {
+            const day = window.gameState?.dayIndex ?? 0;
+            if (storeFullReportedDay !== day) {
+                storeFullReportedDay = day;
+                window.notifications?.add(
+                    `The front store is full (${capacity} customers), so new arrivals are going elsewhere. ` +
+                        "Further ones today won't be reported.",
+                    'warning',
+                );
+            }
+            this.customerLeaves(newCustomer.id, 'unavailable');
+            return null;
+        }
 
         // Generate and assign a prescription - a returning customer gets a
         // refill of their previous product instead of a random pick.

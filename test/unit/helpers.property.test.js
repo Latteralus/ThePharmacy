@@ -9,9 +9,9 @@ const fc = require('fast-check');
 describe('helpers production math (property-based)', () => {
   beforeEach(() => {
     jest.resetModules();
-    require('../../main/js/data/materials.js');
-    require('../../main/js/data/products.js');
-    require('../../main/js/data/helpers.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/data/helpers.js');
   });
 
   function fitsInventory(needed) {

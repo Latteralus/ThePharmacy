@@ -25,6 +25,7 @@ test.afterEach(() => {
 // the right side of the top bar.
 async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
+    if (process.env.THEPHARMACY_HIDDEN === '1') return; // no window, no DevTools
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -88,7 +89,7 @@ test('close the front, end the day early, and send someone home', async () => {
   // End day asks first; the summary notes the short day
   await page.click('#endDayButton');
   const prompt = page.locator('.confirm-modal');
-  await expect(prompt).toContainText('Wages and overhead are charged for the full day');
+  await expect(prompt).toContainText('Wages and utilities are charged for the full day');
   await prompt.locator('button', { hasText: 'End day' }).click();
   const summary = page.locator('.daily-summary');
   await expect(summary).toBeVisible();

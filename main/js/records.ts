@@ -1,21 +1,32 @@
-// records.js - the pharmacy's history (Phase 8).
+// records.js - the company's history (Phase 8).
 //
-//   days    one DayRecord per closing: money by category, cash, the loan,
-//           reputation, customers by outcome and staff. Kept for the whole
-//           game (a few hundred bytes a day).
+//   days    one DayRecord per closing: money by category and by location,
+//           cash, the loan, reputation, customers by outcome and staff. The
+//           company's: one a closing, whatever the number of locations.
+//           Kept for DAYS_KEPT days; older ones are summarised in the
+//           monthly reports (reports.ts) and their customers in `pruned`.
 //   visits  one CustomerVisit per departure, newest first, the last
-//           VISITS_KEPT of them.
+//           VISITS_KEPT of them. Each location's own (company.ts makes
+//           records.visits a view of the active location's).
 //
 // The Dashboard, Statistics and Customers pages and the Finances month view
 // read it. Saved with the game (saveFile.ts). Times are game-time epoch
 // milliseconds, like Customer.arrivedAt, so there's nothing to revive on load.
 
 const VISITS_KEPT = 500;
+// A little over a year of day records (Statistics and the Finances page
+// read the last few weeks; reports keep the totals of older months)
+const DAYS_KEPT = 400;
 const LOST_REASONS: DepartureReason[] = ['impatient', 'price', 'closing', 'unavailable'];
+
+function sumOf(rows: Record<string, number>): number {
+    return Object.values(rows).reduce((sum, n) => sum + n, 0);
+}
 
 window.records = {
     days: [],
     visits: [],
+    pruned: {},
 
     // Called by customers.customerLeaves for every departure, before the
     // customer's prescription is removed.
@@ -64,10 +75,18 @@ window.records = {
             revenueByCategory: byCategory.revenue,
             costsByCategory: byCategory.expenses,
             cash: data.cash,
-            loan: data.loanBalance ?? 0,
+            // Everything owed to the bank: the line of credit and term loans
+            loan: window.stakes?.debt() ?? data.loanBalance ?? 0,
             reputation: window.brandReputation.reputationScore,
             customers: { ...(state.customersToday ?? {}) },
-            staff: window.employeesData.length,
+            staff: window.company.locations.reduce((sum, loc) => sum + loc.employees.length, 0),
+            // Each location's part (the rest is the company's own: loans)
+            byLocation: window.company.locations.map((loc) => {
+                const totals = window.finances.categoryTotals(opening, now.getTime(), loc.id);
+                const revenue = sumOf(totals.revenue);
+                const costs = sumOf(totals.expenses);
+                return { id: loc.id, name: loc.name, revenue, costs, net: revenue - costs };
+            }),
         };
         // A short day, so Statistics can tell it from a slow one (#8)
         if (state.frontClosedAt !== undefined) record.frontClosedAt = state.frontClosedAt;
@@ -84,7 +103,33 @@ window.records = {
     totalCustomers(reason) {
         const today = window.gameState.dayIndex;
         const before = this.days.reduce((sum, d) => sum + (d.day !== today ? (d.customers[reason] ?? 0) : 0), 0);
-        return before + (window.gameState.customersToday?.[reason] ?? 0);
+        return (this.pruned[reason] ?? 0) + before + (window.gameState.customersToday?.[reason] ?? 0);
+    },
+
+    // Drops day records over DAYS_KEPT days old whose month has a report,
+    // keeping their customer counts. Returns how many it dropped.
+    pruneDays() {
+        const cutoff = window.gameState.dayIndex - DAYS_KEPT;
+        const reported = (record: DayRecord): boolean => {
+            const date = new Date(record.date);
+            const period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            return !!window.reports?.find('month', period);
+        };
+        const kept: DayRecord[] = [];
+        let dropped = 0;
+        this.days.forEach((record) => {
+            if (record.day < cutoff && reported(record)) {
+                Object.entries(record.customers).forEach(([reason, count]) => {
+                    const key = reason as DepartureReason;
+                    this.pruned[key] = (this.pruned[key] ?? 0) + (count ?? 0);
+                });
+                dropped++;
+            } else {
+                kept.push(record);
+            }
+        });
+        this.days = kept;
+        return dropped;
     },
 
     // Customers who left unserved, from counts by reason. Those sent home by

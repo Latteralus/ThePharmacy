@@ -77,10 +77,7 @@
                 console.error('[bootstrap] gameAPI.getNewGameOptions not available');
 
                 // Fallback to default options
-                const defaultOptions: NewGameOptions = {
-                    pharmacyName: 'Mountain Care',
-                    location: 'suburban',
-                };
+                const defaultOptions: NewGameOptions = { pharmacyName: 'Mountain Care' };
 
                 console.log('[bootstrap] Using default options:', defaultOptions);
 
@@ -117,10 +114,7 @@
             console.log('[bootstrap] No mode specified, defaulting to new game with default options');
 
             // Default to new game with default options
-            const defaultOptions: NewGameOptions = {
-                pharmacyName: 'Mountain Care',
-                location: 'suburban',
-            };
+            const defaultOptions: NewGameOptions = { pharmacyName: 'Mountain Care' };
 
             if (typeof window.initializeNewGame === 'function') {
                 window.initializeNewGame(defaultOptions);
@@ -145,12 +139,14 @@
 
     // The main menu's settings the game reads while it runs (#49). Until
     // they arrive, the defaults apply.
-    window.appSettings = { skipDailySummary: false };
+    window.appSettings = { skipDailySummary: false, skipMonthlyReport: false, skipYearlyReport: false };
     function loadAppSettings(): void {
         window.gameAPI
             ?.getSettings?.()
             .then((settings) => {
                 window.appSettings.skipDailySummary = settings?.skipDailySummary === true;
+                window.appSettings.skipMonthlyReport = settings?.skipMonthlyReport === true;
+                window.appSettings.skipYearlyReport = settings?.skipYearlyReport === true;
             })
             .catch((error) => console.error('[bootstrap] Error reading settings:', error));
     }

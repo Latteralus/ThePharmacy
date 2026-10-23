@@ -1,7 +1,8 @@
 // /js/pages/settingsPage.js - player settings only (no cheats, findings H5):
-// pause and speed (also in the top bar, with Space and 1-4), and skipping
-// the daily summary (Phase 9, #49), which is the main menu's setting, shared
-// by every game. There is no difficulty setting: every game plays at Normal.
+// pause and speed (also in the top bar, with Space and 1-4), skipping the
+// daily summary (Phase 9, #49) and the monthly and yearly reports (Phase
+// 10, #13), which are the main menu's settings, shared by every game, and
+// the game's saves. There is no difficulty setting: every game plays at Normal.
 
 const SPEED_NAMES: Record<number, string> = { 1: 'slow', 2: 'normal', 5: 'fast', 10: 'very fast' };
 
@@ -12,7 +13,7 @@ window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope)
     const root = kit.page(
         mainContent,
         'Settings',
-        'Game speed is saved with your game; the daily summary setting applies to every game. Changes apply at once.',
+        'Game speed is saved with your game; the report settings apply to every game. Changes apply at once.',
     );
     root.classList.add('settings-page-container');
     root.style.maxWidth = '760px';
@@ -71,34 +72,60 @@ window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope)
     row(time, 'Speed', speedSelect, 'Keys 1-4 pick a speed. At 1×, one real second is one game minute.');
 
     // --------------------- Reports ---------------------
-    // The main menu's setting: change it here, and it's stored for every game.
+    // The main menu's settings: change them here, and they're stored for every game.
     const reports = settingsCard('Reports');
-    const skipSummary = kit.checkbox(
+    type SkipSetting = 'skipDailySummary' | 'skipMonthlyReport' | 'skipYearlyReport';
+    function skipRow(key: SkipSetting, label: string, title: string, hint: string): void {
+        const box = kit.checkbox(label, !!window.appSettings?.[key], (on) => void saveSkip(key, on));
+        box.input.id = key;
+        row(reports, title, box.root, hint);
+    }
+    skipRow(
+        'skipDailySummary',
         'Skip the daily summary',
-        !!window.appSettings?.skipDailySummary,
-        (on) => void saveSkipSummary(on),
-    );
-    skipSummary.input.id = 'skipDailySummary';
-    row(
-        reports,
         'Daily summary',
-        skipSummary.root,
         "The next day starts straight away. Game over and the win still show, warnings come as notifications, and every day's summary stays on the Dashboard.",
     );
+    skipRow(
+        'skipMonthlyReport',
+        'Skip the monthly report',
+        'Monthly report',
+        'It opens after the last closing of each month. Skipped, it is kept on the Dashboard and the Finances page.',
+    );
+    skipRow(
+        'skipYearlyReport',
+        'Skip the yearly report',
+        'Yearly report',
+        'It opens after the last closing of December. Skipped, it is kept like the monthly one.',
+    );
 
-    async function saveSkipSummary(on: boolean): Promise<void> {
-        window.appSettings.skipDailySummary = on;
+    async function saveSkip(key: SkipSetting, on: boolean): Promise<void> {
+        window.appSettings[key] = on;
         const api = window.gameAPI;
         if (!api?.getSettings || !api.updateSettings) return;
         try {
             const current = (await api.getSettings()) ?? {};
-            const result = await api.updateSettings({ ...current, skipDailySummary: on } as GameSettings);
+            const result = await api.updateSettings({ ...current, [key]: on } as GameSettings);
             if (!result?.success) throw new Error('not saved');
         } catch (error) {
             console.error('[settingsPage] Error saving settings:', error);
             window.toast("The setting applies to this session, but couldn't be saved.", 'warn');
         }
     }
+
+    // --------------------- Saves ---------------------
+    const saves = settingsCard('Saves');
+    const saveButtons = el('div', 'toolbar');
+    saveButtons.append(
+        kit.button('Save', 'secondary', () => window.saveGame?.()),
+        kit.button('Saves…', 'secondary', () => window.showSavesModal({ gameOnly: true })),
+    );
+    row(
+        saves,
+        'This game',
+        saveButtons,
+        'Save (Ctrl+S) keeps one named save up to date; Saves… (Ctrl+L) saves under a new name or loads one. Autosave keeps the last three.',
+    );
 
     // --------------------- Live status ---------------------
     function showStatus(): void {

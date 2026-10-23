@@ -16,11 +16,14 @@ if (contextBridge && ipcRenderer) {
   contextBridge.exposeInMainWorld('gameAPI', {
     // True when running unpackaged (npm start, tests). See electron-main.js.
     isDev: process.argv.includes('--thepharmacy-dev'),
-    saveGame: (gameData) => {
-      return ipcRenderer.invoke('save-game', gameData);
+    saveGame: (gameData, options) => {
+      return ipcRenderer.invoke('save-game', gameData, options);
     },
-    loadGame: () => {
-      return ipcRenderer.invoke('load-game');
+    loadGame: (slot) => {
+      return ipcRenderer.invoke('load-game', slot);
+    },
+    selectSave: (slot) => {
+      return ipcRenderer.invoke('select-save', slot);
     },
     updateSettings: (settings) => {
       return ipcRenderer.invoke('update-settings', settings);
@@ -31,8 +34,8 @@ if (contextBridge && ipcRenderer) {
     getSavedGames: () => {
       return ipcRenderer.invoke('get-saved-games');
     },
-    deleteSavedGame: (index) => {
-      return ipcRenderer.invoke('delete-saved-game', index);
+    deleteSavedGame: (slot) => {
+      return ipcRenderer.invoke('delete-saved-game', slot);
     },
     startNewGame: (gameData) => {
       return ipcRenderer.invoke('start-new-game', gameData);

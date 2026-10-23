@@ -30,7 +30,7 @@ describe('clock', () => {
   beforeEach(() => {
     jest.resetModules();
     startGameAt(8);
-    require('../../main/js/clock.js');
+    require('../../build/main/js/clock.js');
   });
 
   test('now() is the game time', () => {
@@ -116,7 +116,7 @@ describe('clock', () => {
   test('jobs registered before a game exists start counting from the first tick', () => {
     jest.resetModules();
     delete window.gameState;
-    require('../../main/js/clock.js');
+    require('../../build/main/js/clock.js');
 
     const fn = jest.fn();
     window.clock.every(5, fn);
@@ -177,9 +177,9 @@ describe('customer patience on the game clock', () => {
     window.prescriptions = { removePrescriptionsByCustomer: jest.fn() };
     window.updateUI = jest.fn();
 
-    require('../../main/js/clock.js');
-    require('../../main/js/ids.js');
-    require('../../main/js/customers.js');
+    require('../../build/main/js/clock.js');
+    require('../../build/main/js/ids.js');
+    require('../../build/main/js/customers.js');
   });
 
   afterEach(() => {

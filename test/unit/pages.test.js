@@ -19,9 +19,15 @@ function loadUi() {
     isPaused: false,
   };
   window.GAME_SPEEDS = [1, 2, 5, 10]; // main.ts
-  require('../../main/js/clock.js');
-  require('../../main/js/ui.js');
-  require('../../main/components/kit.js');
+  require('../../build/main/js/clock.js');
+  require('../../build/main/js/ui.js');
+  require('../../build/main/components/kit.js');
+  // The company and its one location (Phase 10): the per-location lists a
+  // test sets go to it, and pages read its building and lease
+  require('../../build/main/js/data/properties.js');
+  require('../../build/main/js/company.js');
+  require('../../build/main/js/building.js');
+  require('../../build/main/js/reports.js');
 }
 
 function main() {
@@ -259,7 +265,7 @@ describe('the UI kit (U5, 9.1)', () => {
 describe('modals (U19-U21)', () => {
   beforeEach(() => {
     loadUi();
-    require('../../main/modals/modal.js');
+    require('../../build/main/modals/modal.js');
   });
 
   test('the confirm prompt runs the action only on confirm; Esc and Cancel do nothing', () => {
@@ -377,9 +383,9 @@ describe('the Operations page', () => {
     };
     window.prescriptions = { activePrescriptions: [] };
     window.getGameSpeed = () => 1;
-    require('../../main/js/taskbars.js');
-    require('../../main/js/pages/operationsPage.js');
-    require('../../main/js/pages/settingsPage.js');
+    require('../../build/main/js/taskbars.js');
+    require('../../build/main/js/pages/operationsPage.js');
+    require('../../build/main/js/pages/settingsPage.js');
   });
 
   test('shows a new customer once customers are announced, in player words, with no timer', () => {
@@ -495,7 +501,7 @@ describe('the top bar (U1, U2)', () => {
   beforeEach(() => {
     loadUi();
     window.financesData = { cash: 101905.65, dailyIncome: 1905.65, pendingInsuranceIncome: 1295 };
-    window.gameState.pharmacyName = 'Barnett Family Pharmacy';
+    window.company.name = 'Barnett Family Pharmacy';
     let speed = 1;
     window.getGameSpeed = () => speed;
     window.setGameSpeed = jest.fn((s) => {
@@ -504,7 +510,7 @@ describe('the top bar (U1, U2)', () => {
     window.toggleGamePause = jest.fn(() => {
       window.gameState.isPaused = !window.gameState.isPaused;
     });
-    require('../../main/components/topBar.js');
+    require('../../build/main/components/topBar.js');
     document.body.prepend(window.renderTopBar());
     window.ui.flush();
   });
@@ -550,7 +556,7 @@ describe('the top bar (U1, U2)', () => {
       endDayNow: jest.fn(),
       closingPreview: () => ({ customers: 2, tasksInProgress: 1 }),
     };
-    require('../../main/modals/modal.js');
+    require('../../build/main/modals/modal.js');
     const front = document.getElementById('frontButton');
     expect(front.textContent).toBe('Close front');
 
@@ -601,14 +607,22 @@ describe('the Settings page', () => {
     window.toggleGamePause = () => {
       window.gameState.isPaused = !window.gameState.isPaused;
     };
-    require('../../main/js/pages/settingsPage.js');
+    require('../../build/main/js/pages/settingsPage.js');
     window.renderBlankPage = () => {};
   });
 
   test('labels every control (U18), and has no difficulty settings', () => {
     window.showPage('settings');
     const labels = [...main().querySelectorAll('.settings-grid .label')].map((l) => l.textContent);
-    expect(labels).toEqual(['Current time', 'Game', 'Speed', 'Daily summary']);
+    expect(labels).toEqual([
+      'Current time',
+      'Game',
+      'Speed',
+      'Daily summary',
+      'Monthly report',
+      'Yearly report',
+      'This game',
+    ]);
     expect([...main().querySelectorAll('select option')].map((o) => o.value)).toEqual(['1', '2', '5', '10']);
   });
 
@@ -661,21 +675,21 @@ describe('stock and equipment pages', () => {
   beforeEach(() => {
     loadUi();
     window.updateUI = jest.fn((topic) => window.ui.updateUI(topic));
-    require('../../main/js/ids.js');
-    require('../../main/js/data/materials.js');
-    require('../../main/js/data/products.js');
-    require('../../main/js/data/equipment.js');
-    require('../../main/js/data/research.js');
-    require('../../main/js/data/helpers.js');
-    require('../../main/js/data/finances.js');
+    require('../../build/main/js/ids.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/data/equipment.js');
+    require('../../build/main/js/data/research.js');
+    require('../../build/main/js/data/helpers.js');
+    require('../../build/main/js/data/finances.js');
     window.globalMarkup = window.globalMarkup || 1.35;
     window.financesData.cash = 100000;
     window.taskAssignment = { requestAutoAssign: jest.fn() };
     window.taskManager = { tasks: [] };
-    require('../../main/js/production.js');
-    require('../../main/js/pages/inventoryPage.js');
-    require('../../main/js/pages/marketplacePage.js');
-    require('../../main/js/pages/equipmentPage.js');
+    require('../../build/main/js/production.js');
+    require('../../build/main/js/pages/inventoryPage.js');
+    require('../../build/main/js/pages/marketplacePage.js');
+    require('../../build/main/js/pages/equipmentPage.js');
   });
 
   function row(name, selector) {
@@ -793,7 +807,7 @@ describe('stock and equipment pages', () => {
     window.updateUI('equipment');
     window.ui.flush();
 
-    expect(eqRow.cells[2].textContent).toBe(String(eq.owned));
+    expect(eqRow.cells[3].textContent).toBe(String(eq.owned)); // after Price and Floor
     expect(eqRow.textContent).toContain('90%');
     expect(buyQty.value).toBe('2');
 
@@ -832,7 +846,7 @@ describe('stock and equipment pages', () => {
     window.showPage('equipment');
     const pressRow = main().querySelector('.equipment-card[data-equipment-id="eq002"]');
     expect(pressRow.textContent).toContain('Needed for 7 products');
-    expect(pressRow.cells[3].textContent).toBe('0 / 1');
+    expect(pressRow.cells[4].textContent).toBe('0 / 1');
     expect(pressRow.textContent).toContain('60%');
 
     const repair = [...pressRow.querySelectorAll('button')].find((b) => b.textContent.startsWith('Repair'));
@@ -847,7 +861,7 @@ describe('stock and equipment pages', () => {
     window.taskManager.tasks.push({ id: 'c1', type: 'compound', status: 'inProgress', productId: 'pd001' });
     window.updateUI('tasks');
     window.ui.flush();
-    expect(pressRow.cells[3].textContent).toBe('1 / 1');
+    expect(pressRow.cells[4].textContent).toBe('1 / 1');
   });
 
   test('Equipment auto-purchase settings apply without buying anything (U14)', () => {
@@ -865,7 +879,7 @@ describe('stock and equipment pages', () => {
 describe('the Employees page (U15)', () => {
   beforeEach(() => {
     loadUi();
-    require('../../main/modals/modal.js');
+    require('../../build/main/modals/modal.js');
     window.employeesData = [
       {
         id: 'emp-1',
@@ -879,13 +893,13 @@ describe('the Employees page (U15)', () => {
       },
     ];
     window.taskManager = { tasks: [], getTaskById: () => undefined };
-    require('../../main/js/data/helpers.js');
+    require('../../build/main/js/data/helpers.js');
     const staff = window.employeesData;
-    require('../../main/js/data/employees.js');
+    require('../../build/main/js/data/employees.js');
     window.employeesData = staff;
     jest.spyOn(window.employees, 'fireEmployee').mockImplementation(() => {});
-    require('../../main/js/taskbars.js');
-    require('../../main/js/pages/employeesPage.js');
+    require('../../build/main/js/taskbars.js');
+    require('../../build/main/js/pages/employeesPage.js');
   });
 
   test('shows the daily wage end of day actually charges (salary / 365, with payroll taxes and benefits)', () => {
@@ -1003,22 +1017,22 @@ describe('the Employees page (U15)', () => {
 describe('the Finances and Research pages (U16, U17)', () => {
   beforeEach(() => {
     loadUi();
-    require('../../main/js/ids.js');
-    require('../../main/js/data/materials.js');
-    require('../../main/js/data/products.js');
-    require('../../main/js/data/equipment.js');
-    require('../../main/js/data/research.js');
-    require('../../main/js/data/helpers.js');
-    require('../../main/js/data/finances.js');
+    require('../../build/main/js/ids.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/data/equipment.js');
+    require('../../build/main/js/data/research.js');
+    require('../../build/main/js/data/helpers.js');
+    require('../../build/main/js/data/finances.js');
     window.financesData.cash = 1000;
     window.taskManager = { tasks: [] };
-    require('../../main/js/production.js');
-    require('../../main/js/insuranceClaims.js');
-    require('../../main/js/records.js');
-    require('../../main/js/stakes.js');
-    require('../../main/components/charts.js');
-    require('../../main/js/pages/financesPage.js');
-    require('../../main/js/pages/researchPage.js');
+    require('../../build/main/js/production.js');
+    require('../../build/main/js/insuranceClaims.js');
+    require('../../build/main/js/records.js');
+    require('../../build/main/js/stakes.js');
+    require('../../build/main/components/charts.js');
+    require('../../build/main/js/pages/financesPage.js');
+    require('../../build/main/js/pages/researchPage.js');
   });
 
   test('Finances follows every transaction while it is open', () => {
@@ -1069,7 +1083,7 @@ describe('notifications', () => {
     loadUi();
     window.financesData = { cash: 0, dailyIncome: 0, pendingInsuranceIncome: 0 };
     window.getGameSpeed = () => 1;
-    require('../../main/components/topBar.js');
+    require('../../build/main/components/topBar.js');
   });
 
   test('the welcome is there as soon as the top bar is, stamped with game time', () => {
@@ -1097,29 +1111,31 @@ describe('notifications', () => {
 describe('stakes and history on screen (Phase 8)', () => {
   beforeEach(() => {
     loadUi();
-    require('../../main/js/ids.js');
-    require('../../main/js/data/materials.js');
-    require('../../main/js/data/products.js');
-    require('../../main/js/data/research.js');
-    require('../../main/js/data/finances.js');
+    require('../../build/main/js/ids.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/data/research.js');
+    require('../../build/main/js/data/finances.js');
     window.financesData.cash = 50000;
-    window.financesData.overhead = 1000;
+    // $1,000 a day of utilities and services, and no rent (it's the 1st's)
+    window.company.dailyServices = () => 1000;
+    window.company.active().lease.monthlyRent = 0;
     // $100 a day, with payroll taxes and benefits
     window.employeesData = [{ id: 'a', firstName: 'Ann', lastName: 'Lee', role: 'Cashier', salary: 29200 }];
     window.brandReputation = { reputationScore: 42 };
     window.gameState.customersToday = { served: 4, impatient: 1 };
     window.gameState.lastEndedDayIndex = 0;
     window.notifications = { add: jest.fn() };
-    require('../../main/js/insuranceClaims.js');
-    require('../../main/js/records.js');
-    require('../../main/js/stakes.js');
-    require('../../main/js/goals.js');
-    require('../../main/components/charts.js');
-    require('../../main/modals/modal.js');
-    require('../../main/js/pages/dashboardPage.js');
-    require('../../main/js/pages/customersPage.js');
-    require('../../main/js/pages/statisticsPage.js');
-    require('../../main/js/pages/financesPage.js');
+    require('../../build/main/js/insuranceClaims.js');
+    require('../../build/main/js/records.js');
+    require('../../build/main/js/stakes.js');
+    require('../../build/main/js/goals.js');
+    require('../../build/main/components/charts.js');
+    require('../../build/main/modals/modal.js');
+    require('../../build/main/js/pages/dashboardPage.js');
+    require('../../build/main/js/pages/customersPage.js');
+    require('../../build/main/js/pages/statisticsPage.js');
+    require('../../build/main/js/pages/financesPage.js');
   });
 
   afterEach(() => {
@@ -1173,11 +1189,11 @@ describe('stakes and history on screen (Phase 8)', () => {
     expect(text()).toContain('Yesterday 30'); // served
     expect(text()).toContain('Yesterday 3'); // lost
     expect(text()).toContain('+2.0 since yesterday');
-    expect(text()).toContain('$1,100.00 (wages, overhead)');
+    expect(text()).toContain('$1,100.00 (wages, rent, utilities)');
     expect(text()).toContain('45 days of fixed costs');
     expect(text()).toContain('Reach reputation 50');
     expect(text()).toContain('42 / 50');
-    expect(text()).toContain('0 of 10');
+    expect(text()).toContain('0 of 17'); // the ladder for a long game (Phase 10)
     expect(main().querySelector('.callout.critical').style.display).toBe('none');
   });
 
@@ -1189,8 +1205,13 @@ describe('stakes and history on screen (Phase 8)', () => {
     expect(warning.style.display).toBe('');
     expect(warning.textContent).toContain('the last closing');
     expect(warning.textContent).toContain('by closing on day 3');
+    // The next goals on the ladder show; every one with Show all
+    expect(text()).toContain('1 reached so far');
+    expect(text()).not.toContain('Open for a week');
+    button(main(), 'Show all').click();
+    expect(text()).toContain('Open for a week');
     expect(text()).toContain('Day 1'); // when "Open for a week" was reached
-    expect(text()).toContain('1 of 10');
+    expect(text()).toContain('1 of 17');
   });
 
   test('Customers lists visits newest first, filters by outcome and searches, and follows departures', () => {
@@ -1234,17 +1255,17 @@ describe('stakes and history on screen (Phase 8)', () => {
 
   test('Finances borrows and repays, and the loan is not in the P&L', () => {
     window.showPage('finances');
-    expect(text()).toContain('Nothing owed');
+    expect(text()).toContain('Line of credit: nothing owed');
     button(main(), 'Borrow $10,000').click();
     window.ui.flush();
     expect(window.financesData.cash).toBe(60000);
-    expect(text()).toContain('Owed $10,000.00 of the $50,000 limit');
+    expect(text()).toContain('Line of credit: owed $10,000.00 of the $50,000 limit');
     expect(text()).toContain('Total revenue$0.00');
 
     button(main(), 'Repay all').click();
     window.ui.flush();
     expect(window.stakes.loanBalance()).toBe(0);
-    expect(text()).toContain('Nothing owed');
+    expect(text()).toContain('Line of credit: nothing owed');
   });
 
   test("Finances' month adds closed days from their records, so a capped log doesn't shorten it", () => {
@@ -1253,7 +1274,10 @@ describe('stakes and history on screen (Phase 8)', () => {
     window.finances.transact({ type: 'income', category: 'copays', amount: 100, description: 'today' });
     window.showPage('finances');
     expect(text()).toContain('Total revenue$9,100.00');
-    expect(text()).toContain('Overhead-$3,900.00');
+    expect(text()).toContain('Utilities and services-$3,900.00');
+    // A record from before locations is all the first location's
+    expect(text()).toContain(`Net by location${window.company.active().name}$5,100.00`);
+    expect(text()).not.toContain('Company (loan interest)');
   });
 
   test('the daily summary warns when in the red and lists goals reached at this closing', () => {
@@ -1270,7 +1294,7 @@ describe('stakes and history on screen (Phase 8)', () => {
     expect(modal.textContent).toContain('+2.0 today');
   });
 
-  test('game over offers the last save and the main menu, and a load closes it', async () => {
+  test("game over offers the game's saves and the main menu, and a load closes it", async () => {
     window.gameState.bankrupt = true;
     window.loadGame = jest.fn(async () => {
       window.closeSessionModals();
@@ -1281,11 +1305,15 @@ describe('stakes and history on screen (Phase 8)', () => {
     expect(modal.textContent).toContain('Bankrupt');
     expect(modal.textContent).toContain('Customers served4');
     expect(button(modal, 'Main menu')).toBeDefined();
-    button(modal, 'Load last save').click();
-    await Promise.resolve();
-    expect(window.loadGame).toHaveBeenCalled();
+    // The game's saves, to pick one from before the trouble (Phase 10)
+    window.showSavesModal = jest.fn();
+    button(modal, 'Load a save').click();
+    expect(window.showSavesModal).toHaveBeenCalledWith({ title: 'Load a save', gameOnly: true });
+    // and a load closes game over
+    await window.loadGame();
     expect(document.querySelector('.game-over')).toBeNull();
     delete window.loadGame;
+    delete window.showSavesModal;
   });
 
   test('a load closes the daily summary without starting a next day', () => {
@@ -1294,5 +1322,239 @@ describe('stakes and history on screen (Phase 8)', () => {
     window.closeSessionModals();
     expect(document.querySelector('.daily-summary')).toBeNull();
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe('the company, its building, reports and saves on screen (Phase 10)', () => {
+  beforeEach(() => {
+    loadUi();
+    window.updateUI = jest.fn((topic) => window.ui.updateUI(topic));
+    require('../../build/main/js/ids.js');
+    require('../../build/main/js/data/materials.js');
+    require('../../build/main/js/data/products.js');
+    require('../../build/main/js/data/equipment.js');
+    require('../../build/main/js/data/research.js');
+    require('../../build/main/js/data/lending.js');
+    require('../../build/main/js/data/finances.js');
+    window.financesData.cash = 50000;
+    window.employeesData = [{ id: 'a', firstName: 'Ann', lastName: 'Lee', role: 'Cashier', salary: 29200 }];
+    window.brandReputation = { reputationScore: 42 };
+    window.customers = { activeCustomers: [] };
+    window.notifications = { add: jest.fn() };
+    window.company.name = 'Mountain Care';
+    require('../../build/main/js/insuranceClaims.js');
+    require('../../build/main/js/records.js');
+    require('../../build/main/js/stakes.js');
+    require('../../build/main/js/goals.js');
+    require('../../build/main/components/charts.js');
+    require('../../build/main/modals/modal.js');
+    require('../../build/main/modals/reportModal.js');
+    require('../../build/main/modals/savesModal.js');
+    require('../../build/main/js/pages/buildingPage.js');
+    require('../../build/main/js/pages/companyPage.js');
+    require('../../build/main/js/pages/financesPage.js');
+  });
+
+  afterEach(() => {
+    delete window.notifications;
+    delete window.gameAPI;
+  });
+
+  function button(root, label) {
+    return [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+  }
+
+  function startupLoan(overrides = {}) {
+    return {
+      id: 'loan-1',
+      name: 'Startup loan',
+      principal: 100000,
+      rate: 0.095,
+      termMonths: 60,
+      monthlyPayment: 2100.19,
+      balance: 100000,
+      paymentsMade: 0,
+      start: 0,
+      guarantee: true,
+      collateral: false,
+      ...overrides,
+    };
+  }
+
+  function januaryReport() {
+    return {
+      kind: 'month',
+      period: '2023-01',
+      label: 'January 2023',
+      firstDay: 0,
+      lastDay: 30,
+      daysOpen: 31,
+      revenueByCategory: { copays: 30000, insurance: 12000 },
+      costsByCategory: { wages: 15000, rent: 4500, overhead: 17000, interest: 800 },
+      revenue: 42000,
+      costs: 37300,
+      net: 4700,
+      byLocation: [{ id: 'loc-1', name: 'Maple Grove Plaza, Unit 4', revenue: 42000, costs: 36500, net: 5500 }],
+      customers: { served: 900, impatient: 40, price: 10 },
+      balance: { cash: 61000, insuranceOwed: 9000, deposits: 4500, creditLine: 0, termLoans: 98500 },
+      loans: [{ name: 'Startup loan', balance: 98500, monthlyPayment: 2100.19, paymentsLeft: 59 }],
+      principalRepaid: 1500,
+      interestPaid: 800,
+      highlights: {
+        bestDay: { day: 13, net: 6100 },
+        worstDay: { day: 0, net: -9000 },
+        reputationStart: 10,
+        reputationEnd: 31,
+        staffStart: 3,
+        staffEnd: 5,
+        goals: ['Open for a week'],
+      },
+    };
+  }
+
+  test('Building shows each zone and what is in it, the shelves stock takes, and the lease', () => {
+    window.showPage('building');
+    expect(text()).toContain('Strip-mall storefront at Maple Grove Plaza, Unit 4: 2,000 sq ft');
+    expect(text()).toContain(`Holds ${window.building.customerCapacity()} customers at once`);
+    expect(text()).toContain('None: sterile work needs a cleanroom build-out');
+    expect(text()).toContain('Shelving bay ×45');
+    expect(text()).toContain('$4,500 a month, due on the 1st');
+    const storage = window.building.zone('storage');
+    expect(text()).toContain(`${storage.usedShelves} of 225 shelves used`);
+
+    // Stock arriving updates the shelves in place
+    window.materialsData[0].inventory += 5000;
+    window.updateUI('inventory');
+    window.ui.flush();
+    expect(text()).toContain(`${storage.usedShelves + 5} of 225 shelves used`);
+  });
+
+  test('Company shows the location, what is owed, a month of fixed costs, and pays off the loan', () => {
+    window.financesData.loans = [startupLoan()];
+    window.showPage('company');
+    expect(main().querySelector('h2').textContent).toBe('Mountain Care');
+    expect(text()).toContain('Maple Grove Plaza, Unit 4');
+    expect(text()).toContain('9.50% a year');
+    expect(text()).toContain('Secured bypersonal guarantee');
+    expect(text()).toContain('Rent$4,500.00');
+    expect(text()).toContain('Loan payments$2,100.19');
+    expect(text()).toContain('Owed to the bank$100,000.00');
+
+    const payOff = button(main(), 'Pay off $100,000.00');
+    expect(payOff.disabled).toBe(true); // not the cash
+    window.financesData.cash = 150000;
+    window.updateUI('finances');
+    window.ui.flush();
+    button(main(), 'Pay off $100,000.00').click();
+    button(document.querySelector('.confirm-modal'), 'Pay off').click();
+    expect(window.financesData.loans).toEqual([]);
+    expect(window.financesData.cash).toBe(50000);
+  });
+
+  test('a report shows its P&L, balance sheet, loans and highlights; at closing it waits for Continue', () => {
+    window.reports.list.push(januaryReport());
+    window.showReportModal('month', '2023-01');
+    let modal = document.querySelector('.period-report');
+    expect(modal.textContent).toContain('January 2023');
+    expect(modal.textContent).toContain('Rent-$4,500.00');
+    expect(modal.textContent).toContain('Utilities and services-$17,000.00');
+    expect(modal.textContent).toContain('Company (loan interest)-$800.00');
+    // Cash, insurance owed and the deposit, less the loan
+    expect(modal.textContent).toContain('Net-$24,000.00');
+    expect(modal.textContent).toContain('Best dayDay 14, $6,100.00');
+    expect(modal.textContent).toContain('Reputation10 → 31');
+    expect(modal.textContent).toContain('Goal reachedOpen for a week');
+    button(modal, 'Close').click();
+    expect(document.querySelector('.period-report')).toBeNull();
+
+    // At closing: Continue goes on, and a load closes it without going on
+    const next = jest.fn();
+    window.showReportModal('month', '2023-01', next);
+    modal = document.querySelector('.period-report');
+    button(modal, 'Continue').click();
+    expect(next).toHaveBeenCalledTimes(1);
+    window.showReportModal('month', '2023-01', next);
+    window.closeSessionModals();
+    expect(document.querySelector('.period-report')).toBeNull();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('Finances lists the reports, and shows a past month from its report once its entries are gone', () => {
+    window.reports.list.push(januaryReport());
+    window.gameState.currentDate = new Date(2023, 2, 10, 9);
+    window.showPage('finances');
+    const month = main().querySelector('select[aria-label="Month"]');
+    expect([...month.options].map((o) => o.textContent)).toEqual(['This month', 'January 2023']);
+    month.value = '2023-01';
+    month.dispatchEvent(new Event('change'));
+    expect(text()).toContain('Total revenue$42,000.00');
+    expect(text()).toContain('Net by locationMaple Grove Plaza, Unit 4$5,500.00');
+
+    button(main(), 'Reports').click();
+    expect(text()).toContain('January 2023');
+    button(main(), 'Open').click();
+    expect(document.querySelector('.period-report')).not.toBeNull();
+  });
+
+  test("the Saves dialog lists this game's saves with their day, cash and days in the red, and loads one after asking", async () => {
+    window.gameState.gameId = 'game-a';
+    window.saveSession = { slot: 'mountain-care-a', name: 'Mountain Care' };
+    const save = (overrides) => ({
+      slot: 'mountain-care-a',
+      name: 'Mountain Care',
+      kind: 'manual',
+      gameId: 'game-a',
+      companyName: 'Mountain Care',
+      day: 12,
+      cash: 5000,
+      daysInRed: 0,
+      lastSaved: 2,
+      ...overrides,
+    });
+    window.gameAPI = {
+      getSavedGames: jest.fn(async () => [
+        save({
+          slot: 'autosave-game-a-1',
+          name: 'Autosave',
+          kind: 'auto',
+          day: 14,
+          cash: -300,
+          daysInRed: 2,
+          lastSaved: 3,
+        }),
+        save(),
+        save({ slot: 'other-game', gameId: 'game-b', companyName: 'Other' }),
+      ]),
+      deleteSavedGame: jest.fn(async () => true),
+    };
+    window.loadGame = jest.fn(async () => true);
+    window.saveGame = jest.fn(async () => true);
+
+    window.showSavesModal({ gameOnly: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const dialog = document.querySelector('.saves-modal');
+    const rows = dialog.querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2); // not the other game's
+    expect(rows[0].textContent).toContain('Autosave');
+    expect(rows[0].textContent).toContain('2 in the red');
+    expect(rows[0].textContent).toContain('-$300.00');
+    // Only named saves can be deleted
+    expect(button(rows[0], 'Delete')).toBeUndefined();
+    expect(button(rows[1], 'Delete')).toBeDefined();
+
+    button(rows[0], 'Load').click();
+    button(document.querySelector('.confirm-modal'), 'Load').click();
+    await Promise.resolve();
+    expect(window.loadGame).toHaveBeenCalledWith('autosave-game-a-1');
+
+    window.showSavesModal({ gameOnly: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const again = document.querySelector('.saves-modal');
+    const name = again.querySelector('input[aria-label="Name for a new save"]');
+    name.value = 'Before the expansion';
+    button(again, 'Save as new').click();
+    expect(window.saveGame).toHaveBeenCalledWith({ name: 'Before the expansion' });
+    delete window.loadGame;
+    delete window.saveGame;
   });
 });

@@ -18,6 +18,8 @@ function openSessionDialog(options: Parameters<Kit['modal']>[0]): Modal {
     };
 }
 
+window.openSessionDialog = openSessionDialog;
+
 window.closeSessionModals = function (): void {
     sessionDialog?.close();
     sessionDialog = null;
@@ -42,7 +44,7 @@ function runRecord(): HTMLElement {
         ['Goals reached', `${goals.filter((g) => g.reachedOn !== null).length} of ${goals.length}`],
         ['Cash', window.fmt.money(window.financesData.cash)],
     ];
-    if (window.stakes.loanBalance() > 0) rows.push(['Owed to the bank', window.fmt.money(window.stakes.loanBalance())]);
+    if (window.stakes.debt() > 0) rows.push(['Owed to the bank', window.fmt.money(window.stakes.debt())]);
     const grid = el('dl', 'definition-grid');
     rows.forEach(([label, value]) => grid.append(el('dt', '', label), el('dd', '', value)));
     return grid;
@@ -80,7 +82,7 @@ function daySummaryParts(day: DaySummary): { money: Node; rest: Node[] } {
     // Money
     const money = table([{ label: 'Today' }, { label: '', num: true }]);
     money.row(['Revenue', window.fmt.money(day.revenue)]);
-    money.row(['Costs (wages, overhead, purchases)', window.fmt.money(-day.costs)]);
+    money.row(['Costs (wages, rent, utilities, purchases)', window.fmt.money(-day.costs)]);
     const net = el('span', day.net >= 0 ? 'good-text' : 'critical-text', window.fmt.money(day.net));
     money.row(['Net', net], 'total');
     money.row(['Cash on hand', el('span', day.cash < 0 ? 'critical-text' : '', window.fmt.money(day.cash))]);
@@ -166,7 +168,7 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
         costs: expenses.today,
         net: profit.today,
         cash,
-        loan: window.stakes?.loanBalance() ?? 0,
+        loan: window.stakes?.debt() ?? 0,
         customers: window.gameState.customersToday ?? {},
         reputation: todayRecord?.reputation,
         reputationBefore: window.records?.yesterday()?.reputation,
@@ -272,15 +274,17 @@ window.showDayRecordModal = function (dayIndex: number): void {
 };
 
 // Bankrupt: three closings in a row in the red (stakes.closeDay). The game
-// is over; the player can load their last save or leave.
+// is over; the player can load one of this game's saves (listed with their
+// day, cash and closings in the red, so they can go back to before the
+// trouble) or leave.
 window.showGameOverModal = function (): void {
     const { el } = window.kit;
-    const loadBtn = window.kit.button('Load last save', 'primary');
+    const loadBtn = window.kit.button('Load a save', 'primary');
     const menuBtn = window.kit.button('Main menu', 'secondary');
     const date = window.gameState.currentDate;
     const dialog = openSessionDialog({
         title: 'Bankrupt',
-        subtitle: `${window.gameState.pharmacyName || 'Your pharmacy'} · ${window.fmt.day(date)}`,
+        subtitle: `${window.company.name || 'Your pharmacy'} · ${window.fmt.day(date)}`,
         body: [
             callout(
                 `Cash was below $0 at closing ${window.stakes.BANKRUPT_AFTER} days in a row, so the bank has ` +
@@ -293,15 +297,8 @@ window.showGameOverModal = function (): void {
         actions: [menuBtn, loadBtn],
         className: 'game-over',
     });
-    loadBtn.addEventListener('click', async () => {
-        loadBtn.disabled = true;
-        // A successful load closes this dialog (closeSessionModals)
-        const loaded = window.loadGame ? await window.loadGame() : false;
-        if (!loaded) {
-            loadBtn.disabled = false;
-            window.toast('There is no save to load.', 'warn');
-        }
-    });
+    // A successful load closes this dialog (closeSessionModals)
+    loadBtn.addEventListener('click', () => window.showSavesModal({ title: 'Load a save', gameOnly: true }));
     menuBtn.addEventListener('click', () => {
         dialog.close();
         window.location.href = 'index.html';

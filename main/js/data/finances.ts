@@ -3,11 +3,9 @@
 // Globally configurable markup for suggested prices (default 50%)
 window.globalMarkup = 1.5;
 
-// Daily overhead (rent, utilities, licences, insurance, software) for a
-// suburban store: about $21,000 a month. It was $3,000 a day, sized for
-// prices 4x today's (balance pass, 2026-10-23). Cities pay more rent.
-const BASE_OVERHEAD = 700;
-const LOCATION_OVERHEAD: Record<string, number> = { urban: 1.3, suburban: 1, rural: 0.7 };
+// Rent is monthly, from each location's lease, and utilities and services
+// daily, from its building (company.ts, Phase 10 #11). Together they were
+// one flat daily overhead.
 
 // What an employee costs beyond their salary: payroll taxes and benefits.
 const PAYROLL_LOAD = 1.25;
@@ -54,8 +52,8 @@ window.financesData = {
     pendingInsuranceIncome: 0,
     pendingOrders: 0,
     completedOrders: 0,
-    overhead: 500, // e.g., daily overhead (rent, utilities)
-    loanBalance: 0, // owed to the bank (stakes.ts)
+    loanBalance: 0, // owed on the bank's line of credit (stakes.ts)
+    loans: [], // term loans, like the startup loan (stakes.ts)
     transactions: [], // Transaction history
     revenue: {
         today: 0,
@@ -85,6 +83,7 @@ window.financesData = {
     },
     expenseCategories: {
         wages: 0,
+        rent: 0,
         materials: 0,
         overhead: 0,
         equipment: 0,
@@ -109,21 +108,25 @@ function bucketFor<T extends object>(buckets: T, category: string): keyof T {
     return (category in buckets ? category : 'other') as keyof T;
 }
 
-// Appends to the transaction log (newest first, last 1000 kept). Only
-// transact() calls it, so every entry matches a change in cash.
+// Appends to the transaction log (newest first). Only transact() calls it,
+// so every entry matches a change in cash. Entries from before last month
+// are summarised in the monthly reports and dropped (reports.pruneLedger,
+// Phase 10 #13), so the log stays a couple of months long.
 function logTransaction(transaction: Transaction): void {
     const data = window.financesData;
-    data.transactions.push(transaction);
-    data.transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
-    if (data.transactions.length > 1000) {
-        data.transactions = data.transactions.slice(0, 1000);
+    data.transactions.unshift(transaction);
+    // Kept newest first; an entry is only out of order after a load moved
+    // the clock back
+    if (data.transactions.length > 1 && data.transactions[1].date > transaction.date) {
+        data.transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
     }
 }
 
-// Money that moves cash without being revenue or a cost: the bank loan's
-// principal (stakes.ts). It's logged, and left out of the period totals,
+// Money that moves cash without being revenue or a cost: a loan's
+// principal (stakes.ts) and the lease deposit, which the landlord holds and
+// returns (company.ts). They're logged, and left out of the period totals,
 // the category buckets, today's income and every P&L.
-const FINANCING_CATEGORIES = new Set(['loan']);
+const FINANCING_CATEGORIES = new Set(['loan', 'deposit']);
 
 function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
     periods.today += amount;
@@ -167,10 +170,6 @@ function planCovers(plan: InsurancePlan, productId: string): boolean {
 }
 
 window.finances = {
-    dailyOverhead(location) {
-        return Math.round(BASE_OVERHEAD * (LOCATION_OVERHEAD[location] ?? 1));
-    },
-
     transact(entry) {
         const data = window.financesData;
         const amount = Number(entry.amount);
@@ -206,6 +205,9 @@ window.finances = {
             description: entry.description,
             customerId: entry.customerId,
             prescriptionId: entry.prescriptionId,
+            // The location it's for: the active one unless the entry says
+            // (null for the company's own, like loan interest)
+            locationId: entry.locationId !== undefined ? entry.locationId : (window.company?.activeId ?? null),
         });
         this.updateProfitMetrics();
         window.updateUI('finances');
@@ -220,53 +222,46 @@ window.finances = {
     OVERTIME_WEEK_HOURS,
     OVERTIME_RATE,
 
-    // Apply daily costs (called at end of day). Wages and overhead are owed
-    // whether or not there's cash for them, so they can take cash negative.
-    // Runs before employees.endOfDay, which resets the hours worked today.
+    // Apply daily costs (called at end of day): each location's wages and
+    // utilities and services, then the company's line-of-credit interest.
+    // They're owed whether or not there's cash for them, so they can take
+    // cash negative. Runs before employees.endOfDay, which resets the hours
+    // worked today. Rent and term-loan payments are monthly (on the 1st).
     applyDailyCosts() {
-        console.log('[finances.js] Applying daily costs...');
-
-        let totalWages = 0;
-        window.employeesData.forEach((emp) => {
-            const name = `${emp.firstName} ${emp.lastName}`;
-            const dailyPay = dailyWage(emp);
-            totalWages += dailyPay;
-            this.transact({
-                type: 'expense',
-                category: 'wages',
-                amount: dailyPay,
-                description: `Wage for ${name} (${emp.role}), with payroll taxes and benefits`,
-            });
-
-            const overtime = overtimePay(emp);
-            if (overtime > 0) {
-                totalWages += overtime;
+        window.company.forEachLocation((location) => {
+            window.employeesData.forEach((emp) => {
+                const name = `${emp.firstName} ${emp.lastName}`;
                 this.transact({
                     type: 'expense',
                     category: 'wages',
-                    amount: overtime,
-                    description: `Overtime for ${name}: ${overtimeHours(emp).toFixed(1)}h at ${OVERTIME_RATE}x`,
+                    amount: dailyWage(emp),
+                    description: `Wage for ${name} (${emp.role}), with payroll taxes and benefits`,
                 });
-            }
+
+                const overtime = overtimePay(emp);
+                if (overtime > 0) {
+                    this.transact({
+                        type: 'expense',
+                        category: 'wages',
+                        amount: overtime,
+                        description: `Overtime for ${name}: ${overtimeHours(emp).toFixed(1)}h at ${OVERTIME_RATE}x`,
+                    });
+                }
+            });
+
+            this.transact({
+                type: 'expense',
+                category: 'overhead',
+                amount: window.company.dailyServices(location),
+                description: `Utilities and services, ${location.name}`,
+            });
         });
 
-        const overheadCost = window.financesData.overhead;
-        this.transact({
-            type: 'expense',
-            category: 'overhead',
-            amount: overheadCost,
-            description: 'Daily overhead costs',
-        });
-
-        // Interest on the bank loan, if there is one
+        // Interest on the line of credit, if anything is owed
         window.stakes?.chargeInterest();
 
         // Every other week, the insurers pay what they owe
         this.processInsuranceClaims();
-
-        console.log(
-            `[finances.js] Daily costs applied: Wages $${totalWages.toFixed(2)}, Overhead $${overheadCost.toFixed(2)}`,
-        );
     },
 
     // Call this whenever an order is completed
@@ -528,13 +523,15 @@ window.finances = {
     },
 
     // Revenue and costs by transaction category between two game times (ms),
-    // from the log. The loan's principal isn't in either.
-    categoryTotals(from, to) {
+    // from the log, for one location if given (null: the company's own). The
+    // loan's principal isn't in either.
+    categoryTotals(from, to, locationId) {
         const revenue: Record<string, number> = {};
         const expenses: Record<string, number> = {};
         window.financesData.transactions.forEach((t) => {
             const time = t.date.getTime();
             if (time < from || time > to || FINANCING_CATEGORIES.has(t.category)) return;
+            if (locationId !== undefined && (t.locationId ?? null) !== locationId) return;
             const bucket = t.type === 'income' ? revenue : expenses;
             bucket[t.category] = (bucket[t.category] ?? 0) + t.amount;
         });

@@ -11,6 +11,17 @@ if (process.env.THEPHARMACY_USER_DATA) {
   app.setPath('userData', process.env.THEPHARMACY_USER_DATA);
 }
 
+// Lets tests run without a window popping up: it opens off-screen, without
+// taking focus or a taskbar button, DevTools stay closed, and Chromium is
+// told not to slow it down, so the game loop's animation frames keep coming
+// as if it were on screen. (A window that's never shown draws no frames, so
+// the game clock would stop.) playwright.config.js sets it for the e2e tests.
+const HIDDEN = process.env.THEPHARMACY_HIDDEN === '1';
+if (HIDDEN) {
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+}
+
 // Configure electron-log
 log.transports.file.level = 'info';
 log.transports.console.level = 'info';
@@ -37,7 +48,10 @@ function createWindow() {
     width: 1280,
     height: 800,
     show: false, // Don't show until ready-to-show
+    ...(HIDDEN ? { x: -20000, y: -20000, skipTaskbar: true } : {}),
     webPreferences: {
+      // A hidden window would otherwise pause the game loop
+      backgroundThrottling: !HIDDEN,
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
@@ -81,6 +95,10 @@ function createWindow() {
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
     log.info('Main window ready to show');
+    if (HIDDEN) {
+      mainWindow.showInactive();
+      return;
+    }
     mainWindow.show();
 
     // Open DevTools automatically only in development

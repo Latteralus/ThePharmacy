@@ -42,52 +42,6 @@ documents/
 CLAUDE.md
 .claude/
 
-# TypeScript build output — .ts is the source of truth, .js is generated
-# by `npm run build:ts` (chained in front of start/test/dist/publish).
-# Add each converted file's .js path here as it migrates off plain JS.
-main/js/data/insurance.js
-main/js/data/names.js
-main/js/data/materials.js
-main/js/data/products.js
-main/js/data/research.js
-main/js/data/equipment.js
-main/js/data/helpers.js
-main/js/brandReputation.js
-main/modals/modal.js
-main/js/debug.js
-main/js/insuranceClaims.js
-main/components/sideBar.js
-main/components/topBar.js
-main/components/kit.js
-main/components/charts.js
-main/js/taskbars.js
-main/js/ui.js
-main/js/customers.js
-main/js/production.js
-main/js/prescriptions.js
-main/js/main.js
-main/js/data/employees.js
-main/js/data/finances.js
-main/js/game-bootstrap.js
-main/js/gameInitializer.js
-main/js/taskManager.js
-main/js/taskAssignment.js
-main/js/timeEvents.js
-main/js/clock.js
-main/js/ids.js
-main/js/saveFile.js
-main/js/records.js
-main/js/stakes.js
-main/js/goals.js
-main/js/pages/dashboardPage.js
-main/js/pages/customersPage.js
-main/js/pages/statisticsPage.js
-main/js/pages/equipmentPage.js
-main/js/pages/researchPage.js
-main/js/pages/operationsPage.js
-main/js/pages/employeesPage.js
-main/js/pages/financesPage.js
-main/js/pages/inventoryPage.js
-main/js/pages/marketplacePage.js
-main/js/pages/settingsPage.js
-main/js/electron-integration.js
+# TypeScript build output: .ts is the source of truth, and `npm run
+# build:ts` (chained in front of start/test/dist/publish) compiles it into
+# build/ (ignored above), which main.html loads.

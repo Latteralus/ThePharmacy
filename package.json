@@ -57,8 +57,7 @@
       "index.html",
       "main.html",
       "settings.html",
-      "main/**/*.js",
-      "main/**/*.html",
+      "build/main/**/*.js",
       "main/**/*.css"
     ],
     "win": {
@@ -79,7 +78,7 @@
     ],
     "directories": {
       "output": "dist",
-      "buildResources": "build"
+      "buildResources": "build-resources"
     }
   }
 }

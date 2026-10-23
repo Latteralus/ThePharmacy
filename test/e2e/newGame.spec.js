@@ -51,7 +51,10 @@ test('starting a new game reaches the game screen without console errors', async
   expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
   await expect(page.locator('#pauseButton')).toContainText('Resume');
   expect(await page.evaluate(() => window.employeesData.length)).toBe(0);
-  expect(await page.evaluate(() => window.financesData.cash)).toBe(100000);
+  // $100,000, less the lease's deposit and first month's rent on the first
+  // listing, the default (Phase 10)
+  expect(await page.evaluate(() => window.financesData.cash)).toBe(100000 - 2 * 4500);
+  await expect(page.locator('#locationName')).toHaveText('Maple Grove Plaza, Unit 4');
   // At 2×, the default with no settings saved (#49)
   await expect.poll(() => page.evaluate(() => window.getGameSpeed())).toBe(2);
   await page.locator('.main-content').click({ position: { x: 5, y: 5 } });
@@ -76,9 +79,11 @@ test('starting a new game reaches the game screen without console errors', async
     'dashboard-nav-item',
     'operations-nav-item',
     'customers-nav-item',
+    'building-nav-item',
     'inventory-nav-item',
     'marketplace-nav-item',
     'equipment-nav-item',
+    'company-nav-item',
     'employees-nav-item',
     'finances-nav-item',
     'statistics-nav-item',

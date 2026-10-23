@@ -3,6 +3,7 @@
 // Only pages with something behind them are listed. Dashboard, Customers
 // and Statistics came back in Phase 8 with the history (records.ts) behind
 // them; Orders and Marketing were placeholders (findings U7) and stay out.
+// Company and Building arrived with the company model (Phase 10).
 
 interface NavItemDef {
     label: string;
@@ -17,6 +18,7 @@ const NAV_SECTIONS: Array<{ title: string; items: NavItemDef[] }> = [
             { label: 'Dashboard', pageName: 'dashboard', icon: '📋' },
             { label: 'Operations', pageName: 'operations', icon: '🏥' },
             { label: 'Customers', pageName: 'customers', icon: '🧾' },
+            { label: 'Building', pageName: 'building', icon: '🏢' },
         ],
     },
     {
@@ -30,6 +32,7 @@ const NAV_SECTIONS: Array<{ title: string; items: NavItemDef[] }> = [
     {
         title: 'Business',
         items: [
+            { label: 'Company', pageName: 'company', icon: '🏛️' },
             { label: 'Employees', pageName: 'employees', icon: '👥' },
             { label: 'Finances', pageName: 'finances', icon: '💰' },
             { label: 'Statistics', pageName: 'statistics', icon: '📈' },

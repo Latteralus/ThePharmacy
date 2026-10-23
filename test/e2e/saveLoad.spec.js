@@ -34,6 +34,7 @@ function launchOptions() {
 // button off-screen. Wait for it to open, then close it.
 async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
+    if (process.env.THEPHARMACY_HIDDEN === '1') return; // no window, no DevTools
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -83,34 +84,45 @@ test('saving writes a real save file, and loading it restores game state', async
     return window.customers.generateCustomer().id;
   });
 
+  const cashAtSave = await page1.evaluate(() => window.financesData.cash);
   await page1.click('.save-button');
   await page1.waitForTimeout(1000);
+  const slot = await page1.evaluate(() => window.saveSession.slot);
 
   await app1.close();
 
-  const savedFile = path.join(savesDir, 'pharmacy_save.json');
+  // The game's own save slot, named after it (Phase 10)
+  expect(slot).toMatch(/^round-trip-pharmacy-/);
+  const savedFile = path.join(savesDir, `${slot}.json`);
   expect(fs.existsSync(savedFile)).toBe(true);
   const saved = JSON.parse(fs.readFileSync(savedFile, 'utf8'));
-  expect(saved.gameState.pharmacyName).toBe('Round Trip Pharmacy');
-  expect(saved.financesData.cash).toBe(99999);
-  expect(saved.financesData.transactions.length).toBeGreaterThan(0);
+  expect(saved.slot).toEqual({ id: slot, name: 'Round Trip Pharmacy', kind: 'manual' });
+  // The company and its location (Phase 10)
+  expect(saved.version).toBe(10);
+  expect(saved.company.name).toBe('Round Trip Pharmacy');
+  expect(saved.company.finances.cash).toBe(cashAtSave);
+  expect(saved.company.finances.transactions.length).toBeGreaterThan(0);
+  expect(saved.locations).toHaveLength(1);
+  const [location] = saved.locations;
+  expect(location.lease.listingId).toBe('maple-grove');
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
-  // Only player state for static data (A2)
-  expect(saved.version).toBe(9);
   expect(saved.gameState.frontOpen).toBe(true); // Phase 9
   // The history (Phase 8): no day has closed yet
-  expect(saved.records.days).toEqual([]);
-  expect(Array.isArray(saved.records.visits)).toBe(true);
+  expect(saved.company.records.days).toEqual([]);
+  expect(Array.isArray(location.visits)).toBe(true);
+  // Notifications are saved with the game (C5): the welcome, at least
+  expect(saved.notifications.items.map((n) => n.message)).toContain('Welcome to The Pharmacy!');
   // Ids come from a counter saved with the game (M9)
   expect(customerId).toMatch(/^cust-\d+$/);
   expect(saved.gameState.nextId).toBeGreaterThan(Number(customerId.split('-')[1]));
-  expect(saved.products.find((p) => p.id === 'pd001')).toMatchObject({ price: 123.45 });
-  expect(saved.products[0].name).toBeUndefined();
+  // Only player state for static data (A2)
+  expect(location.products.find((p) => p.id === 'pd001')).toMatchObject({ price: 123.45 });
+  expect(location.products[0].name).toBeUndefined();
   expect(saved.productsData).toBeUndefined();
-  expect(saved.customers.map((c) => c.id)).toContain(customerId);
+  expect(location.customers.map((c) => c.id)).toContain(customerId);
   // One fill per prescription (H1), and the check-in task says what it is (A4)
-  const savedCustomerTasks = saved.tasks.filter((t) => t.customerId === customerId);
+  const savedCustomerTasks = location.tasks.filter((t) => t.customerId === customerId);
   expect(savedCustomerTasks.filter((t) => t.type === 'fillPrescription')).toHaveLength(1);
   expect(savedCustomerTasks.find((t) => t.type === 'customerInteraction').interaction).toBe('checkIn');
   expect(saved.settings.gameSpeed).toBe(5);
@@ -156,7 +168,7 @@ test('saving writes a real save file, and loading it restores game state', async
 
   const loaded = await page2.evaluate(
     (before) => ({
-      pharmacyName: window.gameState?.pharmacyName,
+      pharmacyName: window.company?.name,
       cash: window.financesData?.cash,
       currentDateIsDate: window.gameState?.currentDate instanceof Date,
       transactionDatesAreDates: window.financesData.transactions.every((t) => t.date instanceof Date),
@@ -168,7 +180,7 @@ test('saving writes a real save file, and loading it restores game state', async
   );
 
   expect(loaded.pharmacyName).toBe('Round Trip Pharmacy');
-  expect(loaded.cash).toBe(99999);
+  expect(loaded.cash).toBe(cashAtSave);
   expect(loaded.currentDateIsDate).toBe(true);
   expect(loaded.transactionDatesAreDates).toBe(true);
   expect(loaded.clockAdvanced).toBe(true);

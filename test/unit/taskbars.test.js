@@ -6,8 +6,8 @@
 describe('taskbars.createProgressBar', () => {
   beforeEach(() => {
     jest.resetModules();
-    require('../../main/components/kit.js');
-    require('../../main/js/taskbars.js');
+    require('../../build/main/components/kit.js');
+    require('../../build/main/js/taskbars.js');
   });
 
   test('exposes window.taskbars.createProgressBar', () => {

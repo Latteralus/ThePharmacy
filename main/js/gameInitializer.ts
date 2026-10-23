@@ -26,9 +26,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
                 frameCount: 0,
                 lastFpsUpdate: 0,
             },
-            // Game customization options from the new game form
-            pharmacyName: gameOptions.pharmacyName || 'Your Pharmacy',
-            location: gameOptions.location || 'suburban',
+            // Its saves and autosaves are listed together (save slots)
+            gameId: `game-${Math.random().toString(36).slice(2, 10)}`,
             dateCreated: new Date(),
             // Stakes (stakes.ts): closings in a row with cash below $0, and
             // the day each goal was reached
@@ -50,9 +49,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             pendingInsuranceIncome: 0,
             pendingOrders: 0,
             completedOrders: 0,
-            // Cities pay more rent (and get more customers: brandReputation.calcCustomers)
-            overhead: window.finances.dailyOverhead(window.gameState.location),
             loanBalance: 0,
+            loans: [],
             transactions: [], // Transaction history
             revenue: {
                 today: 0,
@@ -82,6 +80,7 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             },
             expenseCategories: {
                 wages: 0,
+                rent: 0,
                 materials: 0,
                 overhead: 0,
                 equipment: 0,
@@ -99,6 +98,51 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
         };
 
         console.log('[gameInitializer] Finances initialized with $' + startingCash.toFixed(2));
+
+        // The company and its first location, from the lease listing chosen
+        // on the new-game screen (#11, #12). Signing the lease takes the
+        // deposit (held by the landlord) and the first month's rent; rent is
+        // then due on the 1st.
+        const properties = window.properties;
+        const listing = properties.find(gameOptions.propertyId ?? '') ?? properties.listings[0];
+        const leaseYears = properties.LEASE_YEARS.includes(gameOptions.leaseYears ?? 0)
+            ? gameOptions.leaseYears!
+            : properties.DEFAULT_LEASE_YEARS;
+        window.company.reset(gameOptions.pharmacyName || 'Your Pharmacy', [
+            window.company.fromListing(listing, leaseYears, startDate.getTime(), 0),
+        ]);
+        window.records.days = [];
+        window.records.pruned = {};
+        window.reports.list = [];
+        const location = window.company.active();
+        const month = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        window.finances.transact({
+            type: 'expense',
+            category: 'deposit',
+            amount: location.lease.deposit,
+            description: `Lease deposit for ${location.name}, held by the landlord until the lease ends`,
+        });
+        window.finances.transact({
+            type: 'expense',
+            category: 'rent',
+            amount: location.lease.monthlyRent,
+            description: `Rent for ${location.name}, ${month}`,
+        });
+
+        // The startup loan, if one was negotiated, up to what the bank lends
+        // for this property
+        const loan = gameOptions.loan;
+        if (loan && loan.amount > 0) {
+            const termYears = Math.min(
+                window.lending.MAX_TERM_YEARS,
+                Math.max(window.lending.MIN_TERM_YEARS, Math.round(loan.termYears)),
+            );
+            const amount = Math.min(loan.amount, window.lending.maxAmount('retail', listing, leaseYears));
+            window.stakes.takeTermLoan(
+                { amount, termYears, guarantee: !!loan.guarantee, collateral: !!loan.collateral },
+                'Startup loan',
+            );
+        }
 
         // 3. Starting reputation
         console.log('[gameInitializer] Checking if brandReputation exists before modifying...');
@@ -124,6 +168,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
         console.log('[gameInitializer] Ensuring game systems are initialized');
         ensureGameSystemsInitialized();
 
+        window.saveSession = { slot: null, name: window.company.name };
+
         console.log('[gameInitializer] Game initialization complete');
         window.isGameInitialized = true;
         return true;
@@ -133,11 +179,19 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
     }
 };
 
+// The slot Save writes (save slots, Phase 10): none yet in a new game, so
+// the first save makes one named after the company.
+window.saveSession = { slot: null, name: '' };
+
 // Restores a save into the live globals. The single load path, shared by
-// the main-menu load (loadSavedGame below) and the in-game Ctrl+L load
-// (electron-integration.ts). The format itself lives in saveFile.ts.
+// the main-menu load (loadSavedGame below) and the in-game load
+// (electron-integration.ts). The format itself lives in saveFile.ts. Saving
+// afterwards goes back into a named save; an autosave's game gets a new one.
 window.applySavedGame = function (gameData: unknown): void {
     window.saveFile.apply(gameData);
+    const slot = (gameData as { slot?: SaveSlotMeta }).slot;
+    window.saveSession =
+        slot && slot.kind === 'manual' ? { slot: slot.id, name: slot.name } : { slot: null, name: window.company.name };
 };
 
 window.loadSavedGame = async function (): Promise<boolean> {

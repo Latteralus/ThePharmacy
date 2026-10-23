@@ -13,7 +13,7 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
     const root = kit.page(
         mainContent,
         'Equipment',
-        'Products can only be compounded with all their equipment working. Each unit handles one compound at a time, and wears a little with each.',
+        'Products can only be compounded with all their equipment working. Each unit handles one compound at a time, wears a little with each, and takes floor space in the lab.',
     );
 
     const toolbar = el('div', 'toolbar');
@@ -31,11 +31,12 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
     const order = new Map<string, number>();
 
     const orderBar = el('div', 'order-bar');
+    const room = el('span', 'muted');
     const summary = el('span', 'muted');
     const total = el('span', 'order-total');
     total.id = 'total-cost-value';
     const buy = kit.button('Buy equipment', 'primary', confirmPurchase);
-    orderBar.append(summary, total, buy);
+    orderBar.append(room, summary, total, buy);
     root.appendChild(orderBar);
 
     let liveFields: Array<() => void> = [];
@@ -70,6 +71,7 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
         const table = kit.table([
             { label: 'Equipment' },
             { label: 'Price', num: true },
+            { label: 'Floor', num: true, title: 'Floor space each unit takes in the lab' },
             { label: 'Owned', num: true },
             { label: 'In use', num: true, title: 'Compounds using it now, of how many it can take at once' },
             { label: 'Condition', width: '150px', title: 'Below 50% compounding slows down. At 0% it is broken.' },
@@ -168,6 +170,7 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
             const row = table.row([
                 name,
                 fmt.moneyWhole(eq.cost),
+                `${fmt.int(eq.sqft)} sq ft`,
                 owned,
                 inUse,
                 cond.root,
@@ -199,12 +202,26 @@ window.renderEquipmentPage = function (mainContent: HTMLElement, page: PageScope
         total.textContent = fmt.money(sum);
         const short = sum > window.financesData.cash;
         total.className = short ? 'order-total critical-text' : 'order-total';
-        buy.disabled = units === 0 || short;
+        // Lab floor the order needs, against what's free (building.ts)
+        const free = window.building.freeSqft('lab');
+        const needed = window.building.floorNeeded(order).lab ?? 0;
+        const noRoom = !!window.building.refuseEquipment(order);
+        room.textContent =
+            needed > 0
+                ? `Needs ${fmt.int(needed)} of ${fmt.int(Math.max(0, free))} sq ft free in the lab`
+                : `${fmt.int(Math.max(0, free))} sq ft free in the lab`;
+        room.className = noRoom ? 'critical-text' : 'muted';
+        buy.disabled = units === 0 || short || noRoom;
     }
 
     function confirmPurchase(): void {
         const totalCost = orderTotal();
         if (totalCost <= 0) return;
+        const refusal = window.building.refuseEquipment(order);
+        if (refusal) {
+            window.toast(refusal, 'error');
+            return;
+        }
         const paid = window.finances.transact({
             type: 'expense',
             category: 'equipment',

@@ -1335,3 +1335,214 @@ select {
   border-radius: var(--radius);
   padding: 16px;
 }
+
+/* Wider dialogs: a monthly or yearly report, and the saves */
+.period-report .modal {
+  width: min(880px, 94vw);
+}
+
+.saves-modal .modal {
+  width: min(680px, 94vw);
+}
+
+/* ---------- Main menu and its Settings (index.html, settings.html) ---------- */
+body.menu-page {
+  overflow-y: auto;
+  background: var(--brand-900);
+}
+
+.menu {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.menu-narrow {
+  max-width: 760px;
+  align-items: stretch;
+}
+
+.menu-header {
+  text-align: center;
+  color: #fff;
+}
+
+.menu-header h1 {
+  font-size: 40px;
+}
+
+.menu-header p {
+  color: var(--brand-200);
+  margin-top: 6px;
+}
+
+.menu-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.menu-header-row h1 {
+  font-size: 28px;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 300px;
+}
+
+.menu-buttons .btn {
+  height: 44px;
+  font-size: 16px;
+}
+
+.menu-buttons[hidden],
+.menu-panel[hidden],
+.loan-fields[hidden] {
+  display: none;
+}
+
+.menu-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.menu-panel > h2 {
+  color: #fff;
+  font-size: 22px;
+}
+
+.menu-panel .card-body > * + * {
+  margin-top: 10px;
+}
+
+.menu-actions {
+  justify-content: flex-end;
+}
+
+.menu-version {
+  color: var(--brand-200);
+  font-size: 12px;
+}
+
+.menu-status {
+  min-height: 20px;
+  text-align: center;
+  color: #fff;
+}
+
+.menu-status.good-text,
+.menu-status.critical-text {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.form-field label {
+  font-weight: 600;
+}
+
+.listing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.listing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.listing-card:hover {
+  background: var(--surface-sunken);
+}
+
+.listing-card.selected {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 2px var(--brand-200);
+}
+
+.listing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.listing-head h4 {
+  font-size: 15px;
+}
+
+.listing-rent {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.loan-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.loan-fields .form-field {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+
+.loan-offers {
+  gap: 8px;
+}
+
+.loan-offers .check {
+  white-space: normal;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--brand-700);
+}
+
+.save-item {
+  cursor: pointer;
+}
+
+.save-item:hover td {
+  background: var(--surface-sunken);
+}
+
+/* The top bar's location switcher, shown with more than one location */
+.top-bar .location-switcher {
+  height: 22px;
+  font-size: 12px;
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.top-bar .location-switcher option {
+  color: var(--ink);
+}

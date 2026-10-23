@@ -1,6 +1,7 @@
 // /js/pages/marketplacePage.js - buy raw materials. Quantities typed here
 // survive stock changes (compounds taking materials, auto-orders), which
-// update the stock column in place.
+// update the stock column in place. Stock takes shelves in storage, and an
+// order that won't fit is refused (building.ts, Phase 10).
 
 window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -36,6 +37,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageSco
     const order = new Map<string, number>();
 
     const orderBar = el('div', 'order-bar');
+    const shelves = el('span', 'muted');
     const summary = el('span', 'muted');
     const total = el('span', 'order-total');
     const clear = kit.button('Clear', 'ghost', () => {
@@ -44,7 +46,7 @@ window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageSco
         updateTotal();
     });
     const buy = kit.button('Buy materials', 'primary', confirmPurchase);
-    orderBar.append(summary, total, clear, buy);
+    orderBar.append(shelves, summary, total, clear, buy);
     root.appendChild(orderBar);
 
     let stockCells: Array<() => void> = [];
@@ -122,12 +124,26 @@ window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageSco
         const short = sum > window.financesData.cash;
         total.className = short ? 'order-total critical-text' : 'order-total';
         total.title = short ? `More than your ${fmt.money(window.financesData.cash)} cash` : '';
-        buy.disabled = lines === 0 || short;
+        // Shelves the order needs, against those free
+        const free = window.building.freeShelves();
+        const needed = window.building.shelvesNeeded(order);
+        const noRoom = needed > Math.max(0, free);
+        shelves.textContent =
+            needed > 0
+                ? `Needs ${fmt.int(needed)} of ${fmt.int(Math.max(0, free))} shelves free`
+                : `${fmt.int(Math.max(0, free))} shelves free`;
+        shelves.className = noRoom ? 'critical-text' : 'muted';
+        buy.disabled = lines === 0 || short || noRoom;
     }
 
     function confirmPurchase(): void {
         const totalCost = orderTotal();
         if (totalCost <= 0) return;
+        const refusal = window.building.refuseMaterials(order);
+        if (refusal) {
+            window.toast(refusal, 'error');
+            return;
+        }
         const paid = window.finances.transact({
             type: 'expense',
             category: 'materials',
@@ -156,7 +172,10 @@ window.renderMarketplacePage = function (mainContent: HTMLElement, page: PageSco
     search.addEventListener('input', render);
 
     // Stock changes update the column in place, keeping typed quantities
-    page.on('inventory', () => stockCells.forEach((update) => update()));
+    page.on('inventory', () => {
+        stockCells.forEach((update) => update());
+        updateTotal();
+    });
     // The Buy button depends on cash
     page.on('finances', updateTotal);
 

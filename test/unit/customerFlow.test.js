@@ -51,23 +51,23 @@ function loadGame({ employees = FULL_STAFF(), stock = 5, random = 0 } = {}) {
   window.brandReputation = { loseReputation: jest.fn(), gainReputation: jest.fn() };
   window.research = { getUnlockedProducts: () => ['pd001'] };
 
-  require('../../main/js/clock.js');
-  require('../../main/js/ids.js');
-  require('../../main/js/data/names.js');
-  require('../../main/js/data/employees.js'); // work speed and morale
+  require('../../build/main/js/clock.js');
+  require('../../build/main/js/ids.js');
+  require('../../build/main/js/data/names.js');
+  require('../../build/main/js/data/employees.js'); // work speed and morale
   window.employeesData = employees;
-  require('../../main/js/data/materials.js');
-  require('../../main/js/data/products.js');
-  require('../../main/js/data/equipment.js'); // completed tasks wear it down
-  require('../../main/js/data/helpers.js');
-  require('../../main/js/data/insurance.js');
-  require('../../main/js/data/finances.js');
-  require('../../main/js/insuranceClaims.js');
-  require('../../main/js/taskManager.js');
-  require('../../main/js/taskAssignment.js');
-  require('../../main/js/production.js');
-  require('../../main/js/customers.js');
-  require('../../main/js/prescriptions.js');
+  require('../../build/main/js/data/materials.js');
+  require('../../build/main/js/data/products.js');
+  require('../../build/main/js/data/equipment.js'); // completed tasks wear it down
+  require('../../build/main/js/data/helpers.js');
+  require('../../build/main/js/data/insurance.js');
+  require('../../build/main/js/data/finances.js');
+  require('../../build/main/js/insuranceClaims.js');
+  require('../../build/main/js/taskManager.js');
+  require('../../build/main/js/taskAssignment.js');
+  require('../../build/main/js/production.js');
+  require('../../build/main/js/customers.js');
+  require('../../build/main/js/prescriptions.js');
 
   window.materialsData.forEach((m) => {
     m.inventory = 10000;
@@ -669,7 +669,7 @@ describe('loose ends from earlier phases', () => {
   test('departures are counted by reason for the daily summary, and reset the next day', () => {
     loadGame({ stock: 5 });
     window.ui.updateTime = jest.fn();
-    require('../../main/js/timeEvents.js');
+    require('../../build/main/js/timeEvents.js');
     const reasons = ['served', 'served', 'impatient', 'price'];
     reasons.forEach((reason) => window.customers.customerLeaves(window.customers.generateCustomer().id, reason));
 
@@ -681,7 +681,7 @@ describe('loose ends from earlier phases', () => {
 
   test("loading a save cancels the old session's customers who haven't arrived yet", () => {
     loadGame();
-    require('../../main/js/timeEvents.js');
+    require('../../build/main/js/timeEvents.js');
     window.brandReputation.calcCustomers = () => 3;
 
     window.timeEvents.spawnCustomersForHour(9);
@@ -841,7 +841,9 @@ describe('staff matter (M7, Phase 7)', () => {
   test('closing time charges wages, then moves morale', () => {
     loadGame();
     window.ui.updateTime = jest.fn();
-    require('../../main/js/timeEvents.js');
+    require('../../build/main/js/timeEvents.js');
+    require('../../build/main/js/data/properties.js');
+    require('../../build/main/js/company.js'); // each location's wages and utilities
     staff(LAB_TECH).minutesWorkedToday = 600;
 
     window.timeEvents.endOfDay(window.gameState);

@@ -2,18 +2,19 @@
 // with pause and speed (Space, 1-4), Save and notifications.
 
 // Notifications. Timestamps are game time, like everything else the player
-// reads in the game. updateUI finds the badge and list by id, so it does
-// nothing until renderTopBar's element is on the page; renderTopBar draws
-// the badge from unreadCount itself.
+// reads in the game. They're saved with the game (Phase 10), so a load
+// brings back that game's. updateUI finds the badge and list by id, so it
+// does nothing until renderTopBar's element is on the page; renderTopBar
+// draws the badge from unreadCount itself.
 (function () {
-    let nextNotificationId = 1;
     window.notifications = {
         items: [],
         unreadCount: 0,
+        nextId: 1,
 
         add: function (message: string, type = 'info'): number {
             const notification: NotificationItem = {
-                id: nextNotificationId++,
+                id: this.nextId++,
                 message,
                 type,
                 timestamp: new Date(window.clock.now()),
@@ -31,6 +32,13 @@
 
             this.updateUI();
             return notification.id;
+        },
+
+        restore: function (saved: SavedNotifications): void {
+            this.items = saved.items;
+            this.unreadCount = saved.items.filter((n) => !n.read).length;
+            this.nextId = Math.max(saved.nextId, ...saved.items.map((n) => n.id + 1), 1);
+            this.updateUI();
         },
 
         markAsRead: function (id: number): void {
@@ -113,7 +121,7 @@ function confirmEndDay(): void {
     }
     if (parts.length === 0) parts.push('Nothing is in progress.');
     window.showConfirmModal(
-        `${parts.join(' ')} Wages and overhead are charged for the full day.`,
+        `${parts.join(' ')} Wages and utilities are charged for the full day.`,
         'End day',
         () => window.timeEvents!.endDayNow(),
         { title: 'End the day now?', danger: customers > 0 },
@@ -147,17 +155,37 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     // goes before the badge below is drawn).
     if (!welcomed) {
         welcomed = true;
-        window.notifications!.add('Welcome to The Pharmacy!', 'success');
+        // A loaded game brings its notifications back (saved since Phase 10)
+        const back = window.notifications!.items.length > 0;
+        window.notifications!.add(back ? 'Welcome back to The Pharmacy!' : 'Welcome to The Pharmacy!', 'success');
     }
 
     const topBar = el('header', 'top-bar');
 
     // -------- The pharmacy --------
     const title = el('div', 'top-bar-title');
-    const name = el('span', 'pharmacy-name', window.gameState.pharmacyName || 'Your Pharmacy');
+    const name = el('span', 'pharmacy-name', window.company.name || 'Your Pharmacy');
     name.id = 'pharmacyName';
     name.title = name.textContent!;
-    title.append(name, el('span', 'game-name', 'The Pharmacy'));
+    title.appendChild(name);
+    // The location on screen. With more than one (Phase 18), a switcher.
+    const locations = window.company.locations;
+    if (locations.length > 1) {
+        const switcher = window.kit.select(
+            locations.map((loc) => ({ value: loc.id, label: loc.name })),
+            window.company.activeId,
+            (id) => window.company.select(id),
+        );
+        switcher.id = 'locationSwitcher';
+        switcher.className = 'location-switcher';
+        switcher.setAttribute('aria-label', 'Location');
+        title.appendChild(switcher);
+    } else {
+        const place = el('span', 'game-name', window.company.active()?.name ?? 'The Pharmacy');
+        place.id = 'locationName';
+        place.title = place.textContent!;
+        title.appendChild(place);
+    }
     topBar.appendChild(title);
 
     // -------- Money (ui.ts keeps these current on 'finances') --------

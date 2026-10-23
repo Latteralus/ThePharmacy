@@ -29,6 +29,7 @@ function launchOptions() {
 // See saveLoad.spec.js: unpackaged runs dock DevTools beside the page.
 async function closeDevTools(app) {
   await app.evaluate(async ({ BrowserWindow }) => {
+    if (process.env.THEPHARMACY_HIDDEN === '1') return; // no window, no DevTools
     const win = BrowserWindow.getAllWindows()[0];
     for (let i = 0; i < 100 && !win.webContents.isDevToolsOpened(); i++) {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -79,6 +80,8 @@ async function checkSettings(app) {
     '10× (Very fast)',
   ]);
   await expect(page.locator('#skipDailySummary')).not.toBeChecked();
+  await expect(page.locator('#skipMonthlyReport')).not.toBeChecked();
+  await expect(page.locator('#skipYearlyReport')).not.toBeChecked();
   await expect(page.locator('#uiScale')).toHaveValue('1.2');
   await expect(page.locator('#autoSaveEnabled')).not.toBeChecked();
   await expect(page.locator('#autoSaveInterval')).toBeDisabled();
@@ -87,6 +90,7 @@ async function checkSettings(app) {
   // Saving applies the interface size at once, and stores known keys only
   await page.selectOption('#uiScale', '1');
   await page.check('#skipDailySummary');
+  await page.check('#skipYearlyReport');
   await page.click('.save-button');
   await expect(page.locator('#status')).toHaveText('Settings saved.');
   await expect.poll(() => zoom(app)).toBeCloseTo(1);
@@ -98,6 +102,8 @@ async function checkSettings(app) {
     uiScale: 1,
     fullscreenEnabled: false,
     skipDailySummary: true,
+    skipMonthlyReport: false,
+    skipYearlyReport: true,
   });
 
   // A bad interval isn't saved
@@ -116,8 +122,10 @@ async function checkSettings(app) {
   await page.waitForURL(/mode=new/);
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
   await expect.poll(() => page.evaluate(() => window.getGameSpeed())).toBe(5);
-  // and reads the daily summary setting
+  // and reads the report settings
   await expect.poll(() => page.evaluate(() => window.appSettings.skipDailySummary)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.appSettings.skipYearlyReport)).toBe(true);
+  expect(await page.evaluate(() => window.appSettings.skipMonthlyReport)).toBe(false);
 
   expect(errors).toEqual([]);
 }

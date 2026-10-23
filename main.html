@@ -12,80 +12,91 @@
     <div id="root"></div>
 
     <!-- Debug script for troubleshooting -->
-    <script src="main/js/debug.js"></script>
+    <script src="build/main/js/debug.js"></script>
 
     <!-- Add bootstrap script first to handle initialization -->
-    <script src="main/js/game-bootstrap.js"></script>
+    <script src="build/main/js/game-bootstrap.js"></script>
 
     <!-- Add game initializer next - it needs to be available before game logic -->
-    <script src="main/js/gameInitializer.js"></script>
+    <script src="build/main/js/gameInitializer.js"></script>
 
     <!-- Game clock/scheduler - every simulation module below schedules on it -->
-    <script src="main/js/clock.js"></script>
+    <script src="build/main/js/clock.js"></script>
 
     <!-- Ids for everything the game creates (counter saved on gameState) -->
-    <script src="main/js/ids.js"></script>
+    <script src="build/main/js/ids.js"></script>
 
     <!-- Load the game initialization script -->
-    <script src="main/js/main.js"></script>
+    <script src="build/main/js/main.js"></script>
 
     <!-- Load data modules -->
-    <script src="main/js/data/names.js"></script>
-    <script src="main/js/data/employees.js"></script>
-    <script src="main/js/data/products.js"></script>
-    <script src="main/js/data/materials.js"></script>
-    <script src="main/js/data/equipment.js"></script>
-    <script src="main/js/data/insurance.js"></script>
-    <script src="main/js/data/research.js"></script>
-    <script src="main/js/data/helpers.js"></script>
-    <script src="main/js/data/finances.js"></script>
+    <script src="build/main/js/data/names.js"></script>
+    <script src="build/main/js/data/employees.js"></script>
+    <script src="build/main/js/data/products.js"></script>
+    <script src="build/main/js/data/materials.js"></script>
+    <script src="build/main/js/data/equipment.js"></script>
+    <script src="build/main/js/data/insurance.js"></script>
+    <script src="build/main/js/data/research.js"></script>
+    <script src="build/main/js/data/helpers.js"></script>
+    <!-- Lease listings and the startup loan (the main menu loads these too) -->
+    <script src="build/main/js/data/properties.js"></script>
+    <script src="build/main/js/data/lending.js"></script>
+    <script src="build/main/js/data/finances.js"></script>
 
     <!-- Save file format; snapshots the data files above before anything changes them -->
-    <script src="main/js/saveFile.js"></script>
+    <script src="build/main/js/saveFile.js"></script>
 
     <!-- Load core game modules -->
-    <script src="main/js/ui.js"></script>
+    <script src="build/main/js/ui.js"></script>
     <!-- Formatters, player words, components and toasts every screen is built from -->
-    <script src="main/components/kit.js"></script>
+    <script src="build/main/components/kit.js"></script>
     <!-- One look for every Chart.js chart (Chart.js itself loads further down) -->
-    <script src="main/components/charts.js"></script>
-    <script src="main/js/taskManager.js"></script>
-    <script src="main/js/taskAssignment.js"></script>
-    <script src="main/js/production.js"></script>
-    <script src="main/js/customers.js"></script>
-    <script src="main/js/prescriptions.js"></script>
-    <script src="main/js/insuranceClaims.js"></script>
-    <script src="main/js/timeEvents.js"></script>
-    <script src="main/js/taskbars.js"></script>
-    <script src="main/js/brandReputation.js"></script>
+    <script src="build/main/components/charts.js"></script>
+    <script src="build/main/js/taskManager.js"></script>
+    <script src="build/main/js/taskAssignment.js"></script>
+    <script src="build/main/js/production.js"></script>
+    <script src="build/main/js/customers.js"></script>
+    <script src="build/main/js/prescriptions.js"></script>
+    <script src="build/main/js/insuranceClaims.js"></script>
+    <script src="build/main/js/timeEvents.js"></script>
+    <script src="build/main/js/taskbars.js"></script>
+    <script src="build/main/js/brandReputation.js"></script>
     <!-- History (days and customer visits), the bank and bankruptcy, and goals -->
-    <script src="main/js/records.js"></script>
-    <script src="main/js/stakes.js"></script>
-    <script src="main/js/goals.js"></script>
+    <script src="build/main/js/records.js"></script>
+    <script src="build/main/js/stakes.js"></script>
+    <script src="build/main/js/goals.js"></script>
+    <!-- The company and its locations: the per-location globals above become views of the active location's lists, so it loads after them -->
+    <script src="build/main/js/company.js"></script>
+    <script src="build/main/js/building.js"></script>
+    <script src="build/main/js/reports.js"></script>
 
     <!-- Load UI components -->
-    <script src="main/components/topBar.js"></script>
-    <script src="main/components/sideBar.js"></script>
-    <script src="main/modals/modal.js"></script>
+    <script src="build/main/components/topBar.js"></script>
+    <script src="build/main/components/sideBar.js"></script>
+    <script src="build/main/modals/modal.js"></script>
+    <script src="build/main/modals/reportModal.js"></script>
+    <script src="build/main/modals/savesModal.js"></script>
 
     <!-- Chart.js, for the Finances, Dashboard and Statistics charts -->
     <script src="node_modules/chart.js/dist/chart.umd.min.js"></script>
 
     <!-- Load page renderers -->
-    <script src="main/js/pages/dashboardPage.js"></script>
-    <script src="main/js/pages/operationsPage.js"></script>
-    <script src="main/js/pages/customersPage.js"></script>
-    <script src="main/js/pages/employeesPage.js"></script>
-    <script src="main/js/pages/inventoryPage.js"></script>
-    <script src="main/js/pages/marketplacePage.js"></script>
-    <script src="main/js/pages/equipmentPage.js"></script>
-    <script src="main/js/pages/financesPage.js"></script>
-    <script src="main/js/pages/statisticsPage.js"></script>
-    <script src="main/js/pages/researchPage.js"></script>
-    <script src="main/js/pages/settingsPage.js"></script>
+    <script src="build/main/js/pages/dashboardPage.js"></script>
+    <script src="build/main/js/pages/companyPage.js"></script>
+    <script src="build/main/js/pages/buildingPage.js"></script>
+    <script src="build/main/js/pages/operationsPage.js"></script>
+    <script src="build/main/js/pages/customersPage.js"></script>
+    <script src="build/main/js/pages/employeesPage.js"></script>
+    <script src="build/main/js/pages/inventoryPage.js"></script>
+    <script src="build/main/js/pages/marketplacePage.js"></script>
+    <script src="build/main/js/pages/equipmentPage.js"></script>
+    <script src="build/main/js/pages/financesPage.js"></script>
+    <script src="build/main/js/pages/statisticsPage.js"></script>
+    <script src="build/main/js/pages/researchPage.js"></script>
+    <script src="build/main/js/pages/settingsPage.js"></script>
 
     <!-- Electron save/load integration (window.saveGame/loadGame, autosave, Ctrl+S/Ctrl+L) -->
-    <script src="main/js/electron-integration.js"></script>
+    <script src="build/main/js/electron-integration.js"></script>
 
     <!-- Uncaught errors: log them and show a toast. The game keeps running, so
          the page is left alone (game-bootstrap.js has its own screen for a
