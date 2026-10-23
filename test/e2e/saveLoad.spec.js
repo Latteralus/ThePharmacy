@@ -64,6 +64,7 @@ test('saving writes a real save file, and loading it restores game state', async
 
   await page1.waitForURL(/mode=new/);
   await page1.waitForSelector('.top-bar', { timeout: 20_000 });
+  await page1.evaluate(() => window.toggleGamePause()); // a new game starts paused
   await page1.waitForSelector('.save-button', { timeout: 20_000 });
 
   // Make sure the save has at least one transaction (C2 only shows up then),
@@ -96,7 +97,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(6);
+  expect(saved.version).toBe(8);
   // The history (Phase 8): no day has closed yet
   expect(saved.records.days).toEqual([]);
   expect(Array.isArray(saved.records.visits)).toBe(true);

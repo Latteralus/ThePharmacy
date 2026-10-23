@@ -156,7 +156,9 @@ describe('a customer visit', () => {
     expect(tasks()).toHaveLength(0);
     expect(window.prescriptions.activePrescriptions).toHaveLength(0);
     expect(product().inventory).toBe(4);
-    expect(window.financesData.cash).toBe(1002); // 20% copay on $10
+    // MediQuick covers pd001: the 20% copay on its price, not the pharmacy's $10
+    const plan = window.insuranceData[0];
+    expect(window.financesData.cash).toBeCloseTo(1000 + 0.2 * window.finances.planPrice(plan, 'pd001'));
     expect(window.insuranceClaims.pendingClaims).toHaveLength(1);
     expect(window.brandReputation.loseReputation).not.toHaveBeenCalled();
     expect(window.employeesData.every((e) => e.currentTaskId === null)).toBe(true);
@@ -460,13 +462,18 @@ describe('compounding takes materials for the whole batch (H2)', () => {
 
 describe('price affects whether customers buy (H3)', () => {
   const market = () => window.finances.marketPrice('pd001');
+  // The pharmacy's price is for customers whose plan doesn't pay
+  const selfPay = (customer) => {
+    customer.insurance = window.insuranceData.find((p) => p.planName === 'Uninsured');
+    return customer;
+  };
 
   test('the market price ignores the player markup, and acceptance falls from 1 at market to 0 at 3x', () => {
     loadGame();
     const before = market();
     window.finances.applyMarkupToAllProducts(900);
     expect(market()).toBe(before);
-    expect(market()).toBeCloseTo(window.calculateProductCost('pd001') * 1.35);
+    expect(market()).toBeCloseTo(window.calculateProductCost('pd001') * 1.5);
 
     const chance = window.finances.acceptanceChance;
     expect(chance(0.5)).toBe(1);
@@ -479,7 +486,7 @@ describe('price affects whether customers buy (H3)', () => {
   test('at 3x the market price the customer walks out at check-in, and their stock goes back', () => {
     loadGame({ stock: 5 });
     product().price = market() * 3;
-    const customer = window.customers.generateCustomer();
+    const customer = selfPay(window.customers.generateCustomer());
     expect(product().inventory).toBe(4);
 
     run(4); // check-in takes 3 minutes
@@ -513,7 +520,7 @@ describe('price affects whether customers buy (H3)', () => {
   test('paying over the market price costs mood', () => {
     loadGame({ stock: 5 });
     product().price = market() * 2;
-    const customer = window.customers.generateCustomer();
+    const customer = selfPay(window.customers.generateCustomer());
     const arrivalMood = customer.mood;
 
     run(4);
@@ -521,6 +528,20 @@ describe('price affects whether customers buy (H3)', () => {
     // +1 for being checked in, -2 for paying twice the market price
     expect(customer.status).toBe('waitingForConsultation');
     expect(customer.mood).toBe(arrivalMood + 1 - 2);
+  });
+
+  test("a covered customer pays the plan's price, whatever the pharmacy charges", () => {
+    loadGame({ stock: 5 }); // MediQuick, which covers pd001
+    product().price = market() * 3;
+    const customer = window.customers.generateCustomer();
+    const arrivalMood = customer.mood;
+    run(4);
+
+    const plan = window.insuranceData[0];
+    const prescription = window.prescriptions.getPrescription(customer.prescriptionId);
+    expect(customer.status).toBe('waitingForConsultation');
+    expect(prescription.quotedPrice).toBeCloseTo(market() * plan.reimbursementRate);
+    expect(customer.mood).toBe(arrivalMood + 1); // checked in; the price doesn't sour them
   });
 
   test('prices must be above $0', () => {
@@ -743,7 +764,7 @@ describe('staff matter (M7, Phase 7)', () => {
     window.notifications = { add: jest.fn() };
     const tech = staff(LAB_TECH);
     const fair = window.helpers.fairSalary(tech);
-    expect(fair).toBe(34480); // compounding 50
+    expect(fair).toBe(37540); // compounding 50
     tech.salary = fair;
     tech.morale = 70;
 
@@ -922,8 +943,8 @@ describe('equipment matters (H8, Phase 7)', () => {
     const restock = window.production.createCompoundTask(product(), 1);
     run(16);
     expect(task(restock.id)).toBeUndefined();
-    expect(equipment('eq001').durability).toBe(99.5);
-    expect(equipment('eq002').durability).toBe(99.75);
+    expect(equipment('eq001').durability).toBeCloseTo(99.9);
+    expect(equipment('eq002').durability).toBeCloseTo(99.95);
   });
 
   test('worn equipment slows compounding; broken equipment stops it until repaired', () => {
@@ -936,7 +957,7 @@ describe('equipment matters (H8, Phase 7)', () => {
     expect(window.production.conditionFactor('pd001')).toBe(0.75);
     expect(window.taskManager.workRate(restock)).toBe(0.75);
 
-    equipment('eq001').durability = 0.5;
+    equipment('eq001').durability = 0.1;
     run(31);
     expect(task(restock.id)).toBeUndefined();
     expect(equipment('eq001').durability).toBe(0);

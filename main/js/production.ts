@@ -6,7 +6,10 @@ window.production = (function (): ProductionApi {
     // and an item takes on at most owned x capacity compounds at a time.
     // Each finished compound wears what it used; worn equipment is slower
     // and broken equipment can't be used until it's repaired.
-    const WEAR_PER_BATCH = 0.5; // condition points per finished compound, shared by the units owned
+    // Condition points per finished compound, shared by the units owned. Was
+    // 0.5, sized for prices 4x today's: repairs then ate most of the margin
+    // (balance pass, 2026-10-23). A unit now lasts about 1,000 compounds.
+    const WEAR_PER_BATCH = 0.1;
     const SLOW_BELOW = 50; // condition under which compounding slows, to 0.5x at 0
     const WORN_WARNING = 25; // the player is told when condition falls below this
     const REPAIR_SHARE = 0.25; // a full repair costs this share of the price, per unit owned

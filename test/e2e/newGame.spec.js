@@ -45,14 +45,18 @@ test('starting a new game reaches the game screen without console errors', async
   // The top bar names the pharmacy and has the time controls, with hotkeys
   // (findings U1, U2)
   await expect(page.locator('#pharmacyName')).toHaveText('Playwright Test Pharmacy');
-  await page.locator('.main-content').click({ position: { x: 5, y: 5 } });
-  await page.keyboard.press('Space');
+  // A new game starts paused, with no staff
   expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
   await expect(page.locator('#pauseButton')).toContainText('Resume');
+  expect(await page.evaluate(() => window.employeesData.length)).toBe(0);
+  await page.locator('.main-content').click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => window.gameState.isPaused)).toBe(false);
   await page.keyboard.press('3');
   expect(await page.evaluate(() => window.getGameSpeed())).toBe(2);
   await page.keyboard.press('Space');
-  expect(await page.evaluate(() => window.gameState.isPaused)).toBe(false);
+  expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
+  await expect(page.locator('#pauseButton')).toContainText('Resume');
 
   // The welcome is there from the start (it used to wait 2 real seconds)
   await expect(page.locator('#notificationCount')).toHaveText('1');

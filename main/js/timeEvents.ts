@@ -194,9 +194,6 @@ window.timeEvents = (function (): TimeEventsApi {
         // Restock anything below its max inventory
         step('restock', () => window.production?.checkAndCreateCompoundTasks?.());
 
-        // Pay out insurance claims that have finished processing
-        step('insurance', () => window.insuranceClaims?.processAllClaims?.());
-
         // This hour's customers
         if (hour >= CONFIG.OPENING_HOUR && hour < CONFIG.CLOSING_HOUR) {
             step('customers', () => spawnCustomersForHour(hour));

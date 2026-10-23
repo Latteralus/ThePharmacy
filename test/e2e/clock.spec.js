@@ -41,6 +41,7 @@ test('pause freezes the clock and customers; closing time sends customers home',
   await page.click('.start-button');
   await page.waitForURL(/mode=new/);
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
+  await page.evaluate(() => window.toggleGamePause()); // a new game starts paused
 
   // A customer walks in, then the game is paused.
   const before = await page.evaluate(() => {

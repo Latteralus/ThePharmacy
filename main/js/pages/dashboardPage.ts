@@ -121,7 +121,10 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         bankGrid.innerHTML = '';
         const rows: Array<[string, string, string?]> = [
             ['Cash', fmt.money(data.cash), data.cash < 0 ? 'critical-text' : ''],
-            ['Insurance owed to you', fmt.money(data.pendingInsuranceIncome)],
+            [
+                'Insurance owed to you',
+                `${fmt.money(data.pendingInsuranceIncome)} (paid on day ${window.insuranceClaims.nextPayday()})`,
+            ],
             ['Owed to the bank', owed > 0 ? `${fmt.money(owed)} of ${fmt.moneyWhole(stakes.LOAN_LIMIT)}` : 'Nothing'],
             ['Fixed costs a day', `${fmt.money(fixed)} (wages, overhead${owed > 0 ? ', interest' : ''})`],
             [

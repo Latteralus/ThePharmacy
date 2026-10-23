@@ -3,7 +3,7 @@
 // Market pay by role at key skill 40 and 90 (see helpers.fairSalary).
 const ROLE_PAY: Record<string, { atSkill40: number; atSkill90: number }> = {
     Pharmacist: { atSkill40: 101000, atSkill90: 169000 },
-    'Lab Technician': { atSkill40: 30000, atSkill90: 52400 },
+    'Lab Technician': { atSkill40: 33500, atSkill90: 53700 },
     Cashier: { atSkill40: 27750, atSkill90: 41500 },
 };
 
@@ -75,15 +75,17 @@ window.helpers = {
                 maxWage = 168650;
             }
         } else if (role === 'Lab Technician') {
+            // BLS, May 2024: $35,100 at the 10th percentile, $43,460 median,
+            // $59,450 at the 90th
             if (skillLevel === 'Novice') {
-                minWage = 32720;
-                maxWage = 36290;
+                minWage = 35100;
+                maxWage = 40000;
             } else if (skillLevel === 'Intermediate') {
-                minWage = 36290;
-                maxWage = 47680;
+                minWage = 40000;
+                maxWage = 48000;
             } else if (skillLevel === 'Skilled') {
-                minWage = 47680;
-                maxWage = 57130;
+                minWage = 48000;
+                maxWage = 59450;
             }
         } else if (role === 'Cashier') {
             // Cashiers used to be paid $50-90k, more than lab technicians (L9).

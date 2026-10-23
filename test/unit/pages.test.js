@@ -559,11 +559,10 @@ describe('the Settings page', () => {
     window.renderBlankPage = () => {};
   });
 
-  test('labels every control (U18)', () => {
+  test('labels every control (U18), and has no difficulty settings', () => {
     window.showPage('settings');
-    ['Current time', 'Game', 'Speed', 'Customer frequency', 'Operating costs'].forEach((label) =>
-      expect([...main().querySelectorAll('.settings-grid .label')].map((l) => l.textContent)).toContain(label),
-    );
+    const labels = [...main().querySelectorAll('.settings-grid .label')].map((l) => l.textContent);
+    expect(labels).toEqual(['Current time', 'Game', 'Speed']);
   });
 
   test('keeps the time and pause status current from time announcements, with no interval', () => {
@@ -821,9 +820,9 @@ describe('the Employees page (U15)', () => {
     require('../../main/js/pages/employeesPage.js');
   });
 
-  test('shows the daily wage end of day actually charges (salary / 365)', () => {
+  test('shows the daily wage end of day actually charges (salary / 365, with payroll taxes and benefits)', () => {
     window.showPage('employees');
-    expect(text()).toContain(window.fmt.money(85000 / 365));
+    expect(text()).toContain(window.fmt.money((85000 * 1.25) / 365));
     expect(text()).not.toContain(window.fmt.money(85000 / 30));
   });
 
@@ -833,7 +832,7 @@ describe('the Employees page (U15)', () => {
     window.updateUI('employees');
     window.ui.flush();
     expect(main().querySelector('.stat-value').textContent).toBe('2');
-    expect(text()).toContain(window.fmt.money(145000 / 365));
+    expect(text()).toContain(window.fmt.money((145000 * 1.25) / 365));
   });
 
   test('asks in-game before terminating', () => {
@@ -849,7 +848,7 @@ describe('the Employees page (U15)', () => {
     const row = main().querySelector('.employee-card[data-employee-id="emp-1"]');
     const salary = row.querySelector('input[aria-label="Salary for John Doe"]');
     expect(row.textContent).toContain('vs market');
-    expect(row.textContent).toContain(window.fmt.money(85000 / 365));
+    expect(row.textContent).toContain(window.fmt.money((85000 * 1.25) / 365));
 
     salary.value = '160000';
     salary.dispatchEvent(new Event('change'));
@@ -876,6 +875,9 @@ describe('the Employees page (U15)', () => {
     window.ui.flush();
     expect(row.isConnected).toBe(true);
     expect(row.textContent).toContain('9.0h');
+    const hours = [...row.querySelectorAll('span')].find((n) => n.textContent === '9.0h');
+    expect(hours.className).toBe('warn-text');
+    expect(hours.title).toBe(`1.0h overtime so far: ${window.fmt.money(((85000 * 1.25) / 365 / 8) * 1.5)} at closing`);
     expect(row.textContent).toContain('1.30×'); // consultations: (85 + 75) / 2 = 80
     expect(salary.value).toBe('99999');
   });
@@ -903,6 +905,7 @@ describe('the Finances and Research pages (U16, U17)', () => {
     window.financesData.cash = 1000;
     window.taskManager = { tasks: [] };
     require('../../main/js/production.js');
+    require('../../main/js/insuranceClaims.js');
     require('../../main/js/records.js');
     require('../../main/js/stakes.js');
     require('../../main/components/charts.js');
@@ -993,11 +996,13 @@ describe('stakes and history on screen (Phase 8)', () => {
     require('../../main/js/data/finances.js');
     window.financesData.cash = 50000;
     window.financesData.overhead = 1000;
-    window.employeesData = [{ id: 'a', firstName: 'Ann', lastName: 'Lee', role: 'Cashier', salary: 36500 }];
+    // $100 a day, with payroll taxes and benefits
+    window.employeesData = [{ id: 'a', firstName: 'Ann', lastName: 'Lee', role: 'Cashier', salary: 29200 }];
     window.brandReputation = { reputationScore: 42 };
     window.gameState.customersToday = { served: 4, impatient: 1 };
     window.gameState.lastEndedDayIndex = 0;
     window.notifications = { add: jest.fn() };
+    require('../../main/js/insuranceClaims.js');
     require('../../main/js/records.js');
     require('../../main/js/stakes.js');
     require('../../main/js/goals.js');

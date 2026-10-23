@@ -1,7 +1,8 @@
 // /js/pages/employeesPage.js - the staff table and hiring.
 //
-// Daily wages are salary / 365, which is what end of day charges
-// (finances.applyDailyCosts); the page used to show salary / 30.
+// Daily wages are what end of day charges (finances.dailyWage: salary / 365,
+// with payroll taxes and benefits); the page used to show salary / 30.
+// Hours past 8 are overtime, paid at closing on top.
 //
 // Staff matter (Phase 7): each row shows hours worked today, speed at their
 // main job and pay against the market, which is what moves morale at
@@ -23,8 +24,6 @@ const MAIN_TASK: Record<string, { type: string; label: string }> = {
     'Lab Technician': { type: 'compound', label: 'compounding' },
     Cashier: { type: 'customerInteraction', label: 'the front desk' },
 };
-
-const dailyWage = (employee: Employee): number => employee.salary / 365;
 
 function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -56,7 +55,9 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             'p',
             'small muted',
             'Morale changes at closing: up when someone worked 8 hours or less, down for every hour over, and up or down with pay against the market. ' +
-                'Below 50% they slow down, and below 25% they may quit.',
+                'Below 50% they slow down, and below 25% they may quit. ' +
+                `Hours over 8 are overtime, paid at ${window.finances.OVERTIME_RATE}× at closing. ` +
+                'Wages a day include payroll taxes and benefits (25% on top of salary).',
         ),
     );
 
@@ -72,7 +73,7 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
         const fair = window.helpers.fairSalary(employee);
         const className = pay <= -0.05 ? 'critical-text' : pay >= 0.05 ? 'good-text' : 'muted';
         return {
-            text: `${fmt.money(dailyWage(employee))}/day · ${fmt.signedPct(pay)} vs market`,
+            text: `${fmt.money(window.finances.dailyWage(employee))}/day · ${fmt.signedPct(pay)} vs market`,
             className: `sub ${className}`,
             title: `The market pays about ${fmt.moneyWhole(fair)} a year for this role at their skill.`,
         };
@@ -112,7 +113,11 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             { label: 'Employee' },
             { label: 'Working on', width: '200px' },
             { label: 'Salary a year', num: true },
-            { label: 'Today', num: true, title: 'Hours worked today. Over 8 lowers morale at closing.' },
+            {
+                label: 'Today',
+                num: true,
+                title: `Hours worked today. Over 8 is overtime: it lowers morale and is paid at ${window.finances.OVERTIME_RATE}× at closing.`,
+            },
             { label: 'Speed', num: true, title: 'Speed at their main job. 1× is normal.' },
             { label: 'Morale', width: '120px' },
             ...skillColumns(),
@@ -140,7 +145,7 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
                     return;
                 }
                 window.toast(
-                    `${employee.firstName} ${employee.lastName} now earns ${fmt.moneyWhole(employee.salary)} a year (${fmt.money(dailyWage(employee))} a day).`,
+                    `${employee.firstName} ${employee.lastName} now earns ${fmt.moneyWhole(employee.salary)} a year (${fmt.money(window.finances.dailyWage(employee))} a day).`,
                     'success',
                 );
             });
@@ -175,7 +180,15 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
                 setText(pay, cue.text, cue.className, cue.title);
 
                 const worked = (employee.minutesWorkedToday ?? 0) / 60;
-                setText(hours, `${worked.toFixed(1)}h`, worked > 8 ? 'warn-text' : '');
+                const overtime = window.finances.overtimeHours(employee);
+                setText(
+                    hours,
+                    `${worked.toFixed(1)}h`,
+                    overtime > 0 ? 'warn-text' : '',
+                    overtime > 0
+                        ? `${overtime.toFixed(1)}h overtime so far: ${fmt.money(window.finances.overtimePay(employee))} at closing`
+                        : '',
+                );
 
                 const s = speed(employee);
                 setText(speedCell, s.text, undefined, s.title);
@@ -219,7 +232,7 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
         else liveRows.forEach((update) => update());
 
         const idle = staff.filter((e) => !e.currentTaskId).length;
-        const wages = staff.reduce((sum, e) => sum + dailyWage(e), 0);
+        const wages = staff.reduce((sum, e) => sum + window.finances.dailyWage(e), 0);
         const avgMorale = staff.length > 0 ? staff.reduce((sum, e) => sum + e.morale, 0) / staff.length : 0;
         staffTile.set(fmt.int(staff.length), staff.length > 0 ? `${idle} idle` : '');
         wagesTile.set(fmt.money(wages), `${fmt.moneyWhole(wages * 365)} a year`);

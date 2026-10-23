@@ -56,6 +56,7 @@ test('closing in the red, bankruptcy, and loading the last save', async () => {
   await page.click('.start-button');
   await page.waitForURL(/mode=new/);
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
+  await page.evaluate(() => window.toggleGamePause()); // a new game starts paused
 
   // --- A first day that closes in the black is recorded ---
   await closeTheDay(page);

@@ -41,6 +41,12 @@ function settleClaim(claim: InsuranceClaim, rejected: boolean): boolean {
 // How many settled claims processedClaims keeps (most recent).
 const MAX_PROCESSED_CLAIMS = 500;
 
+// Insurers pay every other week, at closing on days 14, 28, 42 and so on
+// (finances.processInsuranceClaims), for every claim filed since. They used
+// to pay within 1-3 game hours, so a sale was as good as cash. A real
+// pharmacy waits two to four weeks, and has to carry the drugs' cost until then.
+const PAYOUT_EVERY_DAYS = 14;
+
 window.insuranceClaims = {
     pendingClaims: [], // Array to store pending claims
     processedClaims: [], // History of processed claims
@@ -65,7 +71,6 @@ window.insuranceClaims = {
             copayAmount,
             amountDue: totalAmount - copayAmount,
             submittedDate: new Date(window.gameState.currentDate),
-            processingTime: this.calculateProcessingTime(insurancePlan.planName),
             processedDate: null,
             paid: false,
             rejected: false,
@@ -81,51 +86,28 @@ window.insuranceClaims = {
         return claim;
     },
 
-    // Determine processing time based on insurance company
-    calculateProcessingTime(insuranceName) {
-        // Base processing time is 1-3 days
-        let processingDays: number;
+    PAYOUT_EVERY_DAYS,
 
-        // Different companies have different processing speeds
-        switch (insuranceName) {
-            case 'MediQuick':
-                processingDays = 1; // Fastest processor
-                break;
-            case 'HealthFirst':
-                processingDays = 2;
-                break;
-            case 'CarePlus':
-                processingDays = 2;
-                break;
-            case 'UnitedCare':
-                processingDays = 1.5;
-                break;
-            case 'StateHealth':
-                processingDays = 3; // Slowest processor
-                break;
-            default:
-                processingDays = 2;
-        }
-
-        // Convert to milliseconds (speeding up for gameplay)
-        // For simulation, we'll use minutes instead of days: 1 day = 60 minutes
-        return processingDays * 60 * 60 * 1000;
+    // Whether the closing of this day (gameState.dayIndex, from 0) is payday
+    isPayday(dayIndex) {
+        return (dayIndex + 1) % PAYOUT_EVERY_DAYS === 0;
     },
 
-    // Function to process all pending claims
+    // The day number (as the player sees it, from 1) of the first payday
+    // closing at or after fromDayIndex that hasn't happened yet.
+    nextPayday(fromDayIndex = window.gameState.dayIndex) {
+        const start = Math.max(fromDayIndex, (window.gameState.lastEndedDayIndex ?? -1) + 1);
+        return Math.ceil((start + 1) / PAYOUT_EVERY_DAYS) * PAYOUT_EVERY_DAYS;
+    },
+
+    // Pays (or rejects) every pending claim, now. Returns the amount paid.
     processAllClaims() {
         console.log(`[insuranceClaims.js] Processing ${this.pendingClaims.length} pending claims...`);
 
-        const currentTime = window.gameState.currentDate.getTime();
         let totalPaid = 0;
         let rejectionCount = 0;
 
-        // Process claims that have reached their processing time
-        const claimsToProcess = this.pendingClaims.filter(
-            (claim) => !claim.paid && currentTime - claim.submittedDate.getTime() >= claim.processingTime,
-        );
-
-        console.log(`[insuranceClaims.js] Found ${claimsToProcess.length} claims ready for processing`);
+        const claimsToProcess = this.pendingClaims.filter((claim) => !claim.paid);
 
         claimsToProcess.forEach((claim) => {
             if (settleClaim(claim, Math.random() < this.rejectionRate)) {
@@ -271,6 +253,6 @@ window.insuranceClaims = {
             };
         }
 
-        // Claims are processed from timeEvents' hourlyCheck, on game time.
+        // Claims are paid at closing on payday (finances.processInsuranceClaims).
     },
 };

@@ -93,22 +93,45 @@ describe('finances.transact', () => {
 
     window.finances.applyDailyCosts();
 
+    // $1,000 a day of salary, plus 25% payroll taxes and benefits
     const data = window.financesData;
-    expect(data.cash).toBe(1000 - 1000 - 500);
-    expect(data.expenseCategories.wages).toBe(1000);
+    expect(data.cash).toBe(1000 - 1250 - 500);
+    expect(data.expenseCategories.wages).toBe(1250);
     expect(data.expenseCategories.overhead).toBe(500);
-    expect(data.expenses.today).toBe(1500);
+    expect(data.expenses.today).toBe(1750);
     expect(data.transactions).toHaveLength(2);
+  });
+
+  test('hours past 8 are overtime, paid at 1.5x the hourly rate at closing', () => {
+    window.employeesData = [
+      { firstName: 'A', lastName: 'B', role: 'Cashier', salary: 365000, minutesWorkedToday: 10 * 60 },
+      { firstName: 'C', lastName: 'D', role: 'Cashier', salary: 365000, minutesWorkedToday: 8 * 60 },
+    ];
+    window.financesData.overhead = 0;
+
+    window.finances.applyDailyCosts();
+
+    // A day's $1,250 covers 8 hours ($156.25 an hour); 2 hours over at 1.5x
+    const overtime = 2 * (1250 / 8) * 1.5;
+    expect(window.finances.overtimeHours(window.employeesData[0])).toBe(2);
+    expect(window.financesData.expenseCategories.wages).toBeCloseTo(1250 * 2 + overtime);
+    const overtimeEntries = window.financesData.transactions.filter((t) => t.description.startsWith('Overtime'));
+    expect(overtimeEntries).toHaveLength(1);
+    expect(overtimeEntries[0]).toMatchObject({ category: 'wages', amount: expect.closeTo(overtime) });
+    expect(overtimeEntries[0].description).toBe('Overtime for A B: 2.0h at 1.5x');
   });
 });
 
 describe('insurance claims', () => {
   const PRICE_PER_DOSE = 10;
+  const RATE = 0.9;
+  // What the plan pays for the 2 units sold, copay included
+  const planTotal = () => window.finances.marketPrice('pd001') * RATE * 2;
 
-  function sell(planName, formulary, copayPercentage) {
+  function sell(planName, formulary, copayPercentage, reimbursementRate = RATE) {
     const customer = {
       id: `cust-${planName}`,
-      insurance: { planName, copayType: 'percentage', copayPercentage, formulary },
+      insurance: { planName, copayType: 'percentage', copayPercentage, reimbursementRate, formulary },
     };
     window.customers = { activeCustomers: [customer] };
     window.prescriptions = {
@@ -121,62 +144,90 @@ describe('insurance claims', () => {
 
   beforeEach(() => {
     window.insuranceClaims.rejectionRate = 0;
+    window.notifications = { add: jest.fn() };
+    window.fmt = { money: (n) => `$${n.toFixed(2)}` };
   });
 
-  test('a covered sale books the copay now and the rest only when the claim pays', () => {
+  test("a covered sale is at the plan's price: the copay now, the rest when the claim pays", () => {
     const { copay, price } = sell('MediQuick', ['pd001'], 20);
     const data = window.financesData;
+    const total = planTotal();
 
-    expect(price).toBe(20);
-    expect(copay).toBe(4);
-    expect(data.cash).toBe(1004);
-    expect(data.revenue.total).toBe(4);
+    // The plan's price, not the pharmacy's $10 a unit
+    expect(price).toBeCloseTo(total);
+    expect(copay).toBeCloseTo(total * 0.2);
+    expect(data.cash).toBeCloseTo(1000 + total * 0.2);
+    expect(data.revenue.total).toBeCloseTo(total * 0.2);
     expect(data.revenueCategories.insurance).toBe(0);
-    expect(data.pendingInsuranceIncome).toBe(16);
-    expect(data.insuranceReimbursements.pending).toBe(16);
+    expect(data.pendingInsuranceIncome).toBeCloseTo(total * 0.8);
+    expect(data.insuranceReimbursements.pending).toBeCloseTo(total * 0.8);
     // No "pending" income in the log: only money that arrived.
     expect(data.transactions.filter((t) => t.type === 'income')).toHaveLength(1);
 
-    // MediQuick takes one game hour to process.
-    window.gameState.currentDate = new Date(2023, 0, 2, 11, 0);
     window.insuranceClaims.processAllClaims();
 
-    expect(data.cash).toBe(1020);
-    expect(data.revenue.total).toBe(20);
-    expect(data.revenueCategories).toMatchObject({ copays: 4, insurance: 16 });
-    expect(data.pendingInsuranceIncome).toBe(0);
-    expect(data.insuranceReimbursements).toMatchObject({ pending: 0, received: 16 });
+    expect(data.cash).toBeCloseTo(1000 + total);
+    expect(data.revenue.total).toBeCloseTo(total);
+    expect(data.revenueCategories.insurance).toBeCloseTo(total * 0.8);
+    expect(data.pendingInsuranceIncome).toBeCloseTo(0);
+    expect(data.insuranceReimbursements).toMatchObject({
+      pending: expect.closeTo(0),
+      received: expect.closeTo(total * 0.8),
+    });
 
-    // Running again (end of day, the next hour) pays nothing twice.
+    // Running again pays nothing twice.
     window.insuranceClaims.processAllClaims();
+    window.gameState.dayIndex = 13;
     window.finances.processInsuranceClaims();
-    expect(data.cash).toBe(1020);
+    expect(data.cash).toBeCloseTo(1000 + total);
   });
 
-  test('a claim that is not due yet stays pending', () => {
+  test('claims are paid every other week, at closing on days 14, 28, ...', () => {
     sell('StateHealth', ['pd001'], 40);
-    window.insuranceClaims.processAllClaims();
+    const owed = planTotal() * 0.6;
 
+    // Day 2's closing (dayIndex 1) isn't payday
+    window.finances.processInsuranceClaims();
     expect(window.insuranceClaims.pendingClaims).toHaveLength(1);
-    expect(window.financesData.pendingInsuranceIncome).toBe(12);
+    expect(window.financesData.pendingInsuranceIncome).toBeCloseTo(owed);
+    expect(window.insuranceClaims.nextPayday()).toBe(14);
+
+    // Day 14's is
+    window.gameState.dayIndex = 13;
+    window.finances.processInsuranceClaims();
+    expect(window.insuranceClaims.pendingClaims).toHaveLength(0);
+    expect(window.financesData.cash).toBeCloseTo(1000 + planTotal());
+    expect(window.notifications.add).toHaveBeenCalledWith(
+      `Insurers paid $${owed.toFixed(2)} for 1 claim. The next payment is at closing on day 28.`,
+      'success',
+    );
+
+    // Once day 14 has closed, the next payday is day 28
+    window.gameState.lastEndedDayIndex = 13;
+    expect(window.insuranceClaims.nextPayday()).toBe(28);
+    expect(window.insuranceClaims.isPayday(27)).toBe(true);
+    expect(window.insuranceClaims.isPayday(14)).toBe(false);
   });
 
   test('a rejected claim moves no cash and leaves pending', () => {
     sell('MediQuick', ['pd001'], 20);
     window.insuranceClaims.rejectionRate = 1;
-    window.gameState.currentDate = new Date(2023, 0, 3, 10, 0);
     window.insuranceClaims.processAllClaims();
 
     const data = window.financesData;
-    expect(data.cash).toBe(1004);
-    expect(data.insuranceReimbursements).toMatchObject({ pending: 0, rejected: 16, received: 0 });
+    const owed = planTotal() * 0.8;
+    expect(data.cash).toBeCloseTo(1000 + planTotal() * 0.2);
+    expect(data.insuranceReimbursements).toMatchObject({
+      pending: expect.closeTo(0),
+      rejected: expect.closeTo(owed),
+      received: 0,
+    });
     expect(data.expenses.total).toBe(0);
   });
 
   test('only the 500 most recent settled claims are kept', () => {
     window.insuranceClaims.processedClaims = Array.from({ length: 500 }, (_, i) => ({ id: `old-${i}` }));
     sell('MediQuick', ['pd001'], 20);
-    window.gameState.currentDate = new Date(2023, 0, 2, 11, 0);
     window.insuranceClaims.processAllClaims();
 
     const kept = window.insuranceClaims.processedClaims;
@@ -184,15 +235,23 @@ describe('insurance claims', () => {
     expect(kept[0].id).toBe('old-1');
     expect(kept[499].prescriptionId).toBe('pres-1');
     // Lifetime totals don't depend on the history
-    expect(window.financesData.insuranceReimbursements.received).toBe(16);
+    expect(window.financesData.insuranceReimbursements.received).toBeCloseTo(planTotal() * 0.8);
   });
 
-  test('self-pay customers pay in full and file no claim', () => {
-    sell('Uninsured', null, 100);
+  test("self-pay customers pay the pharmacy's price in full and file no claim", () => {
+    sell('Uninsured', null, 100, null);
 
     expect(window.financesData.cash).toBe(1020);
     expect(window.insuranceClaims.pendingClaims).toHaveLength(0);
     expect(window.financesData.pendingInsuranceIncome).toBe(0);
+  });
+
+  test("a drug off the plan's formulary is paid in full, at the pharmacy's price", () => {
+    sell('StateHealth', ['pd002'], 40);
+
+    expect(window.financesData.cash).toBe(1020);
+    expect(window.insuranceClaims.pendingClaims).toHaveLength(0);
+    expect(window.financesData.transactions[0].description).toContain("not on StateHealth's formulary");
   });
 
   test('syncPendingTotals resets both totals to what the pending claims owe', () => {
@@ -201,8 +260,8 @@ describe('insurance claims', () => {
     window.financesData.insuranceReimbursements.pending = 999;
 
     window.insuranceClaims.syncPendingTotals();
-    expect(window.financesData.pendingInsuranceIncome).toBe(16);
-    expect(window.financesData.insuranceReimbursements.pending).toBe(16);
+    expect(window.financesData.pendingInsuranceIncome).toBeCloseTo(planTotal() * 0.8);
+    expect(window.financesData.insuranceReimbursements.pending).toBeCloseTo(planTotal() * 0.8);
   });
 });
 

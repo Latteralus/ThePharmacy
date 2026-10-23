@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 6;
+    const SAVE_VERSION = 8;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -84,9 +84,6 @@ window.saveFile = (function (): SaveFileApi {
             records: { days: window.records.days, visits: window.records.visits },
             settings: {
                 gameSpeed: window.getGameSpeed(),
-                customerFrequencyMultiplier: window.customerFrequencyMultiplier ?? 1,
-                operatingCostMultiplier: window.operatingCostMultiplier ?? 1,
-                baseOverhead: window.originalOverhead ?? null,
                 globalMarkup: window.globalMarkup,
             },
         };
@@ -99,6 +96,8 @@ window.saveFile = (function (): SaveFileApi {
         3: (save: SaveFile) => SaveFile;
         4: (save: SaveFile) => SaveFile;
         5: (save: SaveFile) => SaveFile;
+        6: (save: SaveFile) => SaveFile;
+        7: (save: SaveFile) => SaveFile;
     } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
@@ -134,13 +133,7 @@ window.saveFile = (function (): SaveFileApi {
                 refillRegistry: save.refillRegistry || [],
                 insuranceClaims: { pending: [], processed: [] },
                 records: { days: [], visits: [] }, // a v6 field; migrations[5] sets it again
-                settings: {
-                    gameSpeed: 1,
-                    customerFrequencyMultiplier: 1,
-                    operatingCostMultiplier: 1,
-                    baseOverhead: null,
-                    globalMarkup: 1.35,
-                },
+                settings: { gameSpeed: 1, globalMarkup: 1.35 },
             };
         },
 
@@ -216,6 +209,37 @@ window.saveFile = (function (): SaveFileApi {
             };
             const gameState = { ...save.gameState, daysInRed: 0, goalsReached: {} };
             return { ...save, version: 6, financesData, gameState, records: { days: [], visits: [] } };
+        },
+
+        // v6 had difficulty levels, and Settings multipliers for customers an
+        // hour and overhead. Every game now plays at Normal: overhead goes
+        // back to the location's and the multipliers are dropped. Cash and
+        // reputation are the player's, so they stay.
+        6(save) {
+            const { difficulty, ...gameState } = save.gameState as GameState & { difficulty?: string };
+            const financesData = { ...save.financesData, overhead: window.finances.dailyOverhead(gameState.location) };
+            const settings = { gameSpeed: save.settings.gameSpeed, globalMarkup: save.settings.globalMarkup };
+            return { ...save, version: 7, gameState, financesData, settings };
+        },
+
+        // v7 prices were set when materials cost 4x what they do now
+        // (balance pass, 2026-10-23), so every one would be far over market
+        // and every self-pay customer would walk out. Prices go back to the
+        // player's markup on today's costs, and overhead to today's rent.
+        // Cash, salaries and claims owed are the player's, so they stay.
+        7(save) {
+            const markup = save.settings.globalMarkup;
+            const known = new Set(defaults.products.map((p) => p.id));
+            const products = save.products.map((p) =>
+                p.price === undefined || !known.has(p.id)
+                    ? p
+                    : { ...p, price: window.calculateProductCost(p.id) * markup },
+            );
+            const financesData = {
+                ...save.financesData,
+                overhead: window.finances.dailyOverhead(save.gameState.location),
+            };
+            return { ...save, version: 8, products, financesData };
         },
     };
 
@@ -314,9 +338,6 @@ window.saveFile = (function (): SaveFileApi {
 
         const settings = save.settings;
         window.setGameSpeed(settings.gameSpeed);
-        window.customerFrequencyMultiplier = settings.customerFrequencyMultiplier;
-        window.operatingCostMultiplier = settings.operatingCostMultiplier;
-        window.originalOverhead = settings.baseOverhead ?? undefined;
         window.globalMarkup = settings.globalMarkup;
 
         // Gives every loaded customer the tasks their status needs (and

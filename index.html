@@ -213,15 +213,6 @@
             <input type="text" id="pharmacy-name" placeholder="Enter pharmacy name" required />
           </div>
           <div class="form-group">
-            <label for="difficulty">Difficulty:</label>
-            <select id="difficulty">
-              <option value="easy">Easy</option>
-              <option value="normal" selected>Normal</option>
-              <option value="hard">Hard</option>
-              <option value="expert">Expert</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="starting-capital">Starting Capital:</label>
             <select id="starting-capital">
               <option value="low">Low ($50,000)</option>
@@ -300,7 +291,6 @@
 
         const gameData = {
           pharmacyName: document.getElementById('pharmacy-name').value,
-          difficulty: document.getElementById('difficulty').value,
           startingCapital: document.getElementById('starting-capital').value,
           location: document.getElementById('location').value,
           dateCreated: new Date().toISOString(),
@@ -332,7 +322,7 @@
               nameEl.textContent = save.pharmacyName || 'Unnamed Pharmacy';
               const metaEl = document.createElement('div');
               metaEl.className = 'save-meta';
-              metaEl.textContent = `${formattedDate} • ${save.difficulty || 'Normal'} • $${formatMoney(Number(save.cash) || 0)} `;
+              metaEl.textContent = `${formattedDate} • $${formatMoney(Number(save.cash) || 0)} `;
               const deleteBtn = document.createElement('button');
               deleteBtn.className = 'delete-button';
               deleteBtn.dataset.index = String(index);

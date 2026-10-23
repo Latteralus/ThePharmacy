@@ -115,17 +115,20 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
     }
 
     // How customers react to the price (finances.quotePrice): everyone pays
-    // up to market, fewer above it, nobody at 3x.
+    // up to market, fewer above it, nobody at 3x. Only self-pay customers
+    // and drugs off their plan's formulary pay it; plans pay their own price.
     function priceCue(product: Product): { text: string; className: string; title: string } {
         const market = window.finances.marketPrice(product.id);
         const ratio = market > 0 ? product.price / market : 1;
         const chance = window.finances.acceptanceChance(ratio);
         const text = fmt.signedPct(ratio - 1);
         const className = chance >= 1 ? 'good-text' : chance >= 0.5 ? 'warn-text' : 'critical-text';
+        const who =
+            'Your price is for self-pay customers and drugs their plan doesn’t cover; plans pay their own price.';
         const title =
             chance >= 1
-                ? 'At or below market: every customer pays.'
-                : `${fmt.pct(chance)} of customers accept this price. Those who pay are less happy.`;
+                ? `At or below market: every customer pays. ${who}`
+                : `${fmt.pct(chance)} of customers accept this price. Those who pay are less happy. ${who}`;
         return { text, className, title };
     }
 

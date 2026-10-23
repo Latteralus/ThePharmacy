@@ -79,7 +79,6 @@
                 // Fallback to default options
                 const defaultOptions: NewGameOptions = {
                     pharmacyName: 'Mountain Care',
-                    difficulty: 'normal',
                     startingCapital: 'low',
                     location: 'suburban',
                 };
@@ -121,7 +120,6 @@
             // Default to new game with default options
             const defaultOptions: NewGameOptions = {
                 pharmacyName: 'Mountain Care',
-                difficulty: 'normal',
                 startingCapital: 'medium',
                 location: 'suburban',
             };

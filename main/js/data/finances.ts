@@ -1,7 +1,32 @@
 // improved-finances.js
 
-// Globally configurable markup for suggested prices (default 35%)
-window.globalMarkup = 1.35;
+// Globally configurable markup for suggested prices (default 50%)
+window.globalMarkup = 1.5;
+
+// Daily overhead (rent, utilities, licences, insurance, software) for a
+// suburban store: about $21,000 a month. It was $3,000 a day, sized for
+// prices 4x today's (balance pass, 2026-10-23). Cities pay more rent.
+const BASE_OVERHEAD = 700;
+const LOCATION_OVERHEAD: Record<string, number> = { urban: 1.3, suburban: 1, rural: 0.7 };
+
+// What an employee costs beyond their salary: payroll taxes and benefits.
+const PAYROLL_LOAD = 1.25;
+// A day's pay covers this many hours. Each hour over is paid at
+// OVERTIME_RATE times the hourly rate (a day's pay / OVERTIME_AFTER_HOURS).
+const OVERTIME_AFTER_HOURS = 8;
+const OVERTIME_RATE = 1.5;
+
+function dailyWage(employee: Employee): number {
+    return (employee.salary * PAYROLL_LOAD) / 365;
+}
+
+function overtimeHours(employee: Employee): number {
+    return Math.max(0, (employee.minutesWorkedToday ?? 0) / 60 - OVERTIME_AFTER_HOURS);
+}
+
+function overtimePay(employee: Employee): number {
+    return overtimeHours(employee) * (dailyWage(employee) / OVERTIME_AFTER_HOURS) * OVERTIME_RATE;
+}
 
 window.financesData = {
     cash: 10000,
@@ -87,15 +112,24 @@ function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
     periods.total += amount;
 }
 
-// Pricing (H3). Customers judge a price against the market price: the
-// materials' cost at the standard 35% markup. It's fixed, so the player's
-// markup setting (globalMarkup) can't move it. At check-in a customer always
-// accepts a price up to the market price. Above it, the chance they accept
-// falls in a straight line, to 0 at MAX_PRICE_RATIO times the market price.
-// Those who accept are less happy the more they pay (PRICE_MOOD mood points
-// per 100% over market, up to MAX_PRICE_MOOD_LOSS), and those who refuse
-// walk out. So the best price is somewhat above market, not unlimited.
-const MARKET_MARKUP = 1.35;
+// Pricing (H3). The market price is the materials' cost at the standard 50%
+// markup. It's fixed, so the player's markup setting (globalMarkup) can't
+// move it. A drug the customer's plan covers is sold at the plan's contract
+// price (planPrice); the player's price is for everyone else (self-pay, or
+// not on the formulary), and they judge it against the market price. At
+// check-in they always accept a price up to the market price. Above it, the
+// chance they accept falls in a straight line, to 0 at MAX_PRICE_RATIO times
+// the market price. Those who accept are less happy the more they pay
+// (PRICE_MOOD mood points per 100% over market, up to MAX_PRICE_MOOD_LOSS),
+// and those who refuse walk out. So the best price is somewhat above
+// market, not unlimited.
+//
+// The markup was 35% with up to 25% off materials, about a 45% gross margin.
+// It's now a third, a compounding pharmacy's (every prescription is lab
+// work, so it earns more than a retail counter's ~22%). Simulated over 8
+// weeks, a well-run store nets about 10% and a short-staffed one about 5%
+// (balance pass, 2026-10-23). This is the dial for how hard the game is.
+const MARKET_MARKUP = 1.5;
 const MAX_PRICE_RATIO = 3;
 const PRICE_MOOD = 2;
 const MAX_PRICE_MOOD_LOSS = 3;
@@ -105,7 +139,18 @@ function acceptanceChance(priceRatio: number): number {
     return Math.max(0, 1 - (priceRatio - 1) / (MAX_PRICE_RATIO - 1));
 }
 
+// Whether the plan pays its share of this product: false for self-pay, and
+// for drugs that aren't on its formulary.
+function planCovers(plan: InsurancePlan, productId: string): boolean {
+    if (plan.reimbursementRate === null || plan.copayPercentage >= 100) return false;
+    return !plan.formulary || plan.formulary.includes(productId);
+}
+
 window.finances = {
+    dailyOverhead(location) {
+        return Math.round(BASE_OVERHEAD * (LOCATION_OVERHEAD[location] ?? 1));
+    },
+
     transact(entry) {
         const data = window.financesData;
         const amount = Number(entry.amount);
@@ -147,21 +192,40 @@ window.finances = {
         return true;
     },
 
+    dailyWage,
+    overtimeHours,
+    overtimePay,
+    OVERTIME_AFTER_HOURS,
+    OVERTIME_RATE,
+
     // Apply daily costs (called at end of day). Wages and overhead are owed
     // whether or not there's cash for them, so they can take cash negative.
+    // Runs before employees.endOfDay, which resets the hours worked today.
     applyDailyCosts() {
         console.log('[finances.js] Applying daily costs...');
 
         let totalWages = 0;
         window.employeesData.forEach((emp) => {
-            const dailyPay = emp.salary / 365;
+            const name = `${emp.firstName} ${emp.lastName}`;
+            const dailyPay = dailyWage(emp);
             totalWages += dailyPay;
             this.transact({
                 type: 'expense',
                 category: 'wages',
                 amount: dailyPay,
-                description: `Wage for ${emp.firstName} ${emp.lastName} (${emp.role})`,
+                description: `Wage for ${name} (${emp.role}), with payroll taxes and benefits`,
             });
+
+            const overtime = overtimePay(emp);
+            if (overtime > 0) {
+                totalWages += overtime;
+                this.transact({
+                    type: 'expense',
+                    category: 'wages',
+                    amount: overtime,
+                    description: `Overtime for ${name}: ${overtimeHours(emp).toFixed(1)}h at ${OVERTIME_RATE}x`,
+                });
+            }
         });
 
         const overheadCost = window.financesData.overhead;
@@ -175,7 +239,7 @@ window.finances = {
         // Interest on the bank loan, if there is one
         window.stakes?.chargeInterest();
 
-        // Pay out claims that finished processing since the last hourly check
+        // Every other week, the insurers pay what they owe
         this.processInsuranceClaims();
 
         console.log(
@@ -204,21 +268,26 @@ window.finances = {
             return;
         }
 
-        // The price they agreed to at check-in (quotePrice). A prescription
-        // from an older save that was never quoted pays today's price.
-        const price = prescription.quotedPrice ?? product.price * prescription.dosage;
-        const formulary = customer.insurance.formulary;
-        const isCovered = !formulary || formulary.includes(product.id);
-        const copayPercentage = isCovered ? customer.insurance.copayPercentage : 100;
+        // The price fixed at check-in (quotePrice): the plan's, or the
+        // pharmacy's for self-pay. A prescription from an older save that
+        // was never quoted pays today's price.
+        const plan = customer.insurance;
+        const isCovered = planCovers(plan, product.id);
+        const unitPrice = isCovered ? this.planPrice(plan, product.id) : product.price;
+        const price = prescription.quotedPrice ?? unitPrice * prescription.dosage;
+        const copayPercentage = isCovered ? plan.copayPercentage : 100;
         const copay = price * (copayPercentage / 100);
 
+        const item = `${prescription.productName} ×${prescription.dosage}, ${customer.firstName} ${customer.lastName}`;
         this.transact({
             type: 'income',
             category: 'copays',
             amount: copay,
             description: isCovered
-                ? `Copay: ${prescription.productName} ×${prescription.dosage}, ${customer.firstName} ${customer.lastName}`
-                : `Full price (not on ${customer.insurance.planName}'s formulary): ${prescription.productName} ×${prescription.dosage}, ${customer.firstName} ${customer.lastName}`,
+                ? `Copay: ${item}`
+                : plan.reimbursementRate === null
+                  ? `Self-pay: ${item}`
+                  : `Full price (not on ${plan.planName}'s formulary): ${item}`,
             customerId: customerId,
             prescriptionId: prescription.id,
         });
@@ -247,16 +316,31 @@ window.finances = {
         return window.calculateProductCost(productId) * MARKET_MARKUP;
     },
 
+    planCovers,
+
+    // What a plan pays for one unit of a product it covers, copay included.
+    planPrice(plan, productId) {
+        return this.marketPrice(productId) * (plan.reimbursementRate ?? 1);
+    },
+
     acceptanceChance,
 
-    // At check-in the customer hears the price. If they accept, it's fixed
-    // on the prescription (raising the price afterwards doesn't change what
-    // they pay) and the price affects their mood. Returns false if they
-    // refuse; customers.ts then sends them home.
+    // At check-in the customer hears the price, which is then fixed on the
+    // prescription (changing the price afterwards doesn't change what they
+    // pay). A covered drug is at the plan's price, which they always accept.
+    // Otherwise it's the pharmacy's price: it affects their mood, and they
+    // may refuse it. Returns false if they refuse; customers.ts then sends
+    // them home.
     quotePrice(customerId, prescriptionId) {
         const prescription = window.prescriptions.getPrescription(prescriptionId);
         const product = prescription && window.productsData.find((p) => p.id === prescription.productId);
         if (!prescription || !product) return true; // nothing to charge for; reconcileTasks deals with it
+
+        const plan = window.customers.activeCustomers.find((c) => c.id === customerId)?.insurance;
+        if (plan && planCovers(plan, product.id)) {
+            prescription.quotedPrice = this.planPrice(plan, product.id) * prescription.dosage;
+            return true;
+        }
 
         const market = this.marketPrice(product.id);
         const ratio = market > 0 ? product.price / market : 1;
@@ -273,10 +357,19 @@ window.finances = {
         return true;
     },
 
-    // Pay out insurance claims that have finished processing. The payments
-    // go through transact() inside processAllClaims.
+    // At closing on payday (every other week), the insurers pay every claim
+    // filed since the last one. The payments go through transact() inside
+    // processAllClaims.
     processInsuranceClaims() {
-        window.insuranceClaims.processAllClaims();
+        const claims = window.insuranceClaims;
+        if (!claims.isPayday(window.gameState.dayIndex) || claims.pendingClaims.length === 0) return;
+        const count = claims.pendingClaims.length;
+        const paid = claims.processAllClaims();
+        window.notifications?.add(
+            `Insurers paid ${window.fmt.money(paid)} for ${count} claim${count === 1 ? '' : 's'}. ` +
+                `The next payment is at closing on day ${claims.nextPayday(window.gameState.dayIndex + 1)}.`,
+            'success',
+        );
     },
 
     addIncome(amount, category = 'other', description = 'Other income') {

@@ -217,7 +217,6 @@ function getSavedGames() {
         path: filePath,
         lastSaved: saveData.timestamp || null,
         pharmacyName: saveData.gameState?.pharmacyName || 'Unnamed Pharmacy',
-        difficulty: saveData.gameState?.difficulty || 'normal',
         cash: saveData.financesData?.cash || 0,
       },
     ];

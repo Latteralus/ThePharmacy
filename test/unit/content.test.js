@@ -1,8 +1,8 @@
 /**
  * Tests for the game's content and setup (Phase 7): the research tree only
  * unlocks products and equipment that exist (H8), every product can be made
- * with equipment research unlocks no later than the product, and location,
- * research and difficulty change how the game plays (L6).
+ * with equipment research unlocks no later than the product, location and
+ * research change how the game plays (L6), and every game plays at Normal.
  */
 
 function loadData() {
@@ -101,7 +101,7 @@ describe('customers an hour (L6)', () => {
   });
 });
 
-describe('difficulty (L6)', () => {
+describe('a new game', () => {
   function newGame(options) {
     jest.resetModules();
     window.gameState = { currentDate: new Date(2023, 0, 1, 7), dayIndex: 0 };
@@ -126,29 +126,34 @@ describe('difficulty (L6)', () => {
     expect(window.initializeNewGame(options)).toBe(true);
   }
 
-  test('Expert is harder than Hard (it used to play like Normal)', () => {
+  test('plays at Normal, whatever it is asked for (there is no difficulty setting)', () => {
     newGame({ difficulty: 'expert', startingCapital: 'medium', location: 'suburban' });
-    expect(window.financesData.cash).toBe(50000);
-    expect(window.financesData.overhead).toBe(4800); // 1.6x the $3,000 base (Phase 8)
-    expect(window.brandReputation.reputationScore).toBe(0);
+    expect(window.financesData.cash).toBe(100000);
+    expect(window.financesData.overhead).toBe(700); // the $700 base (balance pass)
+    expect(window.brandReputation.reputationScore).toBe(10);
+    expect(window.gameState.difficulty).toBeUndefined();
+  });
 
-    newGame({ difficulty: 'hard', startingCapital: 'medium', location: 'suburban' });
-    expect(window.financesData.cash).toBe(70000);
-    expect(window.financesData.overhead).toBe(3900);
-    expect(window.brandReputation.reputationScore).toBe(5);
+  test('starting capital sets the cash, and location the rent', () => {
+    newGame({ startingCapital: 'low', location: 'urban' });
+    expect(window.financesData.cash).toBe(50000);
+    expect(window.financesData.overhead).toBe(910);
+
+    newGame({ startingCapital: 'high', location: 'rural' });
+    expect(window.financesData.cash).toBe(200000);
+    expect(window.financesData.overhead).toBe(490);
   });
 
   test("a new game's restocks cover only what it can make", () => {
-    newGame({ difficulty: 'normal', startingCapital: 'medium', location: 'suburban' });
+    newGame({ startingCapital: 'medium', location: 'suburban' });
     const restocked = [...new Set(window.taskManager.tasks.map((t) => t.productId))].sort();
     // Level 0's tablets; its capsules need a Capsule Filler first
     expect(restocked).toEqual(['pd001', 'pd004', 'pd006', 'pd007', 'pd008', 'pd009', 'pd010']);
   });
 
-  test('starting staff are paid about what the market pays them', () => {
-    newGame({ difficulty: 'normal', startingCapital: 'medium', location: 'suburban' });
-    window.employeesData.forEach((employee) => {
-      expect(Math.abs(window.employees.payVsMarket(employee))).toBeLessThan(0.06);
-    });
+  test('a new game starts paused, with no staff', () => {
+    newGame({ startingCapital: 'medium', location: 'suburban' });
+    expect(window.gameState.isPaused).toBe(true);
+    expect(window.employeesData).toEqual([]);
   });
 });

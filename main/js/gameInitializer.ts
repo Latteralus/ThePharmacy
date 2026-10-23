@@ -1,11 +1,5 @@
 // gameInitializer.js - Handles the initialization of a new game or loading a saved game
 
-// Daily overhead (rent, utilities, licences) for a Normal game, and each
-// difficulty's share of it. It was $500, about 2% of a day's revenue, so a
-// bad day still made money and the game couldn't be lost (Phase 8).
-const BASE_OVERHEAD = 3000;
-const DIFFICULTY_OVERHEAD: Record<string, number> = { easy: 0.8, normal: 1, hard: 1.3, expert: 1.6 };
-
 window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
     console.log('[gameInitializer] Starting new game initialization with options:', gameOptions);
 
@@ -20,7 +14,7 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             currentDate: new Date(startDate.getTime()),
             dayIndex: 0, // Start at day 0
             isDayActive: false, // Initially set to false
-            isPaused: false, // Whether game simulation is paused
+            isPaused: true, // A new game starts paused; the player resumes it
             simulationAccumulator: 0, // Accumulator for simulation time
             lastFrameTime: 0, // Last frame timestamp for delta calculation
             lastSimulationTime: 0, // Last time the simulation state was updated
@@ -31,7 +25,6 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             },
             // Game customization options from the new game form
             pharmacyName: gameOptions.pharmacyName || 'Your Pharmacy',
-            difficulty: gameOptions.difficulty || 'normal',
             location: gameOptions.location || 'suburban',
             dateCreated: new Date(),
             // Stakes (stakes.ts): closings in a row with cash below $0, and
@@ -42,13 +35,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
 
         console.log('[gameInitializer] Game state initialized:', window.gameState);
 
-        // 2. Initialize finances based on difficulty and starting capital
-        console.log(
-            '[gameInitializer] Initializing finances with difficulty:',
-            gameOptions.difficulty,
-            'and starting capital:',
-            gameOptions.startingCapital,
-        );
+        // 2. Initialize finances based on starting capital and location
+        console.log('[gameInitializer] Initializing finances with starting capital:', gameOptions.startingCapital);
 
         let startingCash = 100000; // Default (medium)
 
@@ -62,17 +50,6 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             console.log('[gameInitializer] Using medium starting cash:', startingCash);
         }
 
-        // Apply difficulty modifier to starting cash
-        if (gameOptions.difficulty === 'expert') {
-            startingCash *= 0.5; // half the starting cash on expert
-        } else if (gameOptions.difficulty === 'hard') {
-            startingCash *= 0.7; // 30% less starting cash on hard
-            console.log('[gameInitializer] Applying hard difficulty modifier to cash:', startingCash);
-        } else if (gameOptions.difficulty === 'easy') {
-            startingCash *= 1.3; // 30% more starting cash on easy
-            console.log('[gameInitializer] Applying easy difficulty modifier to cash:', startingCash);
-        }
-
         console.log('[gameInitializer] Creating finances object');
         window.financesData = {
             cash: startingCash,
@@ -80,7 +57,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             pendingInsuranceIncome: 0,
             pendingOrders: 0,
             completedOrders: 0,
-            overhead: BASE_OVERHEAD * (DIFFICULTY_OVERHEAD[gameOptions.difficulty ?? ''] ?? 1),
+            // Cities pay more rent (and get more customers: brandReputation.calcCustomers)
+            overhead: window.finances.dailyOverhead(window.gameState.location),
             loanBalance: 0,
             transactions: [], // Transaction history
             revenue: {
@@ -129,7 +107,7 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
 
         console.log('[gameInitializer] Finances initialized with $' + startingCash.toFixed(2));
 
-        // 3. Modify difficulty-based settings
+        // 3. Starting reputation
         console.log('[gameInitializer] Checking if brandReputation exists before modifying...');
         if (typeof window.brandReputation === 'undefined') {
             console.error('[gameInitializer] brandReputation is not defined! Creating a default object.');
@@ -143,40 +121,13 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             };
         }
 
-        // Overhead was set above (DIFFICULTY_OVERHEAD)
-        console.log('[gameInitializer] Applying difficulty modifiers to reputation');
-        if (gameOptions.difficulty === 'easy') {
-            window.brandReputation.reputationScore = 15; // Higher starting reputation
-        } else if (gameOptions.difficulty === 'hard') {
-            window.brandReputation.reputationScore = 5; // Lower starting reputation
-        } else if (gameOptions.difficulty === 'expert') {
-            // Expert used to play exactly like Normal (L6)
-            window.brandReputation.reputationScore = 0;
-        } else {
-            window.brandReputation.reputationScore = 10;
-        }
+        window.brandReputation.reputationScore = 10;
 
-        // 4. Location-based adjustments
-        console.log('[gameInitializer] Applying location-based adjustments for:', gameOptions.location);
-        if (gameOptions.location === 'urban') {
-            // Urban centers have more customers but higher costs
-            window.financesData.overhead *= 1.3; // 30% higher rent in urban areas
-            console.log('[gameInitializer] Urban location: overhead increased by 30% to', window.financesData.overhead);
-            // 30% more customers (brandReputation.calcCustomers)
-        } else if (gameOptions.location === 'rural') {
-            // Rural areas have fewer customers but lower costs
-            window.financesData.overhead *= 0.7; // 30% lower rent in rural areas
-            console.log('[gameInitializer] Rural location: overhead decreased by 30% to', window.financesData.overhead);
-            // 25% fewer customers (brandReputation.calcCustomers)
-        } else {
-            console.log('[gameInitializer] Suburban location: using standard overhead');
-        }
-
-        // 5. Starting prices. New games only: a loaded save keeps the
+        // 4. Starting prices. New games only: a loaded save keeps the
         // player's prices.
         window.finances.setToSuggestedPrices();
 
-        // 6. Make sure game element modules are properly initialized
+        // 5. Make sure game element modules are properly initialized
         console.log('[gameInitializer] Ensuring game systems are initialized');
         ensureGameSystemsInitialized();
 

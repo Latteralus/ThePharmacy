@@ -1,16 +1,12 @@
 // /js/pages/settingsPage.js - player settings only (no cheats, findings H5):
-// pause and speed (also in the top bar, with Space and 1-4), and the two
-// difficulty multipliers.
+// pause and speed (also in the top bar, with Space and 1-4). There is no
+// difficulty setting: every game plays at Normal.
 
 window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
     const { el } = kit;
 
-    const root = kit.page(
-        mainContent,
-        'Settings',
-        'Game speed and difficulty. Changes apply at once and are saved with your game.',
-    );
+    const root = kit.page(mainContent, 'Settings', 'Game speed. Changes apply at once and are saved with your game.');
     root.classList.add('settings-page-container');
     root.style.maxWidth = '760px';
 
@@ -64,38 +60,6 @@ window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope)
     );
     row(time, 'Speed', speedSelect, 'Keys 1-4 pick a speed. At 1×, one real second is one game minute.');
 
-    // --------------------- Difficulty ---------------------
-    const difficulty = settingsCard('Difficulty');
-    row(
-        difficulty,
-        'Customer frequency',
-        kit.select(
-            [
-                { value: 0.5, label: 'Low' },
-                { value: 1, label: 'Normal' },
-                { value: 1.5, label: 'High' },
-                { value: 2, label: 'Very high' },
-            ],
-            window.customerFrequencyMultiplier ?? 1,
-            (value) => setCustomerFrequency(parseFloat(value)),
-        ),
-        'How many customers arrive each hour, on top of what your reputation brings.',
-    );
-    row(
-        difficulty,
-        'Operating costs',
-        kit.select(
-            [
-                { value: 0.5, label: 'Low' },
-                { value: 1, label: 'Normal' },
-                { value: 1.5, label: 'High' },
-            ],
-            window.operatingCostMultiplier ?? 1,
-            (value) => setOperatingCosts(parseFloat(value)),
-        ),
-        'Scales the overhead charged at closing each day.',
-    );
-
     // --------------------- Live status ---------------------
     function showStatus(): void {
         const date = window.gameState?.currentDate;
@@ -118,32 +82,3 @@ window.renderSettingsPage = function (mainContent: HTMLElement, page: PageScope)
     // The render loop announces 'time' every frame, paused or not
     page.on('time', showStatus);
 };
-
-// Set customer frequency multiplier (brandReputation.calcCustomers reads it)
-function setCustomerFrequency(multiplier: number): boolean {
-    window.customerFrequencyMultiplier = multiplier;
-    console.log(`Customer frequency multiplier set to ${multiplier}x`);
-    return true;
-}
-
-// Set operating costs multiplier
-function setOperatingCosts(multiplier: number): boolean {
-    if (!window.financesData) {
-        console.error('Finances data not found');
-        return false;
-    }
-
-    // Store original overhead if not already stored
-    if (!window.originalOverhead) {
-        window.originalOverhead = window.financesData.overhead;
-    }
-
-    // Apply multiplier to original overhead
-    window.operatingCostMultiplier = multiplier;
-    window.financesData.overhead = window.originalOverhead * multiplier;
-
-    console.log(
-        `Operating costs multiplier set to ${multiplier}x (overhead: $${window.financesData.overhead.toFixed(2)})`,
-    );
-    return true;
-}

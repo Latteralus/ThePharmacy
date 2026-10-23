@@ -41,9 +41,10 @@ describe('game data & finance logic', () => {
   // and whichever loaded last won.
   test('buying materials gets the bulk discount; a product cost is at list price', () => {
     const mat001 = window.materialsData.find((m) => m.id === 'mat001');
-    expect(window.calculateMaterialCost('mat001', 10)).toBeCloseTo(mat001.cost * 10);
-    expect(window.calculateMaterialCost('mat001', 100)).toBeCloseTo(mat001.cost * 100 * 0.9);
-    expect(window.helpers.calculateOrderCost({ mat001: 100 })).toBeCloseTo(mat001.cost * 100 * 0.9);
+    expect(window.calculateMaterialCost('mat001', 100)).toBeCloseTo(mat001.cost * 100);
+    expect(window.calculateMaterialCost('mat001', 500)).toBeCloseTo(mat001.cost * 500 * 0.98);
+    expect(window.calculateMaterialCost('mat001', 1000)).toBeCloseTo(mat001.cost * 1000 * 0.95);
+    expect(window.helpers.calculateOrderCost({ mat001: 1000 })).toBeCloseTo(mat001.cost * 1000 * 0.95);
 
     const pd001 = window.productsData.find((p) => p.id === 'pd001');
     const listCost = pd001.ingredients.reduce(

@@ -6,6 +6,9 @@ interface InsurancePlan {
     planName: string;
     copayType: 'percentage';
     copayPercentage: number;
+    // What the plan pays for a drug it covers, copay included, as a share
+    // of the market price. null for self-pay.
+    reimbursementRate: number | null;
     formulary: string[] | null;
 }
 
@@ -250,8 +253,17 @@ interface FinancialSummary {
 }
 
 interface FinancesApi {
+    // Overhead charged at each closing for a store in this location.
+    dailyOverhead: (location: string) => number;
     // The only way to change cash. Returns false if refused.
     transact: (entry: LedgerEntry) => boolean;
+    // An employee's cost for a day: salary / 365, with payroll taxes and benefits
+    dailyWage: (employee: Employee) => number;
+    // Hours worked today past OVERTIME_AFTER_HOURS, and what they cost at closing
+    overtimeHours: (employee: Employee) => number;
+    overtimePay: (employee: Employee) => number;
+    OVERTIME_AFTER_HOURS: number;
+    OVERTIME_RATE: number;
     applyDailyCosts: () => void;
     completePrescription: (customerId: string, prescriptionId: string) => { copay: number; price: number } | undefined;
     processInsuranceClaims: () => void;
@@ -265,10 +277,16 @@ interface FinancesApi {
     // What customers judge a product's unit price against (materials at
     // the standard markup; the player's markup doesn't move it).
     marketPrice: (productId: string) => number;
+    // Whether the plan pays its share of the product (false for self-pay
+    // and drugs off its formulary)
+    planCovers: (plan: InsurancePlan, productId: string) => boolean;
+    // What the plan pays for one unit, copay included
+    planPrice: (plan: InsurancePlan, productId: string) => number;
     // The chance a customer accepts a price of priceRatio x market price.
     acceptanceChance: (priceRatio: number) => number;
-    // At check-in: the customer accepts (true; the price is fixed on the
-    // prescription and affects their mood) or refuses (false) the price.
+    // At check-in: fixes the price on the prescription. A covered drug is at
+    // the plan's price; otherwise the customer accepts (true; the price
+    // affects their mood) or refuses (false) the pharmacy's price.
     quotePrice: (customerId: string, prescriptionId: string) => boolean;
     updateProfitMetrics: () => void;
     resetDailyStats: () => void;
@@ -306,7 +324,6 @@ interface GameState {
     isDayActive: boolean;
     isPaused: boolean;
     pharmacyName: string;
-    difficulty: string;
     location: string;
     simulationAccumulator?: number;
     lastFrameTime?: number;
@@ -338,7 +355,6 @@ interface GameState {
 // optional.
 interface NewGameOptions {
     pharmacyName?: string;
-    difficulty?: string;
     location?: string;
     startingCapital?: string;
 }
@@ -350,11 +366,6 @@ type SavedItemState<T, K extends keyof T> = { id: string } & Partial<Pick<T, K>>
 
 interface SaveSettings {
     gameSpeed: number;
-    customerFrequencyMultiplier: number;
-    operatingCostMultiplier: number;
-    // Overhead before the operating-cost multiplier. null until the player
-    // first changes the multiplier.
-    baseOverhead: number | null;
     globalMarkup: number;
 }
 
@@ -1116,7 +1127,8 @@ interface InsuranceClaim {
     copayAmount: number;
     amountDue: number;
     submittedDate: Date;
-    processingTime: number;
+    // Saves from before biweekly payouts have it; it's no longer used
+    processingTime?: number;
     processedDate: Date | null;
     paid: boolean;
     rejected: boolean;
@@ -1152,7 +1164,13 @@ interface InsuranceClaimsApi {
         totalAmount: number,
         copayAmount: number,
     ) => InsuranceClaim | false;
-    calculateProcessingTime: (insuranceName: string) => number;
+    // Days between payouts
+    PAYOUT_EVERY_DAYS: number;
+    // Whether this day's closing (gameState.dayIndex) is payday
+    isPayday: (dayIndex: number) => boolean;
+    // The day number (from 1) of the next payday closing not yet happened
+    nextPayday: (fromDayIndex?: number) => number;
+    // Pays (or rejects) every pending claim now; the amount paid
     processAllClaims: () => number;
     removeClaim: (prescriptionId: string) => boolean;
     syncPendingTotals: () => void;
@@ -1323,11 +1341,4 @@ interface Window {
     applySavedGame: (gameData: unknown) => void;
     saveFile: SaveFileApi;
     bootstrapGame: BootstrapApi;
-    // Settings-page multipliers, saved with the game (SaveSettings).
-    // brandReputation.calcCustomers reads customerFrequencyMultiplier.
-    customerFrequencyMultiplier?: number;
-    operatingCostMultiplier?: number;
-    // Set by settingsPage.ts's setOperatingCosts the first time it runs, to
-    // remember the pre-multiplier overhead value.
-    originalOverhead?: number;
 }

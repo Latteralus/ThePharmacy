@@ -18,7 +18,6 @@ function loadModules() {
     isDayActive: true,
     isPaused: false,
     pharmacyName: 'Test Pharmacy',
-    difficulty: 'normal',
     location: 'suburban',
     lastFrameTime: 12345,
     lastSimulationTime: 12345,
@@ -103,9 +102,6 @@ function playABit() {
   window.researchData.currentLevel = 1;
   window.brandReputation.reputationScore = 33;
   window.setGameSpeed(2);
-  window.customerFrequencyMultiplier = 1.5;
-  window.operatingCostMultiplier = 0.5;
-  window.originalOverhead = 500;
   window.globalMarkup = 1.5;
 }
 
@@ -116,9 +112,6 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  delete window.customerFrequencyMultiplier;
-  delete window.operatingCostMultiplier;
-  delete window.originalOverhead;
 });
 
 describe('serialize', () => {
@@ -210,11 +203,8 @@ describe('save -> disk -> load round trip', () => {
     expect(window.research.isEquipmentUnlocked(levelTwo)).toBe(false);
   });
 
-  test('restores speed and the Settings multipliers', () => {
+  test('restores speed and markup', () => {
     expect(window.getGameSpeed()).toBe(2);
-    expect(window.customerFrequencyMultiplier).toBe(1.5);
-    expect(window.operatingCostMultiplier).toBe(0.5);
-    expect(window.originalOverhead).toBe(500);
     expect(window.globalMarkup).toBe(1.5);
   });
 });
@@ -315,8 +305,9 @@ describe('migrating v1 saves', () => {
     expect(window.prescriptions.activePrescriptions).toEqual([]);
     expect(window.prescriptions.refillRegistry).toEqual([{ id: 'refill-1' }]);
 
+    // Repriced on today's costs at v1's 35% markup (migrations[7])
     const pd001 = window.productsData.find((p) => p.id === 'pd001');
-    expect(pd001.price).toBe(77);
+    expect(pd001.price).toBeCloseTo(window.calculateProductCost('pd001') * 1.35);
     expect(pd001.name).not.toBe('Frozen Old Name');
     expect(window.researchData.currentLevel).toBe(2);
     expect(window.brandReputation.reputationScore).toBe(21);
@@ -522,5 +513,73 @@ describe('v5 saves and the history (Phase 8)', () => {
     expect(window.records.visits[0]).toMatchObject({ id: 'cust-9', price: 40 });
     expect(window.financesData.loanBalance).toBe(20000);
     expect(window.gameState).toMatchObject({ daysInRed: 1, goalsReached: { week: 2 } });
+  });
+});
+
+describe('v6 saves (difficulty removed: every game plays at Normal)', () => {
+  function v6Save({ difficulty, location, overhead }) {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    save.version = 6;
+    save.gameState.difficulty = difficulty;
+    save.gameState.location = location;
+    save.financesData.overhead = overhead;
+    save.settings = {
+      ...save.settings,
+      customerFrequencyMultiplier: 2,
+      operatingCostMultiplier: 0.5,
+      baseOverhead: 3900,
+    };
+    return save;
+  }
+
+  test("overhead goes back to the location's, and the difficulty and multipliers are dropped", () => {
+    const save = window.saveFile.migrate(v6Save({ difficulty: 'hard', location: 'urban', overhead: 1950 }));
+    expect(save.version).toBe(window.saveFile.version);
+    expect(save.gameState.difficulty).toBeUndefined();
+    expect(save.financesData.overhead).toBe(910); // urban rent, no Hard or multiplier
+    expect(save.settings).toEqual({ gameSpeed: 2, globalMarkup: 1.5 });
+  });
+
+  test('cash and reputation are kept', () => {
+    const v6 = v6Save({ difficulty: 'expert', location: 'suburban', overhead: 4800 });
+    loadModules();
+    window.saveFile.apply(v6);
+    expect(window.financesData.cash).toBe(v6.financesData.cash);
+    expect(window.financesData.overhead).toBe(700);
+    expect(window.brandReputation.reputationScore).toBe(33);
+  });
+});
+
+describe('v7 saves (balance pass: materials a quarter of the price)', () => {
+  function v7Save() {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    save.version = 7;
+    save.gameState.location = 'rural';
+    save.financesData.overhead = 2100; // the old rural rent
+    save.settings.globalMarkup = 1.5;
+    save.products.find((p) => p.id === 'pd001').price = 400; // at the old costs
+    save.products.push({ id: 'pd-removed', price: 1, inventory: 1, maxInventory: 1 });
+    return save;
+  }
+
+  test("prices go back to the player's markup on today's costs, and overhead to today's rent", () => {
+    const save = window.saveFile.migrate(v7Save());
+    expect(save.version).toBe(window.saveFile.version);
+    const price = (id) => save.products.find((p) => p.id === id).price;
+    expect(price('pd001')).toBeCloseTo(window.calculateProductCost('pd001') * 1.5);
+    expect(price('pd002')).toBeCloseTo(window.calculateProductCost('pd002') * 1.5);
+    expect(price('pd-removed')).toBe(1); // left alone; apply() drops it
+    expect(save.financesData.overhead).toBe(490);
+  });
+
+  test('cash, salaries and the claims owed are kept', () => {
+    const v7 = v7Save();
+    loadModules();
+    window.saveFile.apply(v7);
+    expect(window.financesData.cash).toBe(v7.financesData.cash);
+    expect(window.employeesData.map((e) => e.salary)).toEqual(v7.employeesData.map((e) => e.salary));
+    expect(window.insuranceClaims.pendingClaims).toHaveLength(v7.insuranceClaims.pending.length);
   });
 });

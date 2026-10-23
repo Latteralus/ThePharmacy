@@ -6,13 +6,13 @@
  * a new game's materials and overhead.
  */
 
-function employee(id, role, salary = 36500) {
+function employee(id, role, salary = 29200) {
   return {
     id,
     firstName: id,
     lastName: 'Test',
     role,
-    salary, // $100 a day
+    salary, // $100 a day, with payroll taxes and benefits
     skills: { compounding: 50, dispensing: 50, customerService: 50, inventoryManagement: 50, sales: 50 },
     morale: 80,
     currentTaskId: null,
@@ -315,14 +315,14 @@ describe('goals (goals.ts)', () => {
   });
 
   test('money goals count cash less what is owed to the bank', () => {
-    window.financesData.cash = 240000;
+    window.financesData.cash = 140000;
     window.stakes.borrow(50000);
     closeDay();
-    expect(goal('bank250k').reachedOn).toBeNull();
+    expect(goal('bank150k').reachedOn).toBeNull();
     window.stakes.repay(50000);
-    window.financesData.cash = 260000;
+    window.financesData.cash = 160000;
     closeDay();
-    expect(goal('bank250k').reachedOn).toBe(2);
+    expect(goal('bank150k').reachedOn).toBe(2);
   });
 
   test('a week means seven closings', () => {

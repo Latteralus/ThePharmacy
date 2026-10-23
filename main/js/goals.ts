@@ -4,7 +4,9 @@
 // recorded in gameState.goalsReached; reaching the last of them wins the
 // game (gameState.wonOnDay), and play goes on. Targets are first guesses,
 // set from a simulated game: a steady player reaches the first few in the
-// first week or two and the last around day 50.
+// first week or two. The money goals were $250,000 and $1,000,000, set when
+// a store netted $9-20k a day; a well-run one now nets about $1,500
+// (balance pass, 2026-10-23), so they're around day 50 and day 150.
 
 const GOALS: GoalDef[] = [
     {
@@ -43,9 +45,9 @@ const GOALS: GoalDef[] = [
         value: () => window.employeesData.length,
     },
     {
-        id: 'bank250k',
-        label: 'Have $250,000 in the bank',
-        target: 250000,
+        id: 'bank150k',
+        label: 'Have $150,000 in the bank',
+        target: 150000,
         unit: 'money',
         value: () => window.financesData.cash - window.stakes.loanBalance(),
     },
@@ -71,9 +73,9 @@ const GOALS: GoalDef[] = [
         value: () => window.researchData.currentLevel,
     },
     {
-        id: 'bank1m',
-        label: 'Have $1,000,000 in the bank',
-        target: 1000000,
+        id: 'bank300k',
+        label: 'Have $300,000 in the bank',
+        target: 300000,
         unit: 'money',
         value: () => window.financesData.cash - window.stakes.loanBalance(),
     },

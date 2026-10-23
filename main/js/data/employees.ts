@@ -8,61 +8,9 @@
 //   and pay against the market rate for their role and skill. Below 25
 //   they may quit overnight.
 
-// Starting salaries are about what the market pays for their skills
-// (helpers.fairSalary), so a new game's staff aren't unhappy from day one.
-window.employeesData = [
-    {
-        id: 'emp001',
-        firstName: 'John',
-        lastName: 'Doe',
-        role: 'Pharmacist',
-        salary: 150000,
-        skills: {
-            compounding: 70,
-            dispensing: 85,
-            customerService: 75,
-            inventoryManagement: 60,
-            sales: 50,
-        },
-        morale: 80, // 0=worst morale, 100=best morale
-        hireDate: '2023-01-15', // Date the employee was hired
-        currentTaskId: null, // ID of the task currently assigned to the employee
-    },
-    {
-        id: 'emp002',
-        firstName: 'Alice',
-        lastName: 'Wong',
-        role: 'Lab Technician',
-        salary: 50000,
-        skills: {
-            compounding: 80,
-            dispensing: 50,
-            customerService: 40,
-            inventoryManagement: 85,
-            sales: 30,
-        },
-        morale: 90,
-        hireDate: '2023-05-20',
-        currentTaskId: null,
-    },
-    {
-        id: 'emp003',
-        firstName: 'Carlos',
-        lastName: 'Garcia',
-        role: 'Cashier',
-        salary: 40000,
-        skills: {
-            compounding: 20,
-            dispensing: 30,
-            customerService: 80,
-            inventoryManagement: 50,
-            sales: 90,
-        },
-        morale: 60,
-        hireDate: '2023-08-10',
-        currentTaskId: null,
-    },
-];
+// A new game starts with no staff: the player hires them. A loaded save
+// replaces this with its own staff.
+window.employeesData = [];
 
 // Morale, once a day at closing
 const REST_HOURS = 8; // up to this many hours worked: rested

@@ -300,7 +300,10 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
         netTile.set(fmt.money(data.profit.today), '', data.profit.today < 0 ? 'critical' : 'neutral');
         netTile.root.querySelector('.stat-value')!.className =
             `stat-value${data.profit.today < 0 ? ' critical-text' : ''}`;
-        owedTile.set(fmt.money(data.pendingInsuranceIncome), 'Paid as claims clear');
+        owedTile.set(
+            fmt.money(data.pendingInsuranceIncome),
+            `Paid at closing on day ${window.insuranceClaims.nextPayday()}`,
+        );
         refreshLoan();
 
         const now = window.gameState.currentDate;

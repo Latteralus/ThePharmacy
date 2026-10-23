@@ -79,9 +79,10 @@ window.stakes = {
         });
     },
 
-    // What a day costs before any sales: wages, overhead and loan interest.
+    // What a day costs before any sales: wages (without overtime), overhead
+    // and loan interest.
     fixedDailyCosts() {
-        const wages = window.employeesData.reduce((sum, emp) => sum + emp.salary / 365, 0);
+        const wages = window.employeesData.reduce((sum, emp) => sum + window.finances.dailyWage(emp), 0);
         return wages + window.financesData.overhead + this.dailyInterest();
     },
 

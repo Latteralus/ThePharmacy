@@ -18,9 +18,7 @@ window.brandReputation = {
         const repFactor = 1 + this.reputationScore / 100;
         const location = LOCATION_CUSTOMERS[window.gameState?.location ?? ''] ?? 1;
         const research = 1 + CUSTOMERS_PER_RESEARCH_LEVEL * (window.researchData?.currentLevel ?? 0);
-        // Settings' "Customer Frequency" (saved with the game)
-        const frequency = window.customerFrequencyMultiplier ?? 1;
-        return Math.floor(base * repFactor * location * research * frequency);
+        return Math.floor(base * repFactor * location * research);
     },
 
     // Gains shrink as reputation grows: each is scaled by the room left
