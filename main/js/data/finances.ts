@@ -11,17 +11,37 @@ const LOCATION_OVERHEAD: Record<string, number> = { urban: 1.3, suburban: 1, rur
 
 // What an employee costs beyond their salary: payroll taxes and benefits.
 const PAYROLL_LOAD = 1.25;
-// A day's pay covers this many hours. Each hour over is paid at
-// OVERTIME_RATE times the hourly rate (a day's pay / OVERTIME_AFTER_HOURS).
+// A day's pay covers this many hours, and a week's (Sunday to Saturday,
+// like the finances week) OVERTIME_WEEK_HOURS. An hour past either is
+// overtime (Phase 9, #7), paid at OVERTIME_RATE times the hourly rate (a
+// day's pay / OVERTIME_AFTER_HOURS). Morale follows the same hours.
 const OVERTIME_AFTER_HOURS = 8;
+const OVERTIME_WEEK_HOURS = 40;
 const OVERTIME_RATE = 1.5;
 
 function dailyWage(employee: Employee): number {
     return (employee.salary * PAYROLL_LOAD) / 365;
 }
 
+// Overtime hours today, daily and weekly, with no hour counted twice.
+// "Straight" hours are those that weren't daily overtime (at most 8 a day);
+// the week's straight hours past 40 are weekly overtime. An employee with 38
+// straight hours this week who works 9 today has 1 hour of daily overtime
+// and 6 of weekly overtime.
+function overtimeSplit(employee: Employee): { daily: number; weekly: number } {
+    const today = (employee.minutesWorkedToday ?? 0) / 60;
+    const daily = Math.max(0, today - OVERTIME_AFTER_HOURS);
+    const straight = today - daily;
+    // The week's straight hours before today. A save from before Phase 9
+    // has no weekly count, which reads as none.
+    const before = Math.max(0, (employee.straightMinutesThisWeek ?? 0) / 60 - straight);
+    const weekly = Math.max(0, before + straight - OVERTIME_WEEK_HOURS) - Math.max(0, before - OVERTIME_WEEK_HOURS);
+    return { daily, weekly };
+}
+
 function overtimeHours(employee: Employee): number {
-    return Math.max(0, (employee.minutesWorkedToday ?? 0) / 60 - OVERTIME_AFTER_HOURS);
+    const { daily, weekly } = overtimeSplit(employee);
+    return daily + weekly;
 }
 
 function overtimePay(employee: Employee): number {
@@ -193,9 +213,11 @@ window.finances = {
     },
 
     dailyWage,
+    overtimeSplit,
     overtimeHours,
     overtimePay,
     OVERTIME_AFTER_HOURS,
+    OVERTIME_WEEK_HOURS,
     OVERTIME_RATE,
 
     // Apply daily costs (called at end of day). Wages and overhead are owed

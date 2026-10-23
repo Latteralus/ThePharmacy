@@ -259,10 +259,14 @@ interface FinancesApi {
     transact: (entry: LedgerEntry) => boolean;
     // An employee's cost for a day: salary / 365, with payroll taxes and benefits
     dailyWage: (employee: Employee) => number;
-    // Hours worked today past OVERTIME_AFTER_HOURS, and what they cost at closing
+    // Overtime hours today: past 8 today (daily), and past 40 straight
+    // hours this week (weekly), with no hour counted twice
+    overtimeSplit: (employee: Employee) => { daily: number; weekly: number };
+    // Their sum, and what it costs at closing
     overtimeHours: (employee: Employee) => number;
     overtimePay: (employee: Employee) => number;
     OVERTIME_AFTER_HOURS: number;
+    OVERTIME_WEEK_HOURS: number;
     OVERTIME_RATE: number;
     applyDailyCosts: () => void;
     completePrescription: (customerId: string, prescriptionId: string) => { copay: number; price: number } | undefined;
@@ -348,6 +352,14 @@ interface GameState {
     goalsReached?: Record<string, number>;
     // dayIndex every goal had been reached by (the win)
     wonOnDay?: number;
+    // The front door (Phase 9, #8). Closed: no new customers, while those
+    // inside are served and staff keep working. Opens every morning.
+    // Missing in saves from before Phase 9 (migrated to true).
+    frontOpen?: boolean;
+    // Game time (ms) the front was closed today, if it still is
+    frontClosedAt?: number;
+    // Game time (ms) the player ended the day early (End day)
+    closedEarlyAt?: number;
 }
 
 // Options passed from the new-game form, through gameAPI, to
@@ -356,7 +368,6 @@ interface GameState {
 interface NewGameOptions {
     pharmacyName?: string;
     location?: string;
-    startingCapital?: string;
 }
 
 // saveFile.ts - the save file format. A save holds only player state;
@@ -453,6 +464,19 @@ interface Employee {
     // turns it into rest or overwork, then resets it. Missing in saves from
     // before Phase 7 (read as 0).
     minutesWorkedToday?: number;
+    // This week's game minutes on tasks (Sunday to Saturday), and the part
+    // of them that wasn't daily overtime (at most 8 hours a day). Past 40
+    // straight hours is weekly overtime (finances.overtimeSplit). Reset at
+    // the Sunday rollover (employees.startNewDay). Missing before Phase 9.
+    minutesWorkedThisWeek?: number;
+    straightMinutesThisWeek?: number;
+    // Sent home: not given work until this dayIndex (the next opening).
+    offUntilDay?: number;
+    // "Don't allow overtime": at 8 hours today or 40 straight this week they
+    // take no new task, finish the one they're on, then go home.
+    noOvertime?: boolean;
+    // dayIndex the player was last told they went into overtime (once a day)
+    overtimeNotifiedDay?: number;
     // The three static starting employees use an ISO date string; employees
     // hired at runtime (hireEmployee's candidates) get a real Date instead.
     hireDate: string | Date;
@@ -470,7 +494,13 @@ interface StaffDayReport {
     // What moved their morale, in player words ("overworked (11.5h)")
     reasons: string[];
     quit: boolean;
+    // Overtime hours paid at this closing (daily and weekly)
+    overtimeHours: number;
 }
+
+// Where an employee stands against the overtime rule (Phase 9, #7):
+// approaching from 7 hours today or 36 straight this week.
+type OvertimeStatus = 'none' | 'approaching' | 'overtime';
 
 interface EmployeesApi {
     // The last closing time's report (empty until the first one).
@@ -493,6 +523,31 @@ interface EmployeesApi {
     fireEmployee: (employeeId: string) => void;
     // Fired or quit. False if there's no such employee.
     removeEmployee: (employeeId: string) => boolean;
+
+    // Hours and overtime (Phase 9, #7)
+    // Counts game minutes spent on a task (taskManager.updateTasks).
+    recordWork: (employee: Employee, minutes: number) => void;
+    overtimeStatus: (employee: Employee) => OvertimeStatus;
+    // At 8 hours today or 40 straight this week ("Don't allow overtime")
+    atOvertimeLimit: (employee: Employee) => boolean;
+    isSentHome: (employee: Employee) => boolean;
+    // Finishing a task at their overtime limit, then going home
+    isGoingHome: (employee: Employee) => boolean;
+    // Not sent home and not held back at their overtime limit
+    canTakeWork: (employee: Employee) => boolean;
+    // Their task goes back in the queue with its progress; off until the
+    // next opening. `auto`: their overtime limit, not the player.
+    sendHome: (employeeId: string, auto?: boolean) => boolean;
+    // Undoes sendHome, the same day.
+    callBack: (employeeId: string) => boolean;
+    setNoOvertime: (employeeId: string, on: boolean) => void;
+    // Anyone idle at their "Don't allow overtime" limit goes home.
+    sendHomeAtLimit: () => void;
+    // The morning: weekly hours reset on Sunday.
+    startNewDay: (date: Date) => void;
+    // What the staff can't do, for the Employees page and the Dashboard
+    // (no pharmacist, no one to fill or compound).
+    staffingWarnings: () => string[];
 }
 
 // ---------------------------------------------------------------
@@ -514,6 +569,10 @@ interface DayRecord {
     reputation: number;
     customers: Partial<Record<DepartureReason, number>>;
     staff: number;
+    // Game time (ms) the front closed and stayed closed, and the day ended
+    // early with End day (Phase 9, #8). Missing on a full day.
+    frontClosedAt?: number;
+    closedEarlyAt?: number;
 }
 
 // One customer's visit, recorded when they left (records.recordVisit).
@@ -543,6 +602,8 @@ interface RecordsApi {
     totalCustomers: (reason: DepartureReason) => number;
     // Customers who left unserved, from counts by reason (not 'reset')
     lost: (counts: Partial<Record<DepartureReason, number>>) => number;
+    // What made a closed day short: the front closed, or End day
+    notes: (record: DayRecord) => string[];
     // The last closed day before today
     yesterday: () => DayRecord | undefined;
     forDate: (date: Date) => DayRecord | undefined;
@@ -614,12 +675,16 @@ interface GameSettings {
     // Applied by the main process (zoom factor and fullscreen)
     uiScale: number;
     fullscreenEnabled: boolean;
+    // Start the next day without showing the daily summary (Phase 9, #49)
+    skipDailySummary: boolean;
 }
 
 interface GameApi {
     // Running unpackaged: developer tools (the debug overlay) are available.
     isDev?: boolean;
     getSettings?: () => Promise<Partial<GameSettings> | null>;
+    // Stores the whole settings object (missing keys go back to defaults).
+    updateSettings?: (settings: GameSettings) => Promise<{ success: boolean } | undefined>;
     getNewGameOptions?: () => Promise<unknown>;
     loadGame?: () => Promise<unknown>;
     saveGame?: (gameData: SaveFile) => Promise<{ success: boolean } | undefined>;
@@ -802,6 +867,9 @@ interface TaskAssignmentApi {
     requestAutoAssign: () => void;
     assignIfRequested: () => void;
     normalizeEmployeeRoles: () => void;
+    // The roles that may do a task, in order of preference (Phase 9, #3):
+    // 'anyone' for check-in and checkout, [] for nobody.
+    eligibleRoles: (task: Task) => string[] | 'anyone';
     logTaskAssignmentState: () => void;
     forceTaskReassignment: () => void;
 }
@@ -1056,6 +1124,11 @@ interface Kit {
         current: T,
         onChange?: (value: string) => void,
     ) => HTMLSelectElement;
+    checkbox: (
+        label: string,
+        checked: boolean,
+        onChange: (checked: boolean) => void,
+    ) => { root: HTMLLabelElement; input: HTMLInputElement };
     segmented: <T>(
         options: Array<{ value: T; label: string; title?: string }>,
         current: T,
@@ -1182,6 +1255,9 @@ interface InsuranceClaimsApi {
 interface TimeEventsConfig {
     OPENING_HOUR: number;
     CLOSING_HOUR: number;
+    // No hourly batch of customers from this hour (last entry an hour
+    // before closing, Phase 9 #50)
+    LAST_ENTRY_HOUR: number;
 }
 
 // clock.ts - the game clock and scheduler. Delays are in game minutes; jobs
@@ -1208,6 +1284,15 @@ interface TimeEventsApi {
     cancelPendingArrivals: () => void;
     autoOrderCheck: () => void;
     autoPurchaseEquipmentCheck: () => void;
+    // Closing: the 22:00 check and End day. Settles the day once
+    // (lastEndedDayIndex), then the summary or the next day.
+    closeDay: (gameState: GameState) => void;
+    // Store controls (Phase 9, #8)
+    setFrontOpen: (open: boolean) => void;
+    // Ends the day now: customers still inside leave, work resumes tomorrow.
+    endDayNow: () => void;
+    // What End day would leave unfinished, for its confirmation
+    closingPreview: () => { customers: number; tasksInProgress: number };
     CONFIG: TimeEventsConfig;
     addEventListener: (event: string, callback: (data: unknown) => void) => void;
     removeEventListener: (event: string, callback: (data: unknown) => void) => void;
@@ -1244,6 +1329,13 @@ interface Window {
     insuranceData: InsurancePlan[];
     brandReputation: BrandReputationApi;
     showDailySummaryModal: (onNextDay?: () => void) => void;
+    // A closed day's summary from its record (the Dashboard's past days)
+    showDayRecordModal: (day: number) => void;
+    // The main menu's settings the game reads while it runs, filled in from
+    // gameAPI.getSettings at startup (game-bootstrap.ts)
+    appSettings: Pick<GameSettings, 'skipDailySummary'>;
+    // Speeds offered to the player (main.ts), keys 1-4 in order
+    GAME_SPEEDS: number[];
     // Game over (bankruptcy), and the win (every goal reached)
     showGameOverModal: () => void;
     showVictoryModal: (onContinue?: () => void) => void;

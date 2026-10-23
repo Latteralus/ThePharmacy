@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 8;
+    const SAVE_VERSION = 9;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -98,6 +98,7 @@ window.saveFile = (function (): SaveFileApi {
         5: (save: SaveFile) => SaveFile;
         6: (save: SaveFile) => SaveFile;
         7: (save: SaveFile) => SaveFile;
+        8: (save: SaveFile) => SaveFile;
     } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
@@ -240,6 +241,22 @@ window.saveFile = (function (): SaveFileApi {
                 overhead: window.finances.dailyOverhead(save.gameState.location),
             };
             return { ...save, version: 8, products, financesData };
+        },
+
+        // v8 predates store controls and the overtime rules (Phase 9). The
+        // front is open, and nobody has weekly hours yet: a save loaded
+        // mid-week under-counts that week once. Nobody is sent home or set
+        // to "Don't allow overtime". 0.5x is no longer offered; it loads at 1x.
+        8(save) {
+            const gameState = { ...save.gameState, frontOpen: true };
+            const employeesData = save.employeesData.map((emp) => ({
+                ...emp,
+                minutesWorkedThisWeek: 0,
+                straightMinutesThisWeek: 0,
+                noOvertime: false,
+            }));
+            const settings = { ...save.settings, gameSpeed: Math.max(1, save.settings.gameSpeed) };
+            return { ...save, version: 9, gameState, employeesData, settings };
         },
     };
 

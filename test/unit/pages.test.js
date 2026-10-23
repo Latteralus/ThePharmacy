@@ -18,6 +18,7 @@ function loadUi() {
     isDayActive: true,
     isPaused: false,
   };
+  window.GAME_SPEEDS = [1, 2, 5, 10]; // main.ts
   require('../../main/js/clock.js');
   require('../../main/js/ui.js');
   require('../../main/components/kit.js');
@@ -525,13 +526,58 @@ describe('the top bar (U1, U2)', () => {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', bubbles: true }));
     expect(window.gameState.isPaused).toBe(false);
 
+    // Phase 9 (#49): 1×, 2×, 5× and 10×
+    expect([...document.querySelectorAll('#speedControl button')].map((b) => b.textContent)).toEqual([
+      '1×',
+      '2×',
+      '5×',
+      '10×',
+    ]);
     document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit4', bubbles: true }));
-    expect(window.setGameSpeed).toHaveBeenLastCalledWith(5);
+    expect(window.setGameSpeed).toHaveBeenLastCalledWith(10);
     window.ui.flush();
-    expect(document.querySelector('#speedControl button.active').textContent).toBe('5×');
+    expect(document.querySelector('#speedControl button.active').textContent).toBe('10×');
 
-    [...document.querySelectorAll('#speedControl button')].find((b) => b.textContent === '0.5×').click();
-    expect(window.setGameSpeed).toHaveBeenLastCalledWith(0.5);
+    [...document.querySelectorAll('#speedControl button')].find((b) => b.textContent === '1×').click();
+    expect(window.setGameSpeed).toHaveBeenLastCalledWith(1);
+  });
+
+  test('closes and opens the front, and End day asks first, saying what is still going (#8)', () => {
+    window.timeEvents = {
+      setFrontOpen: jest.fn((open) => {
+        window.gameState.frontOpen = open;
+      }),
+      endDayNow: jest.fn(),
+      closingPreview: () => ({ customers: 2, tasksInProgress: 1 }),
+    };
+    require('../../main/modals/modal.js');
+    const front = document.getElementById('frontButton');
+    expect(front.textContent).toBe('Close front');
+
+    front.click();
+    expect(window.timeEvents.setFrontOpen).toHaveBeenLastCalledWith(false);
+    window.ui.flush();
+    expect(document.getElementById('storeStatus').textContent).toBe('Front closed');
+    expect(front.textContent).toBe('Open front');
+    front.click();
+    expect(window.timeEvents.setFrontOpen).toHaveBeenLastCalledWith(true);
+
+    document.getElementById('endDayButton').click();
+    const dialog = document.querySelector('.confirm-modal');
+    expect(dialog.textContent).toContain('2 customers are still in the store and will leave unserved');
+    expect(dialog.textContent).toContain('Close the front first and let the line clear');
+    expect(dialog.textContent).toContain('1 task is in progress');
+    expect(window.timeEvents.endDayNow).not.toHaveBeenCalled();
+    [...dialog.querySelectorAll('button')].find((b) => b.textContent === 'End day').click();
+    expect(window.timeEvents.endDayNow).toHaveBeenCalled();
+
+    // Both wait while the day is closed
+    window.gameState.isDayActive = false;
+    window.ui.flush();
+    expect(document.getElementById('storeStatus').textContent).toBe('Closed');
+    expect(front.disabled).toBe(true);
+    expect(document.getElementById('endDayButton').disabled).toBe(true);
+    delete window.timeEvents;
   });
 
   test('hotkeys are ignored while typing and while a dialog is open', () => {
@@ -562,7 +608,29 @@ describe('the Settings page', () => {
   test('labels every control (U18), and has no difficulty settings', () => {
     window.showPage('settings');
     const labels = [...main().querySelectorAll('.settings-grid .label')].map((l) => l.textContent);
-    expect(labels).toEqual(['Current time', 'Game', 'Speed']);
+    expect(labels).toEqual(['Current time', 'Game', 'Speed', 'Daily summary']);
+    expect([...main().querySelectorAll('select option')].map((o) => o.value)).toEqual(['1', '2', '5', '10']);
+  });
+
+  test("skipping the daily summary applies at once and is stored with the menu's settings (#49)", async () => {
+    window.appSettings = { skipDailySummary: false };
+    const stored = { simulationSpeed: 5, autoSaveEnabled: true, autoSaveInterval: 5, uiScale: 1.2 };
+    window.gameAPI = {
+      getSettings: jest.fn(async () => ({ ...stored })),
+      updateSettings: jest.fn(async () => ({ success: true })),
+    };
+    window.showPage('settings');
+    const toggle = document.getElementById('skipDailySummary');
+    expect(toggle.checked).toBe(false);
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(window.appSettings.skipDailySummary).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    // The rest of the menu's settings are kept
+    expect(window.gameAPI.updateSettings).toHaveBeenCalledWith({ ...stored, skipDailySummary: true });
+    delete window.gameAPI;
+    delete window.appSettings;
   });
 
   test('keeps the time and pause status current from time announcements, with no interval', () => {
@@ -871,15 +939,55 @@ describe('the Employees page (U15)', () => {
     salary.value = '99999';
 
     window.employeesData[0].minutesWorkedToday = 9 * 60;
+    window.employeesData[0].minutesWorkedThisWeek = 30 * 60;
     window.updateUI('tasks');
     window.ui.flush();
     expect(row.isConnected).toBe(true);
-    expect(row.textContent).toContain('9.0h');
-    const hours = [...row.querySelectorAll('span')].find((n) => n.textContent === '9.0h');
-    expect(hours.className).toBe('warn-text');
+    const hours = [...row.querySelectorAll('span')].find((n) => n.textContent === '9.0h today · 30.0h week');
+    expect(hours.className).toBe('critical-text'); // in overtime
+    expect(row.textContent).toContain('Overtime');
     expect(hours.title).toBe(`1.0h overtime so far: ${window.fmt.money(((85000 * 1.25) / 365 / 8) * 1.5)} at closing`);
     expect(row.textContent).toContain('1.30×'); // consultations: (85 + 75) / 2 = 80
     expect(salary.value).toBe('99999');
+  });
+
+  test('sends staff home and calls them back, and sets No overtime (Phase 9, #7)', () => {
+    window.taskAssignment = { requestAutoAssign: jest.fn(), unassignTask: jest.fn() };
+    window.showPage('employees');
+    const row = main().querySelector('.employee-card');
+    const button = (label) => [...row.querySelectorAll('button')].find((b) => b.textContent === label);
+    expect(button('Call back').style.display).toBe('none');
+
+    button('Send home').click();
+    window.ui.flush();
+    expect(window.employeesData[0].offUntilDay).toBe(2);
+    expect(row.textContent).toContain('Sent home');
+    expect(button('Send home').style.display).toBe('none');
+    expect(main().querySelector('.stat-sub').textContent).toBe('0 idle · 1 sent home');
+
+    button('Call back').click();
+    window.ui.flush();
+    expect(window.employeesData[0].offUntilDay).toBeUndefined();
+    expect(row.textContent).toContain('Idle');
+
+    const toggle = row.querySelector('.check input');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(window.employeesData[0].noOvertime).toBe(true);
+    delete window.taskAssignment;
+  });
+
+  test('warns when no one can consult, or fill and compound (Phase 9, #3)', () => {
+    window.showPage('employees');
+    const warning = main().querySelector('.callout.warn');
+    expect(warning.style.display).toBe('none');
+
+    window.employeesData[0].role = 'Cashier';
+    window.updateUI('employees');
+    window.ui.flush();
+    expect(warning.style.display).toBe('');
+    expect(warning.textContent).toContain("No pharmacist on staff: customers can't get consultations.");
+    expect(warning.textContent).toContain('no one can fill or compound');
   });
 
   test('says the posting fee up front, and lists candidates with all their skills', () => {

@@ -48,13 +48,26 @@ function runRecord(): HTMLElement {
     return grid;
 }
 
-// Shown after end of day has charged wages and overhead, before the "today"
-// totals roll over.
-window.showDailySummaryModal = function (onNextDay?: () => void): void {
+// One day's summary: the closing just now, or a closed day from its record.
+interface DaySummary {
+    revenue: number;
+    costs: number;
+    net: number;
+    cash: number;
+    loan: number;
+    customers: Partial<Record<DepartureReason, number>>;
+    // At this closing, and the closing before (none on the first day)
+    reputation?: number;
+    reputationBefore?: number;
+    goalsReached: GoalProgress[];
+    // "Front closed from 15:30", "Closed early at 18:00"
+    notes: string[];
+}
+
+// The money, reputation, notes, customers and goals of a day's summary.
+function daySummaryParts(day: DaySummary): { money: Node; rest: Node[] } {
     const { el, table, pill } = window.kit;
-    const { revenue, expenses, profit, cash } = window.financesData;
-    const loan = window.stakes?.loanBalance() ?? 0;
-    const left = window.gameState.customersToday ?? {};
+    const left = day.customers;
     const served = left.served ?? 0;
     const lostParts = [
         { key: 'impatient', label: 'Ran out of patience', count: left.impatient ?? 0, color: 'var(--critical)' },
@@ -66,12 +79,12 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
 
     // Money
     const money = table([{ label: 'Today' }, { label: '', num: true }]);
-    money.row(['Revenue', window.fmt.money(revenue.today)]);
-    money.row(['Costs (wages, overhead, purchases)', window.fmt.money(-expenses.today)]);
-    const net = el('span', profit.today >= 0 ? 'good-text' : 'critical-text', window.fmt.money(profit.today));
+    money.row(['Revenue', window.fmt.money(day.revenue)]);
+    money.row(['Costs (wages, overhead, purchases)', window.fmt.money(-day.costs)]);
+    const net = el('span', day.net >= 0 ? 'good-text' : 'critical-text', window.fmt.money(day.net));
     money.row(['Net', net], 'total');
-    money.row(['Cash on hand', el('span', cash < 0 ? 'critical-text' : '', window.fmt.money(cash))]);
-    if (loan > 0) money.row(['Owed to the bank', window.fmt.money(loan)]);
+    money.row(['Cash on hand', el('span', day.cash < 0 ? 'critical-text' : '', window.fmt.money(day.cash))]);
+    if (day.loan > 0) money.row(['Owed to the bank', window.fmt.money(day.loan)]);
 
     // Customers: one bar, served then each way they were lost, with counts as text
     const customers = el('div');
@@ -107,6 +120,60 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
         customers.appendChild(el('p', 'muted small', 'No customers today.'));
     }
 
+    const rest: Node[] = [];
+
+    // Reputation over the day, from the history (no change shown on the first day)
+    if (day.reputation !== undefined) {
+        const repLine = el('div', 'toolbar');
+        repLine.append(el('strong', '', 'Reputation'), el('span', '', `${Math.round(day.reputation)} / 100`));
+        if (day.reputationBefore !== undefined) {
+            const change = day.reputation - day.reputationBefore;
+            const tone = change > 0.05 ? 'good-text' : change < -0.05 ? 'critical-text' : 'muted';
+            repLine.appendChild(el('span', tone, `${change >= 0 ? '+' : '−'}${Math.abs(change).toFixed(1)} today`));
+        }
+        rest.push(repLine);
+    }
+
+    // A short day (#8), so it isn't read as a slow one
+    if (day.notes.length > 0) {
+        const noteLine = el('div', 'toolbar');
+        noteLine.appendChild(el('strong', '', 'Hours'));
+        day.notes.forEach((note) => noteLine.appendChild(pill(note, 'warn')));
+        rest.push(noteLine);
+    }
+
+    rest.push(customers);
+
+    // Goals reached at this closing (goals.check ran before this)
+    if (day.goalsReached.length > 0) {
+        const goalLine = el('div', 'toolbar');
+        goalLine.appendChild(el('strong', '', day.goalsReached.length === 1 ? 'Goal reached' : 'Goals reached'));
+        day.goalsReached.forEach((goal) => goalLine.appendChild(pill(goal.label, 'good')));
+        rest.push(goalLine);
+    }
+
+    return { money: money.root, rest };
+}
+
+// Shown after end of day has charged wages and overhead, before the "today"
+// totals roll over.
+window.showDailySummaryModal = function (onNextDay?: () => void): void {
+    const { el, table, pill } = window.kit;
+    const { revenue, expenses, profit, cash } = window.financesData;
+    const todayRecord = window.records?.days.find((d) => d.day === window.gameState.dayIndex);
+    const parts = daySummaryParts({
+        revenue: revenue.today,
+        costs: expenses.today,
+        net: profit.today,
+        cash,
+        loan: window.stakes?.loanBalance() ?? 0,
+        customers: window.gameState.customersToday ?? {},
+        reputation: todayRecord?.reputation,
+        reputationBefore: window.records?.yesterday()?.reputation,
+        goalsReached: window.goals?.reachedToday() ?? [],
+        notes: todayRecord ? window.records.notes(todayRecord) : [],
+    });
+
     const body: Node[] = [];
 
     // In the red: how long until bankruptcy (stakes.closeDay ran before this)
@@ -120,32 +187,7 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
             ),
         );
     }
-    body.push(money.root);
-
-    // Reputation over the day, from the history (no change shown on the first day)
-    const todayRecord = window.records?.days.find((d) => d.day === window.gameState.dayIndex);
-    const before = window.records?.yesterday()?.reputation;
-    if (todayRecord) {
-        const repLine = el('div', 'toolbar');
-        repLine.append(el('strong', '', 'Reputation'), el('span', '', `${Math.round(todayRecord.reputation)} / 100`));
-        if (before !== undefined) {
-            const change = todayRecord.reputation - before;
-            const tone = change > 0.05 ? 'good-text' : change < -0.05 ? 'critical-text' : 'muted';
-            repLine.appendChild(el('span', tone, `${change >= 0 ? '+' : '−'}${Math.abs(change).toFixed(1)} today`));
-        }
-        body.push(repLine);
-    }
-
-    body.push(customers);
-
-    // Goals reached at this closing (goals.check ran before this)
-    const reached = window.goals?.reachedToday() ?? [];
-    if (reached.length > 0) {
-        const goalLine = el('div', 'toolbar');
-        goalLine.appendChild(el('strong', '', reached.length === 1 ? 'Goal reached' : 'Goals reached'));
-        reached.forEach((goal) => goalLine.appendChild(pill(goal.label, 'good')));
-        body.push(goalLine);
-    }
+    body.push(parts.money, ...parts.rest);
 
     // Staff: today's hours and how morale moved (employees.endOfDay ran
     // just before this)
@@ -165,9 +207,12 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
             const morale = entry.quit
                 ? pill('Quit', 'critical')
                 : el('span', change < -0.5 ? 'critical-text' : change > 0.5 ? 'good-text' : '', moraleText);
+            const overtime = entry.overtimeHours ?? 0;
             staffTable.row([
                 window.kit.primaryCell(entry.name, entry.role),
-                `${entry.hoursWorked.toFixed(1)}h`,
+                overtime > 0
+                    ? window.kit.primaryCell(`${entry.hoursWorked.toFixed(1)}h`, `${overtime.toFixed(1)}h overtime`)
+                    : `${entry.hoursWorked.toFixed(1)}h`,
                 morale,
                 entry.reasons.length > 0 ? entry.reasons.join(', ') : 'Rested, paid fairly',
             ]);
@@ -191,6 +236,39 @@ window.showDailySummaryModal = function (onNextDay?: () => void): void {
     });
     // Without scrolling, so a long summary opens at its top (where a warning goes)
     nextDayBtn.focus({ preventScroll: true });
+};
+
+// A closed day's summary, from its record (the Dashboard). Kept for days
+// whose summary was skipped (#49). It changes nothing, so it isn't a
+// session dialog, and Esc closes it.
+window.showDayRecordModal = function (dayIndex: number): void {
+    const records = window.records;
+    const record = records.days.find((d) => d.day === dayIndex);
+    if (!record) return;
+    const before = [...records.days].reverse().find((d) => d.day < dayIndex);
+    const parts = daySummaryParts({
+        revenue: record.revenue,
+        costs: record.costs,
+        net: record.net,
+        cash: record.cash,
+        loan: record.loan,
+        customers: record.customers,
+        reputation: record.reputation,
+        reputationBefore: before?.reputation,
+        goalsReached: window.goals?.list().filter((goal) => goal.reachedOn === dayIndex) ?? [],
+        notes: records.notes(record),
+    });
+    const closeBtn = window.kit.button('Close', 'primary');
+    const dialog = window.kit.modal({
+        title: `Day ${dayIndex + 1}`,
+        subtitle: window.fmt.day(new Date(record.date)),
+        body: [parts.money, ...parts.rest],
+        actions: [closeBtn],
+        className: 'day-record',
+        onEscape: () => dialog.close(),
+    });
+    closeBtn.addEventListener('click', () => dialog.close());
+    closeBtn.focus({ preventScroll: true });
 };
 
 // Bankrupt: three closings in a row in the red (stakes.closeDay). The game

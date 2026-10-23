@@ -36,12 +36,9 @@ coverage/
 # Other
 *.env.*
 
-# Internal docs and notes - not for the public repo. Player-facing docs
-# (docs/readme.md, docs/install-instructions.md) stay tracked.
-findings.md
-docs/Changelog.md
-docs/overview.md
-docs/Complete/
+# Docs and notes - not for the public repo. Everything in documents/ is
+# local only, including the plan, the changelog and the player-facing readme.
+documents/
 CLAUDE.md
 .claude/
 

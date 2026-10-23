@@ -19,6 +19,16 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
     root.appendChild(kpis);
 
     // --------------------- Customers and staff ---------------------
+    // While the front is closed (#8): no new customers
+    const frontBanner = el(
+        'div',
+        'callout warn',
+        'Front closed: no new customers are coming in. Those inside are still served, and staff keep working. ' +
+            'Open the front from the top bar; it opens again every morning.',
+    );
+    frontBanner.setAttribute('role', 'status');
+    root.appendChild(frontBanner);
+
     const customersCard = kit.card('Customers', { flush: true });
     root.appendChild(customersCard.root);
     const customersTable = kit.table([
@@ -37,6 +47,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         { label: 'Employee' },
         { label: 'Working on' },
         { label: 'Progress', width: '220px' },
+        { label: '', className: 'actions' },
     ]);
     staffCard.body.appendChild(staffTable.root);
 
@@ -161,26 +172,63 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
     }
 
     // --------------------- Staff ---------------------
-    function renderStaff(): number {
+    // An Overtime pill that follows the clock, and Send home (highlighted in
+    // overtime) for everyone working today (#7)
+    function overtimeControls(emp: Employee): { pill: HTMLElement; sendHome: HTMLButtonElement } {
+        const pill = el('span');
+        const sendHome = kit.button('Send home', 'secondary', () => window.employees.sendHome(emp.id), {
+            small: true,
+            title: 'Off until tomorrow, paid their normal day. Their task goes back in the queue.',
+        });
+        const update = (): void => {
+            const overtime = window.employees.overtimeStatus(emp) === 'overtime';
+            if (overtime !== pill.childElementCount > 0) {
+                pill.innerHTML = '';
+                if (overtime) pill.append(' ', kit.pill('Overtime', 'critical'));
+            }
+            sendHome.classList.toggle('btn-primary', overtime);
+        };
+        update();
+        liveCells.push(update);
+        return { pill, sendHome };
+    }
+
+    function renderStaff(): { idle: number; sentHome: number } {
         staffTable.clear();
         let idle = 0;
+        let sentHome = 0;
         window.employeesData.forEach((emp) => {
             const task = emp.currentTaskId ? window.taskManager.getTaskById(emp.currentTaskId) : undefined;
             const who = kit.primaryCell(`${emp.firstName} ${emp.lastName}`, emp.role);
+            if (window.employees.isSentHome(emp)) {
+                sentHome++;
+                const callBack = kit.button('Call back', 'secondary', () => window.employees.callBack(emp.id), {
+                    small: true,
+                });
+                staffTable.row([who, kit.pill('Sent home'), '', callBack]);
+                return;
+            }
+            const controls = overtimeControls(emp);
             if (task) {
                 const forWhom = customerName(task.customerId);
                 const working = el('span');
-                working.appendChild(taskCell(task));
-                if (forWhom) working.appendChild(el('span', 'sub', `for ${forWhom}`));
+                working.append(taskCell(task), controls.pill);
+                if (window.employees.isGoingHome(emp)) {
+                    working.appendChild(el('span', 'sub', 'Finishing up, then going home'));
+                } else if (forWhom) {
+                    working.appendChild(el('span', 'sub', `for ${forWhom}`));
+                }
                 const progress = task.status === 'inProgress' ? window.taskbars.createProgressBar(task) : '';
-                staffTable.row([who, working, progress]);
+                staffTable.row([who, working, progress, controls.sendHome]);
             } else {
                 idle++;
-                staffTable.row([who, kit.pill('Idle'), '']);
+                const working = el('span');
+                working.append(kit.pill('Idle'), controls.pill);
+                staffTable.row([who, working, '', controls.sendHome]);
             }
         });
         staffCard.setCount(window.employeesData.length);
-        return idle;
+        return { idle, sentHome };
     }
 
     // --------------------- Queue ---------------------
@@ -233,7 +281,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
     }
 
     // --------------------- KPIs ---------------------
-    function renderKpis(idle: number): void {
+    function renderKpis({ idle, sentHome }: { idle: number; sentHome: number }): void {
         const customers = window.customers?.activeCustomers ?? [];
         const ready = customers.filter((c) => c.status === 'readyForCheckout').length;
         inStoreTile.set(fmt.int(customers.length), ready > 0 ? `${ready} ready to pay` : '');
@@ -247,10 +295,13 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
             waiting.length > 0 && idle === 0 ? 'warn' : 'neutral',
         );
 
-        idleTile.set(
-            `${idle} of ${window.employeesData.length}`,
-            idle === window.employeesData.length ? 'Nothing to do' : '',
-        );
+        // People sent home aren't idle; they're counted on their own
+        const working = window.employeesData.length - sentHome;
+        const notes = [
+            idle > 0 && idle === working ? 'Nothing to do' : '',
+            sentHome > 0 ? `${sentHome} sent home` : '',
+        ].filter(Boolean);
+        idleTile.set(`${idle} of ${working}`, notes.join(' · '));
 
         const restocks = tasks.filter(isRestock);
         const running = restocks.filter((t) => t.status === 'inProgress').length;
@@ -259,10 +310,11 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
 
     function renderAll(): void {
         liveCells = [];
+        frontBanner.style.display = window.gameState.frontOpen === false ? '' : 'none';
         renderCustomers();
-        const idle = renderStaff();
+        const staff = renderStaff();
         renderQueue();
-        renderKpis(idle);
+        renderKpis(staff);
     }
     renderAll();
 

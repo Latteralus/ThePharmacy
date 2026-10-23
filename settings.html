@@ -185,11 +185,27 @@
             </div>
             <div class="setting-control">
               <select id="simulationSpeed" name="simulationSpeed">
-                <option value="0.5">0.5× (Slow)</option>
-                <option value="1" selected>1× (Normal)</option>
-                <option value="2">2× (Fast)</option>
-                <option value="5">5× (Very fast)</option>
+                <option value="1">1× (Slow)</option>
+                <option value="2" selected>2× (Normal)</option>
+                <option value="5">5× (Fast)</option>
+                <option value="10">10× (Very fast)</option>
               </select>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div>
+              <div class="setting-label">Daily summary</div>
+              <div class="setting-description">
+                Skip the end-of-day summary and start the next day straight away. Warnings come as notifications, and
+                past days stay on the Dashboard. Also on the in-game Settings page.
+              </div>
+            </div>
+            <div class="setting-control">
+              <div class="checkbox-wrapper">
+                <input type="checkbox" id="skipDailySummary" name="skipDailySummary" />
+                <label for="skipDailySummary">Skip the daily summary</label>
+              </div>
             </div>
           </div>
 
@@ -265,11 +281,12 @@
       // stores them and applies interface size and fullscreen; the game
       // reads the starting speed and autosave.
       const DEFAULTS = {
-        simulationSpeed: 1,
+        simulationSpeed: 2,
         autoSaveEnabled: true,
         autoSaveInterval: 5,
         uiScale: 1,
         fullscreenEnabled: false,
+        skipDailySummary: false,
       };
 
       const form = document.getElementById('settingsForm');
@@ -288,6 +305,7 @@
         field('autoSaveInterval').disabled = !settings.autoSaveEnabled;
         field('uiScale').value = String(settings.uiScale);
         field('fullscreenEnabled').checked = !!settings.fullscreenEnabled;
+        field('skipDailySummary').checked = !!settings.skipDailySummary;
       }
 
       function read() {
@@ -297,6 +315,7 @@
           autoSaveInterval: parseInt(field('autoSaveInterval').value, 10),
           uiScale: parseFloat(field('uiScale').value),
           fullscreenEnabled: field('fullscreenEnabled').checked,
+          skipDailySummary: field('skipDailySummary').checked,
         };
       }
 

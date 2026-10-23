@@ -8,6 +8,10 @@ window.timeEvents = (function (): TimeEventsApi {
     const CONFIG: TimeEventsConfig = {
         OPENING_HOUR: 7, // Day starts at 7 AM
         CLOSING_HOUR: 22, // Day ends at 10 PM
+        // Last entry an hour before closing (#50): the 20:00 batch is the
+        // last, so everyone who comes in can be served before 22:00. Phase 14
+        // makes this each location's opening hours.
+        LAST_ENTRY_HOUR: 21,
     };
 
     // Game minutes between the customers of one hourly batch (was 500 ms of
@@ -86,15 +90,72 @@ window.timeEvents = (function (): TimeEventsApi {
         }
 
         // Show the daily summary, then wait for the user to start next day
-        // (after the winning dialog, the day all goals are reached)
+        // (after the winning dialog, the day all goals are reached). With
+        // the summary skipped (#49), the next day starts by itself: the
+        // day's record keeps the summary for the Dashboard, and the closing
+        // warnings (in the red, low cash, staff quitting) are notifications
+        // already (stakes.closeDay, employees.endOfDay).
         const nextDay = (): void => skipToNextDay(gameState);
         const afterSummary = goals?.won && window.showVictoryModal ? () => window.showVictoryModal(nextDay) : nextDay;
-        if (window.showDailySummaryModal) {
+        if (window.appSettings?.skipDailySummary) {
+            afterSummary();
+        } else if (window.showDailySummaryModal) {
             window.showDailySummaryModal(afterSummary);
         } else {
             // Fallback if the modal function is missing
             afterSummary();
         }
+    }
+
+    // ---------------------------------------------------------
+    // Closing, from the 22:00 check in main.ts or End day. A day already
+    // settled (a save made while its summary was open) only rolls over, so
+    // wages and overhead are never charged twice.
+    // ---------------------------------------------------------
+    function closeDay(gameState: GameState): void {
+        if (!gameState.isDayActive) return;
+        gameState.isDayActive = false; // Stop advancing time
+        if (gameState.lastEndedDayIndex === gameState.dayIndex) {
+            skipToNextDay(gameState);
+        } else {
+            endOfDay(gameState);
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Store controls (#8). Closing the front stops new customers, including
+    // returning refill customers, and this hour's who haven't walked in yet.
+    // Customers inside are served and staff keep working. Reopening takes
+    // effect from the next hourly batch. Neither costs reputation.
+    // ---------------------------------------------------------
+    function setFrontOpen(open: boolean): void {
+        const gameState = window.gameState;
+        if ((gameState.frontOpen ?? true) === open) return;
+        gameState.frontOpen = open;
+        if (open) {
+            delete gameState.frontClosedAt;
+        } else {
+            gameState.frontClosedAt = window.clock.now();
+            cancelPendingArrivals();
+        }
+        window.updateUI('customers');
+    }
+
+    // Ends the day now, by the same path as 22:00. Customers still inside
+    // leave unserved (with the usual closing-time reputation cost); tasks
+    // keep their progress and resume at the next opening.
+    function endDayNow(): void {
+        const gameState = window.gameState;
+        if (!gameState.isDayActive) return;
+        gameState.closedEarlyAt = window.clock.now();
+        closeDay(gameState);
+    }
+
+    function closingPreview(): { customers: number; tasksInProgress: number } {
+        return {
+            customers: window.customers?.activeCustomers.length ?? 0,
+            tasksInProgress: window.taskManager.tasks.filter((t) => t.status === 'inProgress').length,
+        };
     }
 
     // ---------------------------------------------------------
@@ -111,6 +172,12 @@ window.timeEvents = (function (): TimeEventsApi {
         gameState.dayIndex++;
         gameState.isDayActive = true;
         gameState.customersToday = {};
+        // The store opens every morning
+        gameState.frontOpen = true;
+        delete gameState.frontClosedAt;
+        delete gameState.closedEarlyAt;
+        // Staff sent home are back; weekly hours reset on Sunday
+        window.employees?.startNewDay(gameState.currentDate);
 
         // Roll over today / this week / this month, and the daily counters
         if (window.finances && window.finances.startNewDay) {
@@ -127,9 +194,10 @@ window.timeEvents = (function (): TimeEventsApi {
         // Start new day time-based systems
         startDaySystems(gameState);
 
-        // Update the UI to reflect the new day
+        // Update the UI to reflect the new day (and the front open again)
         window.ui.updateTime();
         window.updateUI('finances');
+        window.updateUI('customers');
     }
 
     // ---------------------------------------------------------
@@ -194,8 +262,8 @@ window.timeEvents = (function (): TimeEventsApi {
         // Restock anything below its max inventory
         step('restock', () => window.production?.checkAndCreateCompoundTasks?.());
 
-        // This hour's customers
-        if (hour >= CONFIG.OPENING_HOUR && hour < CONFIG.CLOSING_HOUR) {
+        // This hour's customers, until last entry and while the front is open
+        if (hour >= CONFIG.OPENING_HOUR && hour < CONFIG.LAST_ENTRY_HOUR && (gameState.frontOpen ?? true)) {
             step('customers', () => spawnCustomersForHour(hour));
         }
 
@@ -394,6 +462,10 @@ window.timeEvents = (function (): TimeEventsApi {
         startOfDay,
         autoOrderCheck,
         autoPurchaseEquipmentCheck,
+        closeDay,
+        setFrontOpen,
+        endDayNow,
+        closingPreview,
         CONFIG, // Expose configuration settings
 
         // Event system

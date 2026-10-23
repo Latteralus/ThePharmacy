@@ -95,7 +95,30 @@ function showUnreadCount(countElem: HTMLElement, unreadCount: number): void {
     countElem.style.display = unreadCount > 0 ? 'block' : 'none';
 }
 
-const GAME_SPEEDS = [0.5, 1, 2, 5];
+// End day (#8): what's still going, and what ending now does to it.
+function confirmEndDay(): void {
+    const { customers, tasksInProgress } = window.timeEvents!.closingPreview();
+    const parts: string[] = [];
+    if (customers > 0) {
+        parts.push(
+            `${customers} ${customers === 1 ? 'customer is' : 'customers are'} still in the store and will leave unserved, ` +
+                'which costs reputation, as at closing time.' +
+                (window.gameState.frontOpen === false ? '' : ' Close the front first and let the line clear.'),
+        );
+    }
+    if (tasksInProgress > 0) {
+        parts.push(
+            `${tasksInProgress} ${tasksInProgress === 1 ? 'task is' : 'tasks are'} in progress; they keep their progress and carry on tomorrow.`,
+        );
+    }
+    if (parts.length === 0) parts.push('Nothing is in progress.');
+    window.showConfirmModal(
+        `${parts.join(' ')} Wages and overhead are charged for the full day.`,
+        'End day',
+        () => window.timeEvents!.endDayNow(),
+        { title: 'End the day now?', danger: customers > 0 },
+    );
+}
 
 // Space pauses, 1-4 pick a speed. Ignored while typing, with a modifier
 // held, or while a dialog is open.
@@ -110,7 +133,7 @@ function handleTimeHotkeys(event: KeyboardEvent): void {
         window.toggleGamePause();
         window.ui.updateTime();
     } else if (/^Digit[1-4]$/.test(event.code)) {
-        window.setGameSpeed(GAME_SPEEDS[Number(event.code.slice(5)) - 1]);
+        window.setGameSpeed(window.GAME_SPEEDS[Number(event.code.slice(5)) - 1]);
         window.ui.updateTime();
     }
 }
@@ -171,7 +194,7 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
         window.ui.updateTime();
     });
     const speed = window.kit.segmented(
-        GAME_SPEEDS.map((value, i) => ({ value, label: `${value}×`, title: `Speed ${value}× (key ${i + 1})` })),
+        window.GAME_SPEEDS.map((value, i) => ({ value, label: `${value}×`, title: `Speed ${value}× (key ${i + 1})` })),
         window.getGameSpeed(),
         (value) => {
             window.setGameSpeed(value);
@@ -190,12 +213,27 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     timeBox.append(gameTime, gameDay);
     clock.appendChild(timeBox);
 
+    // -------- The store: open, front closed or closed (#8) --------
     const storeStatus = el('span');
     storeStatus.id = 'storeStatus';
-    clock.appendChild(storeStatus);
+    const frontButton = el('button', 'icon-button', 'Close front');
+    frontButton.id = 'frontButton';
+    frontButton.type = 'button';
+    frontButton.addEventListener('click', () => {
+        window.timeEvents?.setFrontOpen(window.gameState.frontOpen === false);
+        window.ui.updateTime();
+    });
+    const endDayButton = el('button', 'icon-button', 'End day');
+    endDayButton.id = 'endDayButton';
+    endDayButton.type = 'button';
+    endDayButton.title = 'End the day now: settle wages and overhead, and open tomorrow at 07:00';
+    endDayButton.addEventListener('click', confirmEndDay);
+    const store = el('div', 'store-controls');
+    store.append(storeStatus, frontButton, endDayButton);
+    clock.appendChild(store);
     topBar.appendChild(clock);
 
-    // Pause, speed and open/closed follow the 'time' announcement, which the
+    // Pause, speed and the store follow the 'time' announcement, which the
     // render loop makes every frame.
     const showClockState = (): void => {
         const paused = !!window.gameState?.isPaused;
@@ -204,12 +242,23 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
         pauseButton.classList.toggle('paused', paused);
         pauseButton.title = paused ? 'Resume (Space)' : 'Pause (Space)';
         speed.set(window.getGameSpeed());
+
         const open = !!window.gameState?.isDayActive;
-        const status = open ? 'Open' : 'Closed';
+        const frontOpen = window.gameState?.frontOpen !== false;
+        const status = !open ? 'Closed' : frontOpen ? 'Open' : 'Front closed';
         if (storeStatus.textContent !== status) {
             storeStatus.textContent = status;
-            storeStatus.className = open ? 'pill good' : 'pill critical';
+            storeStatus.className = `pill ${!open ? 'critical' : frontOpen ? 'good' : 'warn'}`;
         }
+        const frontLabel = frontOpen ? 'Close front' : 'Open front';
+        if (frontButton.textContent !== frontLabel) {
+            frontButton.textContent = frontLabel;
+            frontButton.title = frontOpen
+                ? 'Stop new customers coming in. Those inside are still served, and staff keep working.'
+                : 'Let customers in again, from the next hour';
+        }
+        frontButton.disabled = !open;
+        endDayButton.disabled = !open;
     };
     showClockState();
     window.ui.subscribe('time', showClockState);

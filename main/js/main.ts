@@ -3,9 +3,14 @@
 // Set the desired starting date and time (year, month (0-indexed), day, hour, minute)
 const startDate = new Date(2023, 0, 1, 7, 0);
 
+// The speeds offered to the player (Phase 9, #49), keys 1-4 in order. Each
+// fixed step advances SIMULATION_SPEED game seconds, so 10× costs no more
+// steps per frame than 1×.
+window.GAME_SPEEDS = [1, 2, 5, 10];
+
 // Game configuration
 const GAME_CONFIG = {
-    SIMULATION_SPEED: 1.0, // Default game speed multiplier
+    SIMULATION_SPEED: 2, // A new game's speed until the main menu's setting arrives
     GAME_MINUTE_IN_MS: 1000, // 1 second real time = 1 minute game time
     FIXED_TIMESTEP: 1000 / 60, // 60 fps for logic updates
     MAX_UPDATES_PER_FRAME: 10, // Prevent spiral of death if browser freezes temporarily
@@ -109,23 +114,19 @@ function updateGameTime(msElapsed: number): void {
     const currentHour = window.gameState.currentDate.getHours();
 
     if (currentHour >= GAME_CONFIG.END_DAY_HOUR) {
-        // Trigger end of day only once
+        // Trigger end of day only once. closeDay stops time and settles the
+        // day, or only rolls over if it was already settled (a save made
+        // while the daily summary was open). End day takes the same path.
         if (window.gameState.isDayActive) {
             console.log('End of day reached');
-            window.gameState.isDayActive = false; // Stop advancing time
             if (window.timeEvents) {
                 try {
-                    if (window.gameState.lastEndedDayIndex === window.gameState.dayIndex) {
-                        // This day was already settled (a save made while
-                        // the daily summary was open) - don't charge wages
-                        // and overhead again, just roll over.
-                        window.timeEvents.skipToNextDay(window.gameState);
-                    } else {
-                        window.timeEvents.endOfDay(window.gameState);
-                    }
+                    window.timeEvents.closeDay(window.gameState);
                 } catch (error) {
                     console.error('[main] Error in endOfDay event:', error);
                 }
+            } else {
+                window.gameState.isDayActive = false;
             }
         }
     } else {
@@ -176,9 +177,15 @@ function renderUI(): void {
 }
 
 // Add game speed controls
+// A speed that isn't offered (a save made at 0.5×) becomes the nearest
+// offered one at or above it.
 window.setGameSpeed = function (speedMultiplier: number): void {
-    GAME_CONFIG.SIMULATION_SPEED = speedMultiplier;
-    console.log(`Game speed set to ${speedMultiplier}x`);
+    const speeds = window.GAME_SPEEDS;
+    const speed = speeds.includes(speedMultiplier)
+        ? speedMultiplier
+        : (speeds.find((s) => s >= speedMultiplier) ?? speeds[speeds.length - 1]);
+    GAME_CONFIG.SIMULATION_SPEED = speed;
+    console.log(`Game speed set to ${speed}x`);
 };
 
 window.getGameSpeed = function (): number {

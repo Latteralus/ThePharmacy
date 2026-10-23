@@ -127,32 +127,33 @@ describe('a new game', () => {
   }
 
   test('plays at Normal, whatever it is asked for (there is no difficulty setting)', () => {
-    newGame({ difficulty: 'expert', startingCapital: 'medium', location: 'suburban' });
+    newGame({ difficulty: 'expert', location: 'suburban' });
     expect(window.financesData.cash).toBe(100000);
     expect(window.financesData.overhead).toBe(700); // the $700 base (balance pass)
     expect(window.brandReputation.reputationScore).toBe(10);
     expect(window.gameState.difficulty).toBeUndefined();
   });
 
-  test('starting capital sets the cash, and location the rent', () => {
+  test('every game starts with $100,000; location sets the rent (#1)', () => {
+    // An old caller's capital choice is ignored
     newGame({ startingCapital: 'low', location: 'urban' });
-    expect(window.financesData.cash).toBe(50000);
+    expect(window.financesData.cash).toBe(100000);
     expect(window.financesData.overhead).toBe(910);
 
     newGame({ startingCapital: 'high', location: 'rural' });
-    expect(window.financesData.cash).toBe(200000);
+    expect(window.financesData.cash).toBe(100000);
     expect(window.financesData.overhead).toBe(490);
   });
 
   test("a new game's restocks cover only what it can make", () => {
-    newGame({ startingCapital: 'medium', location: 'suburban' });
+    newGame({ location: 'suburban' });
     const restocked = [...new Set(window.taskManager.tasks.map((t) => t.productId))].sort();
     // Level 0's tablets; its capsules need a Capsule Filler first
     expect(restocked).toEqual(['pd001', 'pd004', 'pd006', 'pd007', 'pd008', 'pd009', 'pd010']);
   });
 
   test('a new game starts paused, with no staff', () => {
-    newGame({ startingCapital: 'medium', location: 'suburban' });
+    newGame({ location: 'suburban' });
     expect(window.gameState.isPaused).toBe(true);
     expect(window.employeesData).toEqual([]);
   });

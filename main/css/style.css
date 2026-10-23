@@ -250,6 +250,18 @@ select {
   color: #1b1f2a;
 }
 
+.icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Open / front closed / closed, and the two store controls (Phase 9) */
+.store-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .notification-count {
   position: absolute;
   top: -5px;
@@ -740,6 +752,11 @@ select {
   color: #ffdede;
 }
 
+.top-bar .pill.warn {
+  background: rgba(250, 178, 25, 0.3);
+  color: #fff1cc;
+}
+
 /* ---------- Buttons and inputs ---------- */
 .btn {
   display: inline-flex;
@@ -765,6 +782,21 @@ select {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.check input {
+  margin: 0;
+  accent-color: var(--brand-700);
 }
 
 .btn-primary {
@@ -978,6 +1010,14 @@ select {
 .data-table .actions {
   text-align: right;
   white-space: nowrap;
+}
+
+/* Several controls in one cell (Send home, No overtime, Terminate) */
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .data-table .input.num {
@@ -1278,6 +1318,11 @@ select {
 .callout.good {
   background: var(--good-bg);
   color: var(--good-text);
+}
+
+.callout.warn {
+  background: var(--warn-bg);
+  color: var(--warn-text);
 }
 
 .callout + .definition-grid {

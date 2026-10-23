@@ -79,7 +79,6 @@
                 // Fallback to default options
                 const defaultOptions: NewGameOptions = {
                     pharmacyName: 'Mountain Care',
-                    startingCapital: 'low',
                     location: 'suburban',
                 };
 
@@ -120,7 +119,6 @@
             // Default to new game with default options
             const defaultOptions: NewGameOptions = {
                 pharmacyName: 'Mountain Care',
-                startingCapital: 'medium',
                 location: 'suburban',
             };
 
@@ -140,7 +138,19 @@
             ?.getSettings?.()
             .then((settings) => {
                 const speed = Number(settings?.simulationSpeed);
-                if ([0.5, 1, 2, 5].includes(speed)) window.setGameSpeed(speed);
+                if (window.GAME_SPEEDS.includes(speed)) window.setGameSpeed(speed);
+            })
+            .catch((error) => console.error('[bootstrap] Error reading settings:', error));
+    }
+
+    // The main menu's settings the game reads while it runs (#49). Until
+    // they arrive, the defaults apply.
+    window.appSettings = { skipDailySummary: false };
+    function loadAppSettings(): void {
+        window.gameAPI
+            ?.getSettings?.()
+            .then((settings) => {
+                window.appSettings.skipDailySummary = settings?.skipDailySummary === true;
             })
             .catch((error) => console.error('[bootstrap] Error reading settings:', error));
     }
@@ -285,6 +295,7 @@
         if (!checkGameComponents()) {
             console.log('[bootstrap] Some components are missing, attempting initialization anyway');
         }
+        loadAppSettings();
         try {
             initializeGame();
         } catch (error) {

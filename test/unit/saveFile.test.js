@@ -583,3 +583,60 @@ describe('v7 saves (balance pass: materials a quarter of the price)', () => {
     expect(window.insuranceClaims.pendingClaims).toHaveLength(v7.insuranceClaims.pending.length);
   });
 });
+
+describe('v8 saves (Phase 9: store controls and overtime)', () => {
+  function v8Save() {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    save.version = 8;
+    delete save.gameState.frontOpen;
+    save.employeesData.forEach((emp) => {
+      delete emp.minutesWorkedThisWeek;
+      delete emp.straightMinutesThisWeek;
+      delete emp.noOvertime;
+      delete emp.offUntilDay;
+    });
+    save.settings.gameSpeed = 0.5;
+    return save;
+  }
+
+  test('the front is open, nobody has weekly hours or is sent home, and 0.5x loads at 1x', () => {
+    const v8 = v8Save();
+    expect(v8.employeesData.length).toBeGreaterThan(0);
+    const save = window.saveFile.migrate(v8);
+    expect(save.version).toBe(window.saveFile.version);
+    expect(save.gameState.frontOpen).toBe(true);
+    save.employeesData.forEach((emp) => {
+      expect(emp).toMatchObject({ minutesWorkedThisWeek: 0, straightMinutesThisWeek: 0, noOvertime: false });
+      expect(emp.offUntilDay).toBeUndefined();
+    });
+    expect(save.settings.gameSpeed).toBe(1);
+
+    loadModules();
+    window.saveFile.apply(v8Save());
+    expect(window.gameState.frontOpen).toBe(true);
+    expect(window.getGameSpeed()).toBe(1);
+  });
+
+  test('a current save keeps the front, the weekly hours and who is sent home', () => {
+    playABit();
+    window.gameState.frontOpen = false;
+    window.gameState.frontClosedAt = window.gameState.currentDate.getTime();
+    Object.assign(window.employeesData[0], {
+      minutesWorkedThisWeek: 1200,
+      straightMinutesThisWeek: 1100,
+      offUntilDay: 4,
+      noOvertime: true,
+    });
+    const save = throughDisk(window.saveFile.serialize());
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.gameState).toMatchObject({ frontOpen: false, frontClosedAt: save.gameState.frontClosedAt });
+    expect(window.employeesData[0]).toMatchObject({
+      minutesWorkedThisWeek: 1200,
+      straightMinutesThisWeek: 1100,
+      offUntilDay: 4,
+      noOvertime: true,
+    });
+  });
+});

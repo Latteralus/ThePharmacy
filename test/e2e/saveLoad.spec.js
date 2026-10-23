@@ -78,7 +78,7 @@ test('saving writes a real save file, and loading it restores game state', async
       description: 'e2e test transaction',
     });
     window.productsData.find((p) => p.id === 'pd001').price = 123.45;
-    window.setGameSpeed(2);
+    window.setGameSpeed(5);
     window.productsData.forEach((p) => (p.inventory = 5)); // so they're served, whatever they ask for
     return window.customers.generateCustomer().id;
   });
@@ -97,7 +97,8 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(8);
+  expect(saved.version).toBe(9);
+  expect(saved.gameState.frontOpen).toBe(true); // Phase 9
   // The history (Phase 8): no day has closed yet
   expect(saved.records.days).toEqual([]);
   expect(Array.isArray(saved.records.visits)).toBe(true);
@@ -112,7 +113,7 @@ test('saving writes a real save file, and loading it restores game state', async
   const savedCustomerTasks = saved.tasks.filter((t) => t.customerId === customerId);
   expect(savedCustomerTasks.filter((t) => t.type === 'fillPrescription')).toHaveLength(1);
   expect(savedCustomerTasks.find((t) => t.type === 'customerInteraction').interaction).toBe('checkIn');
-  expect(saved.settings.gameSpeed).toBe(2);
+  expect(saved.settings.gameSpeed).toBe(5);
 
   // --- Second launch: load it from the main menu ---
   const app2 = await electron.launch(launchOptions());
@@ -149,7 +150,7 @@ test('saving writes a real save file, and loading it restores game state', async
   // Custom prices used to be reset to suggested on every load (C5)
   expect(afterLoad.price).toBe(123.45);
   expect(typeof afterLoad.productName).toBe('string');
-  expect(afterLoad.speed).toBe(2);
+  expect(afterLoad.speed).toBe(5);
   const timeAfterLoad = afterLoad.time;
   await page2.waitForTimeout(1500);
 

@@ -213,14 +213,6 @@
             <input type="text" id="pharmacy-name" placeholder="Enter pharmacy name" required />
           </div>
           <div class="form-group">
-            <label for="starting-capital">Starting Capital:</label>
-            <select id="starting-capital">
-              <option value="low">Low ($50,000)</option>
-              <option value="medium" selected>Medium ($100,000)</option>
-              <option value="high">High ($200,000)</option>
-            </select>
-          </div>
-          <div class="form-group">
             <label for="location">Location:</label>
             <select id="location">
               <option value="urban">Urban Center</option>
@@ -291,7 +283,6 @@
 
         const gameData = {
           pharmacyName: document.getElementById('pharmacy-name').value,
-          startingCapital: document.getElementById('starting-capital').value,
           location: document.getElementById('location').value,
           dateCreated: new Date().toISOString(),
         };

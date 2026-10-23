@@ -35,6 +35,8 @@ test('starting a new game reaches the game screen without console errors', async
 
   await page.waitForSelector('#newGameBtn');
   await page.click('#newGameBtn');
+  // Every game starts with $100,000: there's no capital to choose (Phase 9, #1)
+  await expect(page.locator('#starting-capital')).toHaveCount(0);
   await page.fill('#pharmacy-name', 'Playwright Test Pharmacy');
   await page.click('.start-button');
 
@@ -49,11 +51,16 @@ test('starting a new game reaches the game screen without console errors', async
   expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
   await expect(page.locator('#pauseButton')).toContainText('Resume');
   expect(await page.evaluate(() => window.employeesData.length)).toBe(0);
+  expect(await page.evaluate(() => window.financesData.cash)).toBe(100000);
+  // At 2×, the default with no settings saved (#49)
+  await expect.poll(() => page.evaluate(() => window.getGameSpeed())).toBe(2);
   await page.locator('.main-content').click({ position: { x: 5, y: 5 } });
   await page.keyboard.press('Space');
   expect(await page.evaluate(() => window.gameState.isPaused)).toBe(false);
   await page.keyboard.press('3');
-  expect(await page.evaluate(() => window.getGameSpeed())).toBe(2);
+  expect(await page.evaluate(() => window.getGameSpeed())).toBe(5);
+  await page.keyboard.press('4');
+  expect(await page.evaluate(() => window.getGameSpeed())).toBe(10);
   await page.keyboard.press('Space');
   expect(await page.evaluate(() => window.gameState.isPaused)).toBe(true);
   await expect(page.locator('#pauseButton')).toContainText('Resume');

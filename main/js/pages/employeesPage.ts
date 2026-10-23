@@ -2,7 +2,9 @@
 //
 // Daily wages are what end of day charges (finances.dailyWage: salary / 365,
 // with payroll taxes and benefits); the page used to show salary / 30.
-// Hours past 8 are overtime, paid at closing on top.
+// Hours past 8 a day or 40 a week are overtime, paid at closing on top.
+// Phase 9: each row can send the employee home for the day (or call them
+// back), and "Don't allow overtime" sends them home at their limit.
 //
 // Staff matter (Phase 7): each row shows hours worked today, speed at their
 // main job and pay against the market, which is what moves morale at
@@ -48,15 +50,21 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
     kpis.append(staffTile.root, wagesTile.root, moraleTile.root);
     staffView.appendChild(kpis);
 
+    // No pharmacist, or no one to fill and compound (#3)
+    const staffingWarning = el('div', 'callout warn');
+    staffingWarning.setAttribute('role', 'status');
+
     const staffCard = kit.card('Staff', { flush: true });
     staffView.append(
+        staffingWarning,
         staffCard.root,
         el(
             'p',
             'small muted',
-            'Morale changes at closing: up when someone worked 8 hours or less, down for every hour over, and up or down with pay against the market. ' +
+            'Morale changes at closing: up on a day with no overtime, down for every overtime hour, and up or down with pay against the market. ' +
                 'Below 50% they slow down, and below 25% they may quit. ' +
-                `Hours over 8 are overtime, paid at ${window.finances.OVERTIME_RATE}× at closing. ` +
+                `Overtime is any hour past 8 a day or 40 a week (Sunday to Saturday), paid at ${window.finances.OVERTIME_RATE}× at closing. ` +
+                'Send someone home to stop it: they are paid their normal day. With "No overtime" they finish their task at the limit, then go home. ' +
                 'Wages a day include payroll taxes and benefits (25% on top of salary).',
         ),
     );
@@ -114,9 +122,9 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             { label: 'Working on', width: '200px' },
             { label: 'Salary a year', num: true },
             {
-                label: 'Today',
+                label: 'Hours',
                 num: true,
-                title: `Hours worked today. Over 8 is overtime: it lowers morale and is paid at ${window.finances.OVERTIME_RATE}× at closing.`,
+                title: `Hours worked today and this week. Past 8 a day or 40 a week is overtime: it lowers morale and is paid at ${window.finances.OVERTIME_RATE}× at closing.`,
             },
             { label: 'Speed', num: true, title: 'Speed at their main job. 1× is normal.' },
             { label: 'Morale', width: '120px' },
@@ -157,37 +165,69 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             const speedCell = el('span');
             const morale = kit.meterCell(0, '');
 
+            // Send home and Call back swap places; No overtime is a toggle
+            const sendHome = kit.button('Send home', 'secondary', () => window.employees.sendHome(employee.id), {
+                small: true,
+                title: 'Off until tomorrow, paid their normal day. Their task goes back in the queue.',
+            });
+            const callBack = kit.button('Call back', 'secondary', () => window.employees.callBack(employee.id), {
+                small: true,
+                title: 'Back to work today',
+            });
+            const noOvertime = kit.checkbox('No overtime', !!employee.noOvertime, (on) =>
+                window.employees.setNoOvertime(employee.id, on),
+            );
+            noOvertime.root.title =
+                "Don't allow overtime: at 8 hours today or 40 this week they take no new task, finish the one they're on, then go home.";
+
             const update = (): void => {
                 const task = employee.currentTaskId
                     ? window.taskManager.getTaskById(employee.currentTaskId)
                     : undefined;
-                const taskKey = task ? `${task.id}:${task.status}` : null;
+                const sentHome = window.employees.isSentHome(employee);
+                const goingHome = window.employees.isGoingHome(employee);
+                const status = window.employees.overtimeStatus(employee);
+                const taskKey = `${task ? `${task.id}:${task.status}` : ''}:${sentHome}:${goingHome}:${status}`;
                 if (taskKey !== shownTask) {
                     shownTask = taskKey;
                     working.innerHTML = '';
-                    if (task) {
+                    if (sentHome) {
+                        working.appendChild(kit.pill('Sent home'));
+                    } else if (task) {
                         const label = el('div');
                         label.append(kit.swatch(window.words.taskKind(task)), window.words.taskLabel(task));
+                        if (status === 'overtime') label.append(' ', kit.pill('Overtime', 'critical'));
                         working.appendChild(label);
                         if (task.status === 'inProgress') working.appendChild(window.taskbars.createProgressBar(task));
+                        if (goingHome) working.appendChild(el('span', 'sub', 'Finishing up, then going home'));
                     } else {
                         working.appendChild(kit.pill('Idle'));
+                        if (status === 'overtime') working.append(' ', kit.pill('Overtime', 'critical'));
                     }
+                    sendHome.style.display = sentHome ? 'none' : '';
+                    callBack.style.display = sentHome ? '' : 'none';
+                    // Highlighted while they're in overtime
+                    sendHome.classList.toggle('btn-primary', status === 'overtime');
                 }
+                if (noOvertime.input.checked !== !!employee.noOvertime)
+                    noOvertime.input.checked = !!employee.noOvertime;
 
                 setIdle(salaryInput, String(Math.round(employee.salary)));
                 const cue = payCue(employee);
                 setText(pay, cue.text, cue.className, cue.title);
 
                 const worked = (employee.minutesWorkedToday ?? 0) / 60;
+                const week = (employee.minutesWorkedThisWeek ?? 0) / 60;
                 const overtime = window.finances.overtimeHours(employee);
                 setText(
                     hours,
-                    `${worked.toFixed(1)}h`,
-                    overtime > 0 ? 'warn-text' : '',
+                    `${worked.toFixed(1)}h today · ${week.toFixed(1)}h week`,
+                    status === 'overtime' ? 'critical-text' : status === 'approaching' ? 'warn-text' : '',
                     overtime > 0
                         ? `${overtime.toFixed(1)}h overtime so far: ${fmt.money(window.finances.overtimePay(employee))} at closing`
-                        : '',
+                        : status === 'approaching'
+                          ? 'Approaching overtime (8 hours today or 40 this week)'
+                          : '',
                 );
 
                 const s = speed(employee);
@@ -211,6 +251,9 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
                 { small: true },
             );
 
+            const actions = el('div', 'row-actions');
+            actions.append(sendHome, callBack, noOvertime.root, fire);
+
             const row = table.row([
                 kit.primaryCell(`${employee.firstName} ${employee.lastName}`, employee.role),
                 working,
@@ -219,7 +262,7 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
                 speedCell,
                 morale.root,
                 ...SKILL_COLUMNS.map((s) => employee.skills?.[s.key] ?? '—'),
-                fire,
+                actions,
             ]);
             row.className = 'employee-card';
             row.dataset.employeeId = employee.id;
@@ -231,10 +274,18 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
         if (staff.map((e) => e.id).join() !== renderedStaff) buildStaffTable();
         else liveRows.forEach((update) => update());
 
-        const idle = staff.filter((e) => !e.currentTaskId).length;
+        const sentHome = staff.filter((e) => window.employees.isSentHome(e)).length;
+        const idle = staff.filter((e) => !e.currentTaskId && !window.employees.isSentHome(e)).length;
         const wages = staff.reduce((sum, e) => sum + window.finances.dailyWage(e), 0);
         const avgMorale = staff.length > 0 ? staff.reduce((sum, e) => sum + e.morale, 0) / staff.length : 0;
-        staffTile.set(fmt.int(staff.length), staff.length > 0 ? `${idle} idle` : '');
+        staffTile.set(
+            fmt.int(staff.length),
+            staff.length > 0 ? `${idle} idle${sentHome > 0 ? ` · ${sentHome} sent home` : ''}` : '',
+        );
+
+        const warnings = window.employees.staffingWarnings();
+        staffingWarning.style.display = warnings.length > 0 ? '' : 'none';
+        staffingWarning.textContent = warnings.join(' ');
         wagesTile.set(fmt.money(wages), `${fmt.moneyWhole(wages * 365)} a year`);
         moraleTile.set(staff.length > 0 ? `${Math.round(avgMorale)}%` : '—');
         staffCard.setCount(staff.length);

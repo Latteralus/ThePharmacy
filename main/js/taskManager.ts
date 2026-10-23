@@ -224,7 +224,8 @@ window.taskManager = (function (): TaskManagerApi {
                 const previousProgress = task.progress;
                 task.progress += minutes * workRate(task);
                 task.lastProgressTime = now;
-                employee.minutesWorkedToday = (employee.minutesWorkedToday ?? 0) + minutes;
+                // Today's and this week's hours, for overtime
+                window.employees.recordWork(employee, minutes);
 
                 taskEvents.emit('taskProgressUpdated', {
                     task: task,

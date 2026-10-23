@@ -4,18 +4,21 @@
 // - Speed. A task advances at workRate game minutes of work per game minute:
 //   the skill the task uses (0 → 0.5×, 50 → 1×, 100 → 1.5×), slowed when
 //   morale is below 50 (down to 0.7× at 0).
-// - Morale changes once a day, at closing (endOfDay): rest or overwork,
+// - Morale changes once a day, at closing (endOfDay): rest or overtime,
 //   and pay against the market rate for their role and skill. Below 25
 //   they may quit overnight.
+// - Overtime (Phase 9, #7): past 8 hours in a day or 40 straight hours in
+//   the week (finances.overtimeSplit), for pay and morale alike. The player
+//   can send someone home for the day, or set "Don't allow overtime": at
+//   the limit they take no new task, finish the one they're on, then go home.
 
 // A new game starts with no staff: the player hires them. A loaded save
 // replaces this with its own staff.
 window.employeesData = [];
 
 // Morale, once a day at closing
-const REST_HOURS = 8; // up to this many hours worked: rested
-const RESTED_GAIN = 2;
-const OVERWORK_LOSS_PER_HOUR = 1.5; // per hour over REST_HOURS
+const RESTED_GAIN = 2; // a day with no overtime
+const OVERWORK_LOSS_PER_HOUR = 1.5; // per overtime hour, daily or weekly
 const PAY_SENSITIVITY = 8; // morale per 100% over or under the market rate
 const PAY_MAX_GAIN = 2;
 const PAY_MAX_LOSS = 3;
@@ -23,6 +26,22 @@ const LOW_MORALE = 40; // the player is warned below this
 const QUIT_BELOW = 25; // nightly chance to quit: (QUIT_BELOW - morale) / QUIT_SCALE
 const QUIT_SCALE = 50;
 const NEW_HIRE_MORALE = 80;
+
+// "Approaching overtime" from this many hours today, or straight hours this week
+const APPROACHING_DAY_HOURS = 7;
+const APPROACHING_WEEK_HOURS = 36;
+
+// The roles that can do clinical and lab work (#3)
+const CAN_CONSULT = ['Pharmacist'];
+const CAN_FILL_OR_COMPOUND = ['Lab Technician', 'Pharmacist'];
+
+function hoursToday(employee: Employee): number {
+    return (employee.minutesWorkedToday ?? 0) / 60;
+}
+
+function straightHoursThisWeek(employee: Employee): number {
+    return (employee.straightMinutesThisWeek ?? 0) / 60;
+}
 
 window.employees = {
     lastDayReport: [],
@@ -83,12 +102,21 @@ window.employees = {
         const report: StaffDayReport[] = [];
 
         [...window.employeesData].forEach((employee) => {
-            const hours = (employee.minutesWorkedToday ?? 0) / 60;
+            const hours = hoursToday(employee);
             const before = employee.morale;
             const reasons: string[] = [];
 
-            const workload = hours > REST_HOURS ? -OVERWORK_LOSS_PER_HOUR * (hours - REST_HOURS) : RESTED_GAIN;
-            if (hours > REST_HOURS) reasons.push(`overworked (${hours.toFixed(1)}h)`);
+            // Every overtime hour, daily or weekly, costs morale; only a day
+            // with none is restful.
+            const overtime = window.finances.overtimeHours(employee);
+            const workload = overtime > 0 ? -OVERWORK_LOSS_PER_HOUR * overtime : RESTED_GAIN;
+            if (overtime > 0) {
+                const week =
+                    window.finances.overtimeSplit(employee).weekly > 0
+                        ? `, ${((employee.minutesWorkedThisWeek ?? 0) / 60).toFixed(1)}h this week`
+                        : '';
+                reasons.push(`overworked (${hours.toFixed(1)}h${week})`);
+            }
 
             const pay = this.payVsMarket(employee);
             const payChange = Math.max(-PAY_MAX_LOSS, Math.min(PAY_MAX_GAIN, PAY_SENSITIVITY * pay));
@@ -104,6 +132,7 @@ window.employees = {
                 name,
                 role: employee.role,
                 hoursWorked: hours,
+                overtimeHours: overtime,
                 moraleBefore: before,
                 moraleAfter: employee.morale,
                 reasons,
@@ -228,5 +257,148 @@ window.employees = {
         window.employeesData.splice(employeeIndex, 1);
         window.updateUI('employees');
         return true;
+    },
+
+    // ---------------- Hours and overtime (Phase 9, #7) ----------------
+
+    // Game minutes on a task, counted today, this week, and as straight time
+    // (up to 8 hours a day). Tells the player the first time each day someone
+    // goes into overtime, unless they're set to go home at their limit.
+    recordWork(employee, minutes) {
+        const wasInOvertime = this.overtimeStatus(employee) === 'overtime';
+        const dayLimit = window.finances.OVERTIME_AFTER_HOURS * 60;
+        const before = employee.minutesWorkedToday ?? 0;
+        const after = before + minutes;
+        employee.minutesWorkedToday = after;
+        employee.minutesWorkedThisWeek = (employee.minutesWorkedThisWeek ?? 0) + minutes;
+        employee.straightMinutesThisWeek =
+            (employee.straightMinutesThisWeek ?? 0) +
+            Math.max(0, Math.min(after, dayLimit) - Math.min(before, dayLimit));
+
+        const day = window.gameState?.dayIndex;
+        if (
+            !wasInOvertime &&
+            !employee.noOvertime &&
+            employee.overtimeNotifiedDay !== day &&
+            this.overtimeStatus(employee) === 'overtime'
+        ) {
+            employee.overtimeNotifiedDay = day;
+            window.notifications?.add(
+                `${this.getEmployeeFullName(employee)} is in overtime, paid at ${window.finances.OVERTIME_RATE}× and hard on morale. You can send them home from the Employees page.`,
+                'warning',
+            );
+            window.updateUI('employees');
+        }
+    },
+
+    overtimeStatus(employee) {
+        const today = hoursToday(employee);
+        const week = straightHoursThisWeek(employee);
+        if (today > window.finances.OVERTIME_AFTER_HOURS || week > window.finances.OVERTIME_WEEK_HOURS) {
+            return 'overtime';
+        }
+        if (today >= APPROACHING_DAY_HOURS || week >= APPROACHING_WEEK_HOURS) return 'approaching';
+        return 'none';
+    },
+
+    atOvertimeLimit(employee) {
+        return (
+            hoursToday(employee) >= window.finances.OVERTIME_AFTER_HOURS ||
+            straightHoursThisWeek(employee) >= window.finances.OVERTIME_WEEK_HOURS
+        );
+    },
+
+    isSentHome(employee) {
+        return employee.offUntilDay !== undefined && window.gameState.dayIndex < employee.offUntilDay;
+    },
+
+    isGoingHome(employee) {
+        return (
+            !!employee.noOvertime &&
+            !!employee.currentTaskId &&
+            !this.isSentHome(employee) &&
+            this.atOvertimeLimit(employee)
+        );
+    },
+
+    canTakeWork(employee) {
+        return !this.isSentHome(employee) && !(employee.noOvertime && this.atOvertimeLimit(employee));
+    },
+
+    // They're paid their normal day (wages are a flat daily amount): going
+    // home only stops further overtime pay and morale loss.
+    sendHome(employeeId, auto = false) {
+        const employee = this.getEmployeeById(employeeId);
+        if (!employee || this.isSentHome(employee)) return false;
+        employee.offUntilDay = window.gameState.dayIndex + 1;
+        // Back in the queue with its progress: a compound keeps its
+        // materials and a fill its stock.
+        if (employee.currentTaskId) window.taskAssignment.unassignTask(employee.currentTaskId);
+        if (auto) {
+            const overtime = window.finances.overtimeHours(employee);
+            window.notifications?.add(
+                `${this.getEmployeeFullName(employee)} went home at their overtime limit (${overtime.toFixed(1)}h overtime).`,
+                'info',
+            );
+        }
+        window.updateUI('employees');
+        return true;
+    },
+
+    callBack(employeeId) {
+        const employee = this.getEmployeeById(employeeId);
+        if (!employee || !this.isSentHome(employee)) return false;
+        delete employee.offUntilDay;
+        window.taskAssignment.requestAutoAssign();
+        window.updateUI('employees');
+        return true;
+    },
+
+    setNoOvertime(employeeId, on) {
+        const employee = this.getEmployeeById(employeeId);
+        if (!employee) return;
+        employee.noOvertime = on;
+        // Already at the limit: idle, they go now; busy, after this task.
+        if (on) this.sendHomeAtLimit();
+        else window.taskAssignment.requestAutoAssign();
+        window.updateUI('employees');
+    },
+
+    // Runs at the start of every assignment round, and one follows every
+    // task an employee finishes or drops.
+    sendHomeAtLimit() {
+        window.employeesData.forEach((employee) => {
+            if (
+                employee.noOvertime &&
+                !employee.currentTaskId &&
+                !this.isSentHome(employee) &&
+                this.atOvertimeLimit(employee)
+            ) {
+                this.sendHome(employee.id, true);
+            }
+        });
+    },
+
+    startNewDay(date) {
+        window.employeesData.forEach((employee) => {
+            if (employee.offUntilDay !== undefined && !this.isSentHome(employee)) delete employee.offUntilDay;
+            if (date.getDay() === 0) {
+                employee.minutesWorkedThisWeek = 0;
+                employee.straightMinutesThisWeek = 0;
+            }
+        });
+    },
+
+    staffingWarnings() {
+        const warnings: string[] = [];
+        if (window.employeesData.length === 0) return warnings;
+        const roles = new Set(window.employeesData.map((e) => e.role));
+        if (!CAN_CONSULT.some((role) => roles.has(role))) {
+            warnings.push("No pharmacist on staff: customers can't get consultations.");
+        }
+        if (!CAN_FILL_OR_COMPOUND.some((role) => roles.has(role))) {
+            warnings.push('No lab technician or pharmacist on staff: no one can fill or compound prescriptions.');
+        }
+        return warnings;
     },
 };

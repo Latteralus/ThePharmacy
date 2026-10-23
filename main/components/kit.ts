@@ -283,6 +283,17 @@
         return node;
     };
 
+    // A checkbox with its label, for an on/off choice in a row or a form.
+    const checkbox: Kit['checkbox'] = (label, checked, onChange) => {
+        const root = el('label', 'check');
+        const input = el('input');
+        input.type = 'checkbox';
+        input.checked = checked;
+        input.addEventListener('change', () => onChange(input.checked));
+        root.append(input, label);
+        return { root, input };
+    };
+
     const segmented: Kit['segmented'] = (options, current, onChange) => {
         const root = el('div', 'seg');
         root.setAttribute('role', 'group');
@@ -447,6 +458,7 @@
         button,
         numberInput,
         select,
+        checkbox,
         segmented,
         tabs,
         table,

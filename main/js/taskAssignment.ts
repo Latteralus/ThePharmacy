@@ -177,6 +177,10 @@ window.taskAssignment = (function (): TaskAssignmentApi {
         // Normalize employee roles to ensure proper assignment
         normalizeEmployeeRoles();
 
+        // Anyone who just finished a task at their "Don't allow overtime"
+        // limit goes home before the round hands out work.
+        window.employees?.sendHomeAtLimit();
+
         // Get unassigned eligible tasks
         const unassignedTasks = window.taskManager.tasks.filter((task) => {
             // Skip tasks that are already assigned or complete
@@ -210,8 +214,10 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             return;
         }
 
-        // Get available employees
-        const availableEmployees = window.employeesData.filter((emp) => !emp.currentTaskId);
+        // Free employees who aren't sent home or held at their overtime limit
+        const availableEmployees = window.employeesData.filter(
+            (emp) => !emp.currentTaskId && (window.employees?.canTakeWork(emp) ?? true),
+        );
         if (availableEmployees.length === 0) {
             return;
         }
@@ -319,57 +325,48 @@ window.taskAssignment = (function (): TaskAssignmentApi {
     }
 
     /**
-     * The employee for a task: the preferred role with anyone free, then
-     * whoever in it works fastest.
+     * Who may do a task, in order of preference (Phase 9, #3). This follows
+     * US practice: counselling is a pharmacist's job, technicians fill and
+     * compound under a pharmacist, and front-desk clerks do neither. There is
+     * no "anyone free" fallback except at the desk, where everyone can ring
+     * up. With nobody eligible, the task waits.
+     */
+    function eligibleRoles(task: Task): string[] | 'anyone' {
+        // Check-in and checkout: a Cashier, then anyone free
+        if (task.interaction) return 'anyone';
+        switch (task.type) {
+            case 'consultation':
+                return ['Pharmacist'];
+            case 'fillPrescription':
+                return ['Lab Technician', 'Pharmacist'];
+            case 'compound':
+                // Restocking (and Quick Compound) is lab work only. A batch
+                // can take the better part of an hour, and a pharmacist on
+                // one leaves every customer waiting for a consultation. A
+                // customer's own compound can still go to a pharmacist.
+                return task.prescriptionId ? ['Lab Technician', 'Pharmacist'] : ['Lab Technician'];
+            case 'production':
+                return ['Lab Technician', 'Pharmacist'];
+            default:
+                return [];
+        }
+    }
+
+    /**
+     * The employee for a task: the first preferred role with anyone free,
+     * then whoever in it works fastest.
      */
     function findBestEmployeeForTask(task: Task, availableEmployees: Employee[]): Employee | null {
-        // Define roles eligible for each task type, with priority order
-        const eligibleRoles: Record<string, string[]> = {
-            customerInteraction: ['Cashier', 'Pharmacist', 'Lab Technician'], // Cashier preferred, but anyone can help
-            consultation: ['Pharmacist'],
-            fillPrescription: ['Lab Technician', 'Pharmacist'], // Lab Technician preferred
-            compound: ['Lab Technician', 'Pharmacist'],
-            production: ['Lab Technician', 'Pharmacist'],
-        };
-
-        // Check-in and checkout: the fastest free Cashier, or anyone if no
-        // Cashier is free
-        if (task.interaction) {
+        const roles = eligibleRoles(task);
+        if (roles === 'anyone') {
             const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
             return fastest(cashiers.length > 0 ? cashiers : availableEmployees, task);
         }
-
-        // Restocking (and Quick Compound) is lab work only. A batch can take
-        // the better part of an hour, and a pharmacist on one leaves every
-        // customer waiting for a consultation. A customer's own compound can
-        // still go to a pharmacist.
-        const isRestock = task.type === 'compound' && !task.prescriptionId;
-
-        // Get the appropriate roles for this task type
-        const taskRoles = isRestock
-            ? ['Lab Technician']
-            : eligibleRoles[task.type] || ['Pharmacist', 'Lab Technician', 'Cashier'];
-
-        // Try each role in priority order
-        let eligibleEmployees: Employee[] = [];
-        for (const role of taskRoles) {
+        for (const role of roles) {
             const employeesWithRole = availableEmployees.filter((emp) => emp.role === role);
-            if (employeesWithRole.length > 0) {
-                eligibleEmployees = employeesWithRole;
-                break; // Found employees with the highest priority role
-            }
+            if (employeesWithRole.length > 0) return fastest(employeesWithRole, task);
         }
-
-        // If no employees with preferred roles, use any available employee
-        // This is a fallback to ensure tasks don't get stuck
-        if (eligibleEmployees.length === 0 && availableEmployees.length > 0 && !isRestock) {
-            console.log(
-                `[findBestEmployeeForTask] No employees with preferred roles ${taskRoles.join(', ')} for ${task.type}. Using any available employee.`,
-            );
-            eligibleEmployees = availableEmployees;
-        }
-
-        return fastest(eligibleEmployees, task);
+        return null;
     }
 
     // Whoever does this task fastest (skill and morale, employees.workRate).
@@ -420,16 +417,8 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             if (task.assignedTo) {
                 const emp = window.employeesData.find((e) => e.id === task.assignedTo);
                 if (emp) {
-                    const eligibleRoles: Record<string, string[]> = {
-                        customerInteraction: ['Cashier'],
-                        consultation: ['Pharmacist'],
-                        fillPrescription: ['Lab Technician', 'Pharmacist'],
-                        compound: ['Lab Technician', 'Pharmacist'],
-                        production: ['Lab Technician', 'Pharmacist'],
-                    };
-
-                    const preferredRoles = eligibleRoles[task.type] || [];
-                    if (!preferredRoles.includes(emp.role)) {
+                    const roles = eligibleRoles(task);
+                    if (roles !== 'anyone' && !roles.includes(emp.role)) {
                         console.warn(
                             `Potential role mismatch: ${emp.firstName} ${emp.lastName} (${emp.role}) assigned to ${task.type} task`,
                         );
@@ -466,6 +455,7 @@ window.taskAssignment = (function (): TaskAssignmentApi {
         requestAutoAssign,
         assignIfRequested,
         normalizeEmployeeRoles,
+        eligibleRoles,
         logTaskAssignmentState,
         forceTaskReassignment,
     };

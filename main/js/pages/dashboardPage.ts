@@ -1,9 +1,11 @@
 // /js/pages/dashboardPage.js - how the pharmacy is doing: today against
 // yesterday, the bank and how long the cash lasts, the goals, and net
 // profit over the last two weeks (Phase 8). Yesterday and the trend come
-// from the day records (records.ts).
+// from the day records (records.ts), as does Recent days, which reopens each
+// closing's summary (Phase 9: summaries can be skipped at closing).
 
 const TREND_DAYS = 14;
+const RECENT_DAYS = 7;
 
 window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -16,6 +18,11 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         'Dashboard',
         'Today against yesterday, the bank, and your goals. Wages, overhead and interest are charged at closing.',
     );
+
+    // No pharmacist, or no one to fill and compound (#3)
+    const staffingWarning = el('div', 'callout warn');
+    staffingWarning.setAttribute('role', 'status');
+    root.appendChild(staffingWarning);
 
     // --------------------- Today vs yesterday ---------------------
     const kpis = el('div', 'kpi-row');
@@ -58,7 +65,22 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         { label: 'Reached', width: '90px' },
     ]);
     goalsCard.body.appendChild(goalsTable.root);
-    columns.append(left, goalsCard.root);
+
+    // --------------------- Recent days ---------------------
+    // Each closed day's summary, including those skipped at closing (#49)
+    const daysCard = kit.card('Recent days', { flush: true });
+    const daysTable = kit.table([
+        { label: 'Day' },
+        { label: 'Net', num: true },
+        { label: 'Served', num: true },
+        { label: 'Lost', num: true },
+        { label: '', className: 'actions' },
+    ]);
+    daysCard.body.appendChild(daysTable.root);
+
+    const right = el('div', 'stack');
+    right.append(goalsCard.root, daysCard.root);
+    columns.append(left, right);
 
     function goalValue(goal: GoalProgress, value: number): string {
         if (goal.unit === 'money') return fmt.moneyWhole(value);
@@ -159,6 +181,26 @@ window.renderDashboardPage = function (mainContent: HTMLElement, page: PageScope
         } else {
             goalsTable.note('Goals are checked at closing.');
         }
+
+        const warnings = window.employees.staffingWarnings();
+        staffingWarning.style.display = warnings.length > 0 ? '' : 'none';
+        staffingWarning.textContent = warnings.join(' ');
+
+        // The last week's closings, newest first, each with its summary
+        daysTable.clear();
+        const recent = window.records.days.slice(-RECENT_DAYS).reverse();
+        daysCard.setCount(recent.length || null);
+        if (recent.length === 0) daysTable.empty('Each day appears here after closing.');
+        recent.forEach((record) => {
+            const notes = window.records.notes(record);
+            daysTable.row([
+                kit.primaryCell(`Day ${record.day + 1}`, notes.join(' · ') || fmt.day(new Date(record.date))),
+                el('span', record.net < 0 ? 'critical-text' : '', fmt.money(record.net)),
+                fmt.int(record.customers.served ?? 0),
+                fmt.int(window.records.lost(record.customers)),
+                kit.button('Summary', 'ghost', () => window.showDayRecordModal(record.day), { small: true }),
+            ]);
+        });
 
         // Net profit trend: the last TREND_DAYS closed days
         const days = window.records.days.slice(-TREND_DAYS);

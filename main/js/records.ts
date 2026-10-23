@@ -69,6 +69,9 @@ window.records = {
             customers: { ...(state.customersToday ?? {}) },
             staff: window.employeesData.length,
         };
+        // A short day, so Statistics can tell it from a slow one (#8)
+        if (state.frontClosedAt !== undefined) record.frontClosedAt = state.frontClosedAt;
+        if (state.closedEarlyAt !== undefined) record.closedEarlyAt = state.closedEarlyAt;
 
         const existing = this.days.findIndex((d) => d.day === record.day);
         if (existing >= 0) this.days[existing] = record;
@@ -97,6 +100,18 @@ window.records = {
             if (this.days[i].day < today) return this.days[i];
         }
         return undefined;
+    },
+
+    // What made a day short (#8): "Front closed from 15:30", "Closed early at 18:00".
+    notes(record) {
+        const notes: string[] = [];
+        if (record.frontClosedAt !== undefined) {
+            notes.push(`Front closed from ${window.fmt.clock(new Date(record.frontClosedAt))}`);
+        }
+        if (record.closedEarlyAt !== undefined) {
+            notes.push(`Closed early at ${window.fmt.clock(new Date(record.closedEarlyAt))}`);
+        }
+        return notes;
     },
 
     // The record for a calendar date, if that day has closed.

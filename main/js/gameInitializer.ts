@@ -1,5 +1,8 @@
 // gameInitializer.js - Handles the initialization of a new game or loading a saved game
 
+// Every new game starts with this much cash (Phase 9, #1)
+const STARTING_CASH = 100000;
+
 window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
     console.log('[gameInitializer] Starting new game initialization with options:', gameOptions);
 
@@ -31,24 +34,14 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             // the day each goal was reached
             daysInRed: 0,
             goalsReached: {},
+            // Store controls (Phase 9): the front door opens every morning
+            frontOpen: true,
         };
 
         console.log('[gameInitializer] Game state initialized:', window.gameState);
 
-        // 2. Initialize finances based on starting capital and location
-        console.log('[gameInitializer] Initializing finances with starting capital:', gameOptions.startingCapital);
-
-        let startingCash = 100000; // Default (medium)
-
-        if (gameOptions.startingCapital === 'low') {
-            startingCash = 50000;
-            console.log('[gameInitializer] Setting low starting cash:', startingCash);
-        } else if (gameOptions.startingCapital === 'high') {
-            startingCash = 200000;
-            console.log('[gameInitializer] Setting high starting cash:', startingCash);
-        } else {
-            console.log('[gameInitializer] Using medium starting cash:', startingCash);
-        }
+        // 2. Finances. Every game starts with the same cash (#1).
+        const startingCash = STARTING_CASH;
 
         console.log('[gameInitializer] Creating finances object');
         window.financesData = {

@@ -45,7 +45,7 @@ test('menu settings are applied: interface size, and the speed a new game starts
   // Settings from an earlier session, including keys that no longer exist
   fs.writeFileSync(
     path.join(userDataDir, 'settings.json'),
-    JSON.stringify({ simulationSpeed: 2, uiScale: 1.2, autoSaveEnabled: false, musicVolume: 80 }),
+    JSON.stringify({ simulationSpeed: 5, uiScale: 1.2, autoSaveEnabled: false, musicVolume: 80 }),
   );
 
   const app = await electron.launch(launchOptions());
@@ -71,7 +71,14 @@ async function checkSettings(app) {
   // The Settings page shows what's saved, and only settings that work
   await page.click('#settingsBtn');
   await page.waitForSelector('#settingsForm');
-  await expect(page.locator('#simulationSpeed')).toHaveValue('2');
+  await expect(page.locator('#simulationSpeed')).toHaveValue('5');
+  await expect(page.locator('#simulationSpeed option')).toHaveText([
+    '1× (Slow)',
+    '2× (Normal)',
+    '5× (Fast)',
+    '10× (Very fast)',
+  ]);
+  await expect(page.locator('#skipDailySummary')).not.toBeChecked();
   await expect(page.locator('#uiScale')).toHaveValue('1.2');
   await expect(page.locator('#autoSaveEnabled')).not.toBeChecked();
   await expect(page.locator('#autoSaveInterval')).toBeDisabled();
@@ -79,16 +86,18 @@ async function checkSettings(app) {
 
   // Saving applies the interface size at once, and stores known keys only
   await page.selectOption('#uiScale', '1');
+  await page.check('#skipDailySummary');
   await page.click('.save-button');
   await expect(page.locator('#status')).toHaveText('Settings saved.');
   await expect.poll(() => zoom(app)).toBeCloseTo(1);
   const stored = JSON.parse(fs.readFileSync(path.join(userDataDir, 'settings.json'), 'utf8'));
   expect(stored).toEqual({
-    simulationSpeed: 2,
+    simulationSpeed: 5,
     autoSaveEnabled: false,
     autoSaveInterval: 5,
     uiScale: 1,
     fullscreenEnabled: false,
+    skipDailySummary: true,
   });
 
   // A bad interval isn't saved
@@ -106,7 +115,9 @@ async function checkSettings(app) {
   await page.click('.start-button');
   await page.waitForURL(/mode=new/);
   await page.waitForSelector('.top-bar', { timeout: 20_000 });
-  await expect.poll(() => page.evaluate(() => window.getGameSpeed())).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.getGameSpeed())).toBe(5);
+  // and reads the daily summary setting
+  await expect.poll(() => page.evaluate(() => window.appSettings.skipDailySummary)).toBe(true);
 
   expect(errors).toEqual([]);
 }

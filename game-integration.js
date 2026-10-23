@@ -11,17 +11,21 @@ let gameState = null;
 let newGameOptions = null;
 
 // The main menu's Settings page (settings.html). Only settings the game
-// actually applies are kept (findings M18): the default speed for new games
-// and autosave (read by the renderer), UI scale and fullscreen (applied
-// here, to every window).
+// actually applies are kept (findings M18): the default speed for new games,
+// autosave and skipping the daily summary (read by the renderer), UI scale
+// and fullscreen (applied here, to every window). The in-game Settings page
+// changes skipDailySummary too.
 const DEFAULT_SETTINGS = {
-  simulationSpeed: 1,
+  simulationSpeed: 2,
   autoSaveEnabled: true,
   autoSaveInterval: 5, // minutes of play at 1x
   uiScale: 1,
   fullscreenEnabled: false,
+  skipDailySummary: false,
 };
-const SPEEDS = [0.5, 1, 2, 5];
+// The speeds offered in the game (main.ts GAME_SPEEDS). A stored 0.5 from
+// before Phase 9 falls back to the default.
+const SPEEDS = [1, 2, 5, 10];
 const UI_SCALES = [0.8, 1, 1.2, 1.5];
 
 // Known keys only, each a valid value or its default
@@ -36,6 +40,7 @@ function sanitizeSettings(raw) {
   const scale = Number(raw.uiScale);
   if (UI_SCALES.includes(scale)) settings.uiScale = scale;
   if (typeof raw.fullscreenEnabled === 'boolean') settings.fullscreenEnabled = raw.fullscreenEnabled;
+  if (typeof raw.skipDailySummary === 'boolean') settings.skipDailySummary = raw.skipDailySummary;
   return settings;
 }
 
