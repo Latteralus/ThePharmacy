@@ -62,6 +62,7 @@ main/js/insuranceClaims.js
 main/components/sideBar.js
 main/components/topBar.js
 main/components/kit.js
+main/components/charts.js
 main/js/taskbars.js
 main/js/ui.js
 main/js/customers.js
@@ -78,6 +79,12 @@ main/js/timeEvents.js
 main/js/clock.js
 main/js/ids.js
 main/js/saveFile.js
+main/js/records.js
+main/js/stakes.js
+main/js/goals.js
+main/js/pages/dashboardPage.js
+main/js/pages/customersPage.js
+main/js/pages/statisticsPage.js
 main/js/pages/equipmentPage.js
 main/js/pages/researchPage.js
 main/js/pages/operationsPage.js

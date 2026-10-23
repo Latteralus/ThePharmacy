@@ -1,5 +1,11 @@
 // gameInitializer.js - Handles the initialization of a new game or loading a saved game
 
+// Daily overhead (rent, utilities, licences) for a Normal game, and each
+// difficulty's share of it. It was $500, about 2% of a day's revenue, so a
+// bad day still made money and the game couldn't be lost (Phase 8).
+const BASE_OVERHEAD = 3000;
+const DIFFICULTY_OVERHEAD: Record<string, number> = { easy: 0.8, normal: 1, hard: 1.3, expert: 1.6 };
+
 window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
     console.log('[gameInitializer] Starting new game initialization with options:', gameOptions);
 
@@ -28,6 +34,10 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             difficulty: gameOptions.difficulty || 'normal',
             location: gameOptions.location || 'suburban',
             dateCreated: new Date(),
+            // Stakes (stakes.ts): closings in a row with cash below $0, and
+            // the day each goal was reached
+            daysInRed: 0,
+            goalsReached: {},
         };
 
         console.log('[gameInitializer] Game state initialized:', window.gameState);
@@ -70,7 +80,8 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             pendingInsuranceIncome: 0,
             pendingOrders: 0,
             completedOrders: 0,
-            overhead: 500, // Base daily overhead (rent, utilities)
+            overhead: BASE_OVERHEAD * (DIFFICULTY_OVERHEAD[gameOptions.difficulty ?? ''] ?? 1),
+            loanBalance: 0,
             transactions: [], // Transaction history
             revenue: {
                 today: 0,
@@ -104,6 +115,7 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
                 overhead: 0,
                 equipment: 0,
                 research: 0,
+                interest: 0,
                 other: 0,
             },
             revenueCategories: {
@@ -131,21 +143,17 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
             };
         }
 
-        console.log('[gameInitializer] Applying difficulty modifiers to reputation and overhead');
+        // Overhead was set above (DIFFICULTY_OVERHEAD)
+        console.log('[gameInitializer] Applying difficulty modifiers to reputation');
         if (gameOptions.difficulty === 'easy') {
             window.brandReputation.reputationScore = 15; // Higher starting reputation
-            window.financesData.overhead = 400; // Lower overhead costs
-            console.log('[gameInitializer] Applied easy difficulty settings: reputation=15, overhead=400');
         } else if (gameOptions.difficulty === 'hard') {
             window.brandReputation.reputationScore = 5; // Lower starting reputation
-            window.financesData.overhead = 650; // Higher overhead costs
-            console.log('[gameInitializer] Applied hard difficulty settings: reputation=5, overhead=650');
         } else if (gameOptions.difficulty === 'expert') {
             // Expert used to play exactly like Normal (L6)
             window.brandReputation.reputationScore = 0;
-            window.financesData.overhead = 800;
         } else {
-            console.log('[gameInitializer] Using normal difficulty settings');
+            window.brandReputation.reputationScore = 10;
         }
 
         // 4. Location-based adjustments

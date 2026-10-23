@@ -10,6 +10,7 @@ window.financesData = {
     pendingOrders: 0,
     completedOrders: 0,
     overhead: 500, // e.g., daily overhead (rent, utilities)
+    loanBalance: 0, // owed to the bank (stakes.ts)
     transactions: [], // Transaction history
     revenue: {
         today: 0,
@@ -43,6 +44,7 @@ window.financesData = {
         overhead: 0,
         equipment: 0,
         research: 0,
+        interest: 0,
         other: 0,
     },
     revenueCategories: {
@@ -72,6 +74,11 @@ function logTransaction(transaction: Transaction): void {
         data.transactions = data.transactions.slice(0, 1000);
     }
 }
+
+// Money that moves cash without being revenue or a cost: the bank loan's
+// principal (stakes.ts). It's logged, and left out of the period totals,
+// the category buckets, today's income and every P&L.
+const FINANCING_CATEGORIES = new Set(['loan']);
 
 function addToPeriods(periods: FinancialPeriodTotals, amount: number): void {
     periods.today += amount;
@@ -112,7 +119,9 @@ window.finances = {
         }
         if (amount === 0) return true;
 
-        if (entry.type === 'income') {
+        if (FINANCING_CATEGORIES.has(entry.category)) {
+            data.cash += entry.type === 'income' ? amount : -amount;
+        } else if (entry.type === 'income') {
             data.cash += amount;
             data.dailyIncome += amount;
             addToPeriods(data.revenue, amount);
@@ -162,6 +171,9 @@ window.finances = {
             amount: overheadCost,
             description: 'Daily overhead costs',
         });
+
+        // Interest on the bank loan, if there is one
+        window.stakes?.chargeInterest();
 
         // Pay out claims that finished processing since the last hourly check
         this.processInsuranceClaims();
@@ -396,13 +408,34 @@ window.finances = {
         window.financesData.profit.thisMonth = 0;
     },
 
+    isFinancing(category) {
+        return FINANCING_CATEGORIES.has(category);
+    },
+
+    // Revenue and costs by transaction category between two game times (ms),
+    // from the log. The loan's principal isn't in either.
+    categoryTotals(from, to) {
+        const revenue: Record<string, number> = {};
+        const expenses: Record<string, number> = {};
+        window.financesData.transactions.forEach((t) => {
+            const time = t.date.getTime();
+            if (time < from || time > to || FINANCING_CATEGORIES.has(t.category)) return;
+            const bucket = t.type === 'income' ? revenue : expenses;
+            bucket[t.category] = (bucket[t.category] ?? 0) + t.amount;
+        });
+        return { revenue, expenses };
+    },
+
     // Get total sales for a specific date
     getDailySales(date) {
         const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0);
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
         return window.financesData.transactions
-            .filter((t) => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter(
+                (t) =>
+                    t.type === 'income' && !this.isFinancing(t.category) && t.date >= startOfDay && t.date <= endOfDay,
+            )
             .reduce((total, t) => total + t.amount, 0);
     },
 
@@ -412,11 +445,17 @@ window.finances = {
         const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
 
         const income = window.financesData.transactions
-            .filter((t) => t.type === 'income' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter(
+                (t) =>
+                    t.type === 'income' && !this.isFinancing(t.category) && t.date >= startOfDay && t.date <= endOfDay,
+            )
             .reduce((total, t) => total + t.amount, 0);
 
         const expenses = window.financesData.transactions
-            .filter((t) => t.type === 'expense' && t.date >= startOfDay && t.date <= endOfDay)
+            .filter(
+                (t) =>
+                    t.type === 'expense' && !this.isFinancing(t.category) && t.date >= startOfDay && t.date <= endOfDay,
+            )
             .reduce((total, t) => total + t.amount, 0);
 
         return income - expenses;

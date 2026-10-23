@@ -903,6 +903,9 @@ describe('the Finances and Research pages (U16, U17)', () => {
     window.financesData.cash = 1000;
     window.taskManager = { tasks: [] };
     require('../../main/js/production.js');
+    require('../../main/js/records.js');
+    require('../../main/js/stakes.js');
+    require('../../main/components/charts.js');
     require('../../main/js/pages/financesPage.js');
     require('../../main/js/pages/researchPage.js');
   });
@@ -977,5 +980,206 @@ describe('notifications', () => {
     for (let i = 0; i < 60; i++) window.notifications.add(`n${i}`);
     expect(window.notifications.items).toHaveLength(50);
     expect(window.notifications.unreadCount).toBe(50);
+  });
+});
+
+describe('stakes and history on screen (Phase 8)', () => {
+  beforeEach(() => {
+    loadUi();
+    require('../../main/js/ids.js');
+    require('../../main/js/data/materials.js');
+    require('../../main/js/data/products.js');
+    require('../../main/js/data/research.js');
+    require('../../main/js/data/finances.js');
+    window.financesData.cash = 50000;
+    window.financesData.overhead = 1000;
+    window.employeesData = [{ id: 'a', firstName: 'Ann', lastName: 'Lee', role: 'Cashier', salary: 36500 }];
+    window.brandReputation = { reputationScore: 42 };
+    window.gameState.customersToday = { served: 4, impatient: 1 };
+    window.gameState.lastEndedDayIndex = 0;
+    window.notifications = { add: jest.fn() };
+    require('../../main/js/records.js');
+    require('../../main/js/stakes.js');
+    require('../../main/js/goals.js');
+    require('../../main/components/charts.js');
+    require('../../main/modals/modal.js');
+    require('../../main/js/pages/dashboardPage.js');
+    require('../../main/js/pages/customersPage.js');
+    require('../../main/js/pages/statisticsPage.js');
+    require('../../main/js/pages/financesPage.js');
+  });
+
+  afterEach(() => {
+    delete window.notifications;
+  });
+
+  function yesterday(overrides = {}) {
+    return {
+      day: 0,
+      date: new Date(2023, 0, 1, 22).getTime(),
+      revenue: 9000,
+      costs: 4000,
+      net: 5000,
+      revenueByCategory: { copays: 9000 },
+      costsByCategory: { wages: 100, overhead: 3900 },
+      cash: 45000,
+      loan: 0,
+      reputation: 40,
+      customers: { served: 30, price: 2, impatient: 1 },
+      staff: 1,
+      ...overrides,
+    };
+  }
+
+  function visit(overrides = {}) {
+    return {
+      id: 'cust-1',
+      name: 'Bo Chen',
+      insurer: 'CarePlus',
+      product: 'Acetaminophen Tablet',
+      dosage: 2,
+      day: 1,
+      arrivedAt: new Date(2023, 0, 2, 9, 0).getTime(),
+      leftAt: new Date(2023, 0, 2, 9, 40).getTime(),
+      reason: 'served',
+      price: 300,
+      mood: 9,
+      returning: false,
+      ...overrides,
+    };
+  }
+
+  function button(root, label) {
+    return [...root.querySelectorAll('button')].find((b) => b.textContent === label);
+  }
+
+  test('the Dashboard compares today with yesterday and shows the bank and the goals', () => {
+    window.records.days.push(yesterday());
+    window.showPage('dashboard');
+    expect(text()).toContain('Yesterday $9,000.00');
+    expect(text()).toContain('Yesterday 30'); // served
+    expect(text()).toContain('Yesterday 3'); // lost
+    expect(text()).toContain('+2.0 since yesterday');
+    expect(text()).toContain('$1,100.00 (wages, overhead)');
+    expect(text()).toContain('45 days of fixed costs');
+    expect(text()).toContain('Reach reputation 50');
+    expect(text()).toContain('42 / 50');
+    expect(text()).toContain('0 of 10');
+    expect(main().querySelector('.callout.critical').style.display).toBe('none');
+  });
+
+  test('the Dashboard warns when the last closing was in the red, and marks goals reached', () => {
+    window.gameState.daysInRed = 1;
+    window.gameState.goalsReached = { week: 0 };
+    window.showPage('dashboard');
+    const warning = main().querySelector('.callout.critical');
+    expect(warning.style.display).toBe('');
+    expect(warning.textContent).toContain('the last closing');
+    expect(warning.textContent).toContain('by closing on day 3');
+    expect(text()).toContain('Day 1'); // when "Open for a week" was reached
+    expect(text()).toContain('1 of 10');
+  });
+
+  test('Customers lists visits newest first, filters by outcome and searches, and follows departures', () => {
+    window.records.visits.push(visit(), visit({ id: 'cust-2', name: 'Cy Dee', reason: 'impatient', price: 0 }));
+    window.showPage('customers');
+    expect(text()).toContain('50%'); // served of visits
+    expect(text()).toContain('40m'); // average wait, served
+    expect(text()).toContain('$300.00');
+    expect(main().querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(text()).toContain('Ran out of patience');
+
+    button(main(), 'Lost').click();
+    expect(main().querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(text()).toContain('Cy Dee');
+
+    button(main(), 'All').click();
+    const search = main().querySelector('input.search');
+    search.value = 'bo ch';
+    search.dispatchEvent(new Event('input'));
+    expect(main().querySelectorAll('tbody tr')).toHaveLength(1);
+
+    search.value = '';
+    search.dispatchEvent(new Event('input'));
+    window.records.visits.unshift(visit({ id: 'cust-3', name: 'Di Eve' }));
+    window.updateUI('customers');
+    window.ui.flush();
+    expect(main().querySelector('tbody tr').textContent).toContain('Di Eve');
+  });
+
+  test('Statistics waits for the first closing, then lists every day', () => {
+    window.showPage('statistics');
+    expect(text()).toContain('Statistics start at the first closing');
+    window.records.days.push(yesterday(), yesterday({ day: 1, net: -200, cash: -150 }));
+    window.updateUI('finances');
+    window.ui.flush();
+    const rows = main().querySelectorAll('tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Day 2'); // newest first
+    expect(rows[0].querySelectorAll('.critical-text')).toHaveLength(2); // the loss and the negative cash
+  });
+
+  test('Finances borrows and repays, and the loan is not in the P&L', () => {
+    window.showPage('finances');
+    expect(text()).toContain('Nothing owed');
+    button(main(), 'Borrow $10,000').click();
+    window.ui.flush();
+    expect(window.financesData.cash).toBe(60000);
+    expect(text()).toContain('Owed $10,000.00 of the $50,000 limit');
+    expect(text()).toContain('Total revenue$0.00');
+
+    button(main(), 'Repay all').click();
+    window.ui.flush();
+    expect(window.stakes.loanBalance()).toBe(0);
+    expect(text()).toContain('Nothing owed');
+  });
+
+  test("Finances' month adds closed days from their records, so a capped log doesn't shorten it", () => {
+    window.gameState.currentDate = new Date(2023, 0, 2, 9);
+    window.records.days.push(yesterday()); // Jan 1, with no transactions left in the log
+    window.finances.transact({ type: 'income', category: 'copays', amount: 100, description: 'today' });
+    window.showPage('finances');
+    expect(text()).toContain('Total revenue$9,100.00');
+    expect(text()).toContain('Overhead-$3,900.00');
+  });
+
+  test('the daily summary warns when in the red and lists goals reached at this closing', () => {
+    window.financesData.cash = -2000;
+    window.gameState.daysInRed = 1;
+    window.gameState.lastEndedDayIndex = 1;
+    window.gameState.goalsReached = { reputation50: 1 };
+    window.records.days.push(yesterday(), yesterday({ day: 1, reputation: 42 }));
+    window.showDailySummaryModal(jest.fn());
+    const modal = document.querySelector('.daily-summary');
+    expect(modal.querySelector('.callout.critical').textContent).toContain('1 of 3 in a row');
+    expect(modal.textContent).toContain('by closing on day 4');
+    expect(modal.textContent).toContain('Goal reachedReach reputation 50');
+    expect(modal.textContent).toContain('+2.0 today');
+  });
+
+  test('game over offers the last save and the main menu, and a load closes it', async () => {
+    window.gameState.bankrupt = true;
+    window.loadGame = jest.fn(async () => {
+      window.closeSessionModals();
+      return true;
+    });
+    window.showGameOverModal();
+    const modal = document.querySelector('.game-over');
+    expect(modal.textContent).toContain('Bankrupt');
+    expect(modal.textContent).toContain('Customers served4');
+    expect(button(modal, 'Main menu')).toBeDefined();
+    button(modal, 'Load last save').click();
+    await Promise.resolve();
+    expect(window.loadGame).toHaveBeenCalled();
+    expect(document.querySelector('.game-over')).toBeNull();
+    delete window.loadGame;
+  });
+
+  test('a load closes the daily summary without starting a next day', () => {
+    const next = jest.fn();
+    window.showDailySummaryModal(next);
+    window.closeSessionModals();
+    expect(document.querySelector('.daily-summary')).toBeNull();
+    expect(next).not.toHaveBeenCalled();
   });
 });

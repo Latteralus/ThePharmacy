@@ -129,12 +129,12 @@ describe('difficulty (L6)', () => {
   test('Expert is harder than Hard (it used to play like Normal)', () => {
     newGame({ difficulty: 'expert', startingCapital: 'medium', location: 'suburban' });
     expect(window.financesData.cash).toBe(50000);
-    expect(window.financesData.overhead).toBe(800);
+    expect(window.financesData.overhead).toBe(4800); // 1.6x the $3,000 base (Phase 8)
     expect(window.brandReputation.reputationScore).toBe(0);
 
     newGame({ difficulty: 'hard', startingCapital: 'medium', location: 'suburban' });
     expect(window.financesData.cash).toBe(70000);
-    expect(window.financesData.overhead).toBe(650);
+    expect(window.financesData.overhead).toBe(3900);
     expect(window.brandReputation.reputationScore).toBe(5);
   });
 

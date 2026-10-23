@@ -1,8 +1,8 @@
 // sideBar.js - reputation and navigation.
 //
-// Only pages with something behind them are listed. Customers, Orders,
-// Marketing, Statistics and Dashboard were placeholders (findings U7) and
-// come back when there is history data to show.
+// Only pages with something behind them are listed. Dashboard, Customers
+// and Statistics came back in Phase 8 with the history (records.ts) behind
+// them; Orders and Marketing were placeholders (findings U7) and stay out.
 
 interface NavItemDef {
     label: string;
@@ -11,7 +11,14 @@ interface NavItemDef {
 }
 
 const NAV_SECTIONS: Array<{ title: string; items: NavItemDef[] }> = [
-    { title: 'Store', items: [{ label: 'Operations', pageName: 'operations', icon: '🏥' }] },
+    {
+        title: 'Store',
+        items: [
+            { label: 'Dashboard', pageName: 'dashboard', icon: '📋' },
+            { label: 'Operations', pageName: 'operations', icon: '🏥' },
+            { label: 'Customers', pageName: 'customers', icon: '🧾' },
+        ],
+    },
     {
         title: 'Stock',
         items: [
@@ -25,6 +32,7 @@ const NAV_SECTIONS: Array<{ title: string; items: NavItemDef[] }> = [
         items: [
             { label: 'Employees', pageName: 'employees', icon: '👥' },
             { label: 'Finances', pageName: 'finances', icon: '💰' },
+            { label: 'Statistics', pageName: 'statistics', icon: '📈' },
             { label: 'Research', pageName: 'research', icon: '🔬' },
         ],
     },

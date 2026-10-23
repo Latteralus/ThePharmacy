@@ -12,7 +12,7 @@
 // defaults captured below are pristine.
 
 window.saveFile = (function (): SaveFileApi {
-    const SAVE_VERSION = 5;
+    const SAVE_VERSION = 6;
 
     // The mutable fields of each static definition. Everything else on a
     // product, material or equipment item comes from its data file.
@@ -81,6 +81,7 @@ window.saveFile = (function (): SaveFileApi {
                 pending: window.insuranceClaims.pendingClaims,
                 processed: window.insuranceClaims.processedClaims,
             },
+            records: { days: window.records.days, visits: window.records.visits },
             settings: {
                 gameSpeed: window.getGameSpeed(),
                 customerFrequencyMultiplier: window.customerFrequencyMultiplier ?? 1,
@@ -97,6 +98,7 @@ window.saveFile = (function (): SaveFileApi {
         2: (save: SaveFile) => SaveFile;
         3: (save: SaveFile) => SaveFile;
         4: (save: SaveFile) => SaveFile;
+        5: (save: SaveFile) => SaveFile;
     } = {
         // v1 (no version field) stored whole live objects and no tasks,
         // customers, claims or settings.
@@ -131,6 +133,7 @@ window.saveFile = (function (): SaveFileApi {
                 activePrescriptions: [],
                 refillRegistry: save.refillRegistry || [],
                 insuranceClaims: { pending: [], processed: [] },
+                records: { days: [], visits: [] }, // a v6 field; migrations[5] sets it again
                 settings: {
                     gameSpeed: 1,
                     customerFrequencyMultiplier: 1,
@@ -200,6 +203,19 @@ window.saveFile = (function (): SaveFileApi {
                 research.inProgress = null;
             }
             return { ...save, version: 5, research };
+        },
+
+        // v5 predates stakes and history (Phase 8): no bank loan, no interest
+        // bucket, no count of closings in the red, no goals, no records. The
+        // history starts at the upgrade.
+        5(save) {
+            const financesData = {
+                ...save.financesData,
+                loanBalance: 0,
+                expenseCategories: { ...save.financesData.expenseCategories, interest: 0 },
+            };
+            const gameState = { ...save.gameState, daysInRed: 0, goalsReached: {} };
+            return { ...save, version: 6, financesData, gameState, records: { days: [], visits: [] } };
         },
     };
 
@@ -292,6 +308,9 @@ window.saveFile = (function (): SaveFileApi {
         window.insuranceClaims.pendingClaims = save.insuranceClaims.pending;
         window.insuranceClaims.processedClaims = save.insuranceClaims.processed;
         window.insuranceClaims.syncPendingTotals();
+
+        window.records.days = save.records.days;
+        window.records.visits = save.records.visits;
 
         const settings = save.settings;
         window.setGameSpeed(settings.gameSpeed);

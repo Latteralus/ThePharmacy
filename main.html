@@ -47,6 +47,8 @@
     <script src="main/js/ui.js"></script>
     <!-- Formatters, player words, components and toasts every screen is built from -->
     <script src="main/components/kit.js"></script>
+    <!-- One look for every Chart.js chart (Chart.js itself loads further down) -->
+    <script src="main/components/charts.js"></script>
     <script src="main/js/taskManager.js"></script>
     <script src="main/js/taskAssignment.js"></script>
     <script src="main/js/production.js"></script>
@@ -56,22 +58,29 @@
     <script src="main/js/timeEvents.js"></script>
     <script src="main/js/taskbars.js"></script>
     <script src="main/js/brandReputation.js"></script>
+    <!-- History (days and customer visits), the bank and bankruptcy, and goals -->
+    <script src="main/js/records.js"></script>
+    <script src="main/js/stakes.js"></script>
+    <script src="main/js/goals.js"></script>
 
     <!-- Load UI components -->
     <script src="main/components/topBar.js"></script>
     <script src="main/components/sideBar.js"></script>
     <script src="main/modals/modal.js"></script>
 
-    <!-- Chart.js, for financesPage.js's revenue/expense/profit charts -->
+    <!-- Chart.js, for the Finances, Dashboard and Statistics charts -->
     <script src="node_modules/chart.js/dist/chart.umd.min.js"></script>
 
     <!-- Load page renderers -->
+    <script src="main/js/pages/dashboardPage.js"></script>
     <script src="main/js/pages/operationsPage.js"></script>
+    <script src="main/js/pages/customersPage.js"></script>
     <script src="main/js/pages/employeesPage.js"></script>
     <script src="main/js/pages/inventoryPage.js"></script>
     <script src="main/js/pages/marketplacePage.js"></script>
     <script src="main/js/pages/equipmentPage.js"></script>
     <script src="main/js/pages/financesPage.js"></script>
+    <script src="main/js/pages/statisticsPage.js"></script>
     <script src="main/js/pages/researchPage.js"></script>
     <script src="main/js/pages/settingsPage.js"></script>
 

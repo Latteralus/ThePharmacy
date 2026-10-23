@@ -47,6 +47,7 @@ function loadModules() {
   require('../../main/js/data/finances.js');
   require('../../main/js/insuranceClaims.js');
   require('../../main/js/saveFile.js');
+  require('../../main/js/records.js');
 
   window.customers = {
     activeCustomers: [],
@@ -480,5 +481,46 @@ describe('v4 saves (Phase 7: the research tree is levels 0-4)', () => {
     loadModules();
     window.saveFile.apply(save);
     expect(window.employeesData[0].minutesWorkedToday).toBe(123);
+  });
+});
+
+describe('v5 saves and the history (Phase 8)', () => {
+  test('a v5 save gets an empty history, no loan, an interest bucket and no goals', () => {
+    playABit();
+    const save = throughDisk(window.saveFile.serialize());
+    save.version = 5;
+    delete save.records;
+    delete save.financesData.loanBalance;
+    delete save.financesData.expenseCategories.interest;
+    delete save.gameState.daysInRed;
+    delete save.gameState.goalsReached;
+
+    const upgraded = window.saveFile.migrate(throughDisk(save));
+    expect(upgraded.version).toBe(window.saveFile.version);
+    expect(upgraded.records).toEqual({ days: [], visits: [] });
+    expect(upgraded.financesData.loanBalance).toBe(0);
+    expect(upgraded.financesData.expenseCategories.interest).toBe(0);
+    expect(upgraded.gameState).toMatchObject({ daysInRed: 0, goalsReached: {} });
+
+    window.saveFile.apply(save);
+    expect(window.records.days).toEqual([]);
+    expect(window.financesData.cash).toBe(save.financesData.cash);
+  });
+
+  test('the day records, the visit log, the loan and the goals survive save and load', () => {
+    playABit();
+    window.records.days.push({ day: 2, date: 1, revenue: 10, costs: 5, net: 5, customers: { served: 3 } });
+    window.records.visits.push({ id: 'cust-9', name: 'Bo Chen', reason: 'served', price: 40 });
+    window.financesData.loanBalance = 20000;
+    window.gameState.daysInRed = 1;
+    window.gameState.goalsReached = { week: 2 };
+    const save = throughDisk(window.saveFile.serialize());
+
+    loadModules();
+    window.saveFile.apply(save);
+    expect(window.records.days[0]).toMatchObject({ day: 2, net: 5, customers: { served: 3 } });
+    expect(window.records.visits[0]).toMatchObject({ id: 'cust-9', price: 40 });
+    expect(window.financesData.loanBalance).toBe(20000);
+    expect(window.gameState).toMatchObject({ daysInRed: 1, goalsReached: { week: 2 } });
   });
 });

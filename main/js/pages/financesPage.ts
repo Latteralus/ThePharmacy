@@ -1,6 +1,12 @@
-// /js/pages/financesPage.js - money in and out: today's figures, this
-// month's P&L by category with a daily chart, and the transaction log.
-// Everything redraws on 'finances' (every transaction announces it).
+// /js/pages/financesPage.js - money in and out: today's figures, the bank
+// loan, this month's P&L by category with a daily chart, and the
+// transaction log. Everything redraws on 'finances' (every transaction
+// announces it).
+//
+// Closed days come from the day records (records.ts), so the month isn't cut
+// short by the transaction log's 1000-entry cap; today, and days from before
+// a save had records, come from the log. The loan's principal is neither
+// revenue nor a cost, so no P&L or chart counts it.
 //
 // Prices are set on the Inventory page.
 
@@ -13,16 +19,32 @@ const CATEGORY_LABELS: Record<string, string> = {
     equipment: 'Equipment',
     research: 'Research',
     hiring: 'Hiring',
+    interest: 'Loan interest',
+    loan: 'Bank loan',
     other: 'Other',
 };
 const REVENUE_ORDER = ['copays', 'insurance', 'other'];
-const EXPENSE_ORDER = ['wages', 'overhead', 'materials', 'equipment', 'research', 'hiring', 'other'];
+const EXPENSE_ORDER = ['wages', 'overhead', 'materials', 'equipment', 'research', 'hiring', 'interest', 'other'];
+
+type CategoryTotals = { revenue: Record<string, number>; expenses: Record<string, number> };
+
+// Revenue and costs by category for one calendar day: its record once it has
+// closed, otherwise the transaction log. Today always comes from the log.
+function dayTotals(date: Date): CategoryTotals {
+    const today = window.gameState.currentDate;
+    const record = date.toDateString() === today.toDateString() ? undefined : window.records.forDate(date);
+    if (record) return { revenue: record.revenueByCategory, expenses: record.costsByCategory };
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+    return window.finances.categoryTotals(start.getTime(), end.getTime() - 1);
+}
 
 window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
     const { el } = kit;
     const { fmt } = window;
     const data = window.financesData;
+    const stakes = window.stakes;
 
     const root = kit.page(
         mainContent,
@@ -40,6 +62,47 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
     kpis.append(cashTile.root, revenueTile.root, costsTile.root, netTile.root, owedTile.root);
     root.appendChild(kpis);
 
+    // --------------------- Bank loan (stakes.ts) ---------------------
+    const loanText = el('p');
+    const borrowBtn = kit.button(`Borrow ${fmt.moneyWhole(stakes.LOAN_STEP)}`, 'secondary', () => {
+        const amount = Math.min(stakes.LOAN_STEP, stakes.loanRoom());
+        if (stakes.borrow(amount)) window.toast(`Borrowed ${fmt.moneyWhole(amount)} from the bank.`, 'success');
+    });
+    const repayBtn = kit.button(`Repay ${fmt.moneyWhole(stakes.LOAN_STEP)}`, 'secondary', () =>
+        repay(stakes.LOAN_STEP),
+    );
+    const repayAllBtn = kit.button('Repay all', 'ghost', () => repay(stakes.loanBalance()));
+    function repay(amount: number): void {
+        const due = Math.min(amount, stakes.loanBalance());
+        if (stakes.repay(due)) window.toast(`Repaid ${fmt.money(due)} to the bank.`, 'success');
+        else window.toast(`Not enough cash to repay ${fmt.money(due)}.`, 'error');
+    }
+    const loanCard = kit.card('Bank loan', { actions: [borrowBtn, repayBtn, repayAllBtn] });
+    loanCard.body.appendChild(loanText);
+    root.appendChild(loanCard.root);
+
+    function refreshLoan(): void {
+        const owed = stakes.loanBalance();
+        const rate = fmt.pct(stakes.LOAN_DAILY_INTEREST, 1);
+        let text =
+            owed > 0
+                ? `Owed ${fmt.money(owed)} of the ${fmt.moneyWhole(stakes.LOAN_LIMIT)} limit. Interest is ` +
+                  `${fmt.money(stakes.dailyInterest())} a day (${rate}), charged at closing.`
+                : `Nothing owed. The bank lends up to ${fmt.moneyWhole(stakes.LOAN_LIMIT)} at ${rate} a day, ` +
+                  'charged at closing. Repay whenever you like.';
+        const red = stakes.daysInRed();
+        if (red > 0) {
+            text +=
+                ` Cash was below $0 at ${red === 1 ? 'the last closing' : `the last ${red} closings`}; ` +
+                `${stakes.BANKRUPT_AFTER} in a row is bankruptcy.`;
+        }
+        if (loanText.textContent !== text) loanText.textContent = text;
+        loanText.className = red > 0 ? 'critical-text' : 'muted';
+        borrowBtn.disabled = stakes.loanRoom() <= 0;
+        repayBtn.disabled = owed <= 0;
+        repayAllBtn.disabled = owed <= 0;
+    }
+
     // --------------------- Tabs ---------------------
     const monthView = el('div', 'columns');
     const todayView = el('div', 'stack');
@@ -53,18 +116,24 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
     });
     root.append(tabs.root, ...views);
 
-    // Rows of a category breakdown, computed from the transaction log
-    function byCategory(from: Date, to: Date): { revenue: Record<string, number>; expenses: Record<string, number> } {
+    // A category breakdown over the calendar days from..to
+    function byCategory(from: Date, to: Date): CategoryTotals {
         const revenue: Record<string, number> = {};
         const expenses: Record<string, number> = {};
-        data.transactions.forEach((t) => {
-            if (t.date < from || t.date > to) return;
-            const bucket = t.type === 'income' ? revenue : expenses;
-            const key = CATEGORY_LABELS[t.category] ? t.category : 'other';
-            bucket[key] = (bucket[key] ?? 0) + t.amount;
-        });
+        const add = (into: Record<string, number>, rows: Record<string, number>) =>
+            Object.entries(rows).forEach(([category, amount]) => {
+                const key = CATEGORY_LABELS[category] ? category : 'other';
+                into[key] = (into[key] ?? 0) + amount;
+            });
+        for (const d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
+            const totals = dayTotals(d);
+            add(revenue, totals.revenue);
+            add(expenses, totals.expenses);
+        }
         return { revenue, expenses };
     }
+
+    const sum = (rows: Record<string, number>) => Object.values(rows).reduce((a, b) => a + b, 0);
 
     function plTable(title: string, from: Date, to: Date, card: Card, comparison?: { revenue: number }): void {
         card.body.innerHTML = '';
@@ -72,7 +141,6 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
         const table = kit.table([{ label: title }, { label: 'Amount', num: true }]);
         card.body.appendChild(table.root);
 
-        const sum = (rows: Record<string, number>) => Object.values(rows).reduce((a, b) => a + b, 0);
         const totalRevenue = sum(revenue);
         const totalExpenses = sum(expenses);
 
@@ -101,10 +169,8 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
     const monthPl = kit.card('Profit and loss', { flush: true });
     const monthChartCard = kit.card('Revenue and costs by day');
     monthView.append(monthPl.root, monthChartCard.root);
-    const monthCanvas = el('canvas');
-    const monthBox = el('div', 'chart-box');
-    monthBox.appendChild(monthCanvas);
-    monthChartCard.body.appendChild(monthBox);
+    const monthBox = window.charts.box();
+    monthChartCard.body.appendChild(monthBox.box);
 
     // --------------------- Today ---------------------
     const todayColumns = el('div', 'columns');
@@ -112,10 +178,8 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
     const todayChartCard = kit.card('Revenue by hour');
     todayColumns.append(todayPl.root, todayChartCard.root);
     todayView.appendChild(todayColumns);
-    const todayCanvas = el('canvas');
-    const todayBox = el('div', 'chart-box');
-    todayBox.appendChild(todayCanvas);
-    todayChartCard.body.appendChild(todayBox);
+    const todayBox = window.charts.box();
+    todayChartCard.body.appendChild(todayBox.box);
 
     // --------------------- Transactions ---------------------
     let typeFilter = '';
@@ -178,115 +242,51 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
     }
 
     // --------------------- Charts ---------------------
-    const css = getComputedStyle(document.documentElement);
-    const token = (name: string, fallback: string): string => css.getPropertyValue(name).trim() || fallback;
-    const SERIES_1 = token('--series-1', '#2a78d6');
-    const SERIES_2 = token('--series-2', '#eb6834');
-    const GRID = token('--line', '#e3e5ec');
-    const INK_MUTED = token('--ink-muted', '#7a8294');
-
-    function barOptions(showLegend: boolean): Record<string, unknown> {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: false,
-            interaction: { mode: 'index', intersect: false },
-            plugins: {
-                legend: {
-                    display: showLegend,
-                    position: 'top',
-                    align: 'start',
-                    labels: { boxWidth: 10, boxHeight: 10, color: INK_MUTED },
-                },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx: { dataset: { label: string }; raw: number }) =>
-                            `${ctx.dataset.label}: ${fmt.money(ctx.raw)}`,
-                    },
-                },
-            },
-            scales: {
-                x: { grid: { display: false }, ticks: { color: INK_MUTED } },
-                y: {
-                    beginAtZero: true,
-                    grid: { color: GRID },
-                    border: { display: false },
-                    ticks: {
-                        color: INK_MUTED,
-                        callback: (value: number) => (value >= 1000 ? `$${value / 1000}K` : `$${value}`),
-                    },
-                },
-            },
-        };
-    }
-
-    function dataset(label: string, values: number[], color: string): ChartDataset {
-        return {
-            label,
-            data: values,
-            backgroundColor: color,
-            borderColor: color,
-            borderWidth: 0,
-            borderRadius: { topLeft: 4, topRight: 4 },
-            borderSkipped: 'bottom',
-            maxBarThickness: 24,
-        };
-    }
-
     // Days of this month up to today
-    function monthSeries(): ChartData {
+    function monthSpec(): ChartSpec {
         const now = window.gameState.currentDate;
-        const days = now.getDate();
-        const revenue = new Array(days).fill(0);
-        const costs = new Array(days).fill(0);
-        data.transactions.forEach((t) => {
-            if (t.date.getFullYear() !== now.getFullYear() || t.date.getMonth() !== now.getMonth()) return;
-            const i = t.date.getDate() - 1;
-            if (i >= days) return;
-            if (t.type === 'income') revenue[i] += t.amount;
-            else costs[i] += t.amount;
-        });
         const month = now.toLocaleDateString('en-US', { month: 'short' });
+        const labels: string[] = [];
+        const revenue: number[] = [];
+        const costs: number[] = [];
+        for (let day = 1; day <= now.getDate(); day++) {
+            const totals = dayTotals(new Date(now.getFullYear(), now.getMonth(), day));
+            labels.push(`${month} ${day}`);
+            revenue.push(sum(totals.revenue));
+            costs.push(sum(totals.expenses));
+        }
         return {
-            labels: revenue.map((_, i) => `${month} ${i + 1}`),
-            datasets: [dataset('Revenue', revenue, SERIES_1), dataset('Costs', costs, SERIES_2)],
+            type: 'bar',
+            format: 'money',
+            labels,
+            series: [
+                { label: 'Revenue', values: revenue },
+                { label: 'Costs', values: costs },
+            ],
         };
     }
 
     // Opening hours today (07:00-22:00)
-    function todaySeries(): ChartData {
+    function todaySpec(): ChartSpec {
         const now = window.gameState.currentDate;
         const hours = Array.from({ length: 15 }, (_, i) => i + 7);
         const revenue = hours.map(() => 0);
         data.transactions.forEach((t) => {
-            if (t.type !== 'income' || t.date.toDateString() !== now.toDateString()) return;
+            if (t.type !== 'income' || window.finances.isFinancing(t.category)) return;
+            if (t.date.toDateString() !== now.toDateString()) return;
             const i = t.date.getHours() - 7;
             if (i >= 0 && i < revenue.length) revenue[i] += t.amount;
         });
         return {
+            type: 'bar',
+            format: 'money',
             labels: hours.map((h) => `${String(h).padStart(2, '0')}:00`),
-            datasets: [dataset('Revenue', revenue, SERIES_1)],
+            series: [{ label: 'Revenue', values: revenue }],
         };
     }
 
     let monthChart: Chart | null = null;
     let todayChart: Chart | null = null;
-    function drawChart(
-        existing: Chart | null,
-        canvas: HTMLCanvasElement,
-        series: ChartData,
-        legend: boolean,
-    ): Chart | null {
-        if (typeof Chart === 'undefined') return null;
-        if (existing) {
-            existing.data.labels = series.labels;
-            series.datasets.forEach((ds, i) => (existing.data.datasets[i].data = ds.data));
-            existing.update('none');
-            return existing;
-        }
-        const ctx = canvas.getContext('2d');
-        return ctx ? new Chart(ctx, { type: 'bar', data: series, options: barOptions(legend) }) : null;
-    }
     page.onLeave(() => {
         monthChart?.destroy();
         todayChart?.destroy();
@@ -301,16 +301,17 @@ window.renderFinancesPage = function (mainContent: HTMLElement, page: PageScope)
         netTile.root.querySelector('.stat-value')!.className =
             `stat-value${data.profit.today < 0 ? ' critical-text' : ''}`;
         owedTile.set(fmt.money(data.pendingInsuranceIncome), 'Paid as claims clear');
+        refreshLoan();
 
         const now = window.gameState.currentDate;
         if (activeTab === 0) {
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             plTable('This month', startOfMonth, now, monthPl, { revenue: data.revenue.lastMonth });
-            monthChart = drawChart(monthChart, monthCanvas, monthSeries(), true);
+            monthChart = window.charts.draw(monthChart, monthBox.canvas, monthSpec());
         } else if (activeTab === 1) {
             const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             plTable('Today', startOfDay, now, todayPl);
-            todayChart = drawChart(todayChart, todayCanvas, todaySeries(), false);
+            todayChart = window.charts.draw(todayChart, todayBox.canvas, todaySpec());
         } else {
             renderTransactions();
         }

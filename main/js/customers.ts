@@ -27,6 +27,12 @@ const DEPARTURE_PENALTY: Record<Exclude<DepartureReason, 'served'>, number> = {
     reset: 0, // sent home by reconcileTasks (no prescription): not their choice
 };
 
+// Reputation a served customer brings, by mood (8+ very happy, 6+ content),
+// before brandReputation.gainReputation scales it by the room left below
+// 100. Was +1 and +0.5 unscaled; nearly every customer leaves very happy.
+const SERVED_GAIN_HAPPY = 0.3;
+const SERVED_GAIN_CONTENT = 0.15;
+
 // Products a turned-away customer has been reported for, with the day, so
 // the player hears about each product once a day rather than per customer.
 const turnedAwayReported = new Map<string, number>();
@@ -300,6 +306,9 @@ window.customers = {
                 customerTasks.forEach((task) => window.taskManager.cancelTask(task.id));
             }
 
+            // Into the visit log, while their prescription is still there
+            window.records?.recordVisit(customer, reason);
+
             // Remove any associated prescriptions
             window.prescriptions.removePrescriptionsByCustomer(customerId);
 
@@ -362,11 +371,11 @@ window.customers = {
 
             if (customer.mood >= 8) {
                 // Very happy customer
-                reputationChange = 1;
+                reputationChange = SERVED_GAIN_HAPPY;
                 console.log(`[customers.js] Very happy customer departure - reputation +${reputationChange}`);
             } else if (customer.mood >= 6) {
                 // Satisfied customer
-                reputationChange = 0.5;
+                reputationChange = SERVED_GAIN_CONTENT;
                 console.log(`[customers.js] Satisfied customer departure - reputation +${reputationChange}`);
             } else if (customer.mood <= 3) {
                 // Very unhappy customer

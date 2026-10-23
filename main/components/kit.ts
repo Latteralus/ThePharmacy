@@ -111,6 +111,24 @@
             }
         },
 
+        // Why a customer left (the visit log, Statistics)
+        departure(reason) {
+            switch (reason) {
+                case 'served':
+                    return { label: 'Served', tone: 'good' };
+                case 'impatient':
+                    return { label: 'Ran out of patience', tone: 'critical' };
+                case 'price':
+                    return { label: 'Refused the price', tone: 'warn' };
+                case 'closing':
+                    return { label: 'Still waiting at closing', tone: 'warn' };
+                case 'unavailable':
+                    return { label: 'Turned away', tone: 'neutral' };
+                default:
+                    return { label: 'Sent home', tone: 'neutral' };
+            }
+        },
+
         // Mood is 1-10. The bands match customers.updateReputationOnDeparture.
         mood(mood) {
             if (mood >= 8) return { label: 'Happy', tone: 'good' };

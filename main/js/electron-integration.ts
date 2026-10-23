@@ -57,6 +57,12 @@
         function initSaveLoadSystem() {
             // Add save game function to window
             window.saveGame = async function (options = {}) {
+                // A bankrupt pharmacy is game over; saving it would overwrite
+                // the save the player can still go back to.
+                if (window.gameState?.bankrupt) {
+                    window.toast('The pharmacy is bankrupt, so there is nothing to save.', 'warn');
+                    return false;
+                }
                 try {
                     // Plain data only (see saveFile.ts), so it crosses IPC's
                     // structured-clone boundary.
@@ -96,6 +102,10 @@
                         window.applySavedGame(gameData);
 
                         console.log('Game loaded successfully');
+
+                        // A daily summary or game-over dialog belongs to the
+                        // old session; its "next day" would act on the loaded one.
+                        window.closeSessionModals();
 
                         // Everything on screen was replaced: redraw the
                         // top bar and show the current page afresh.

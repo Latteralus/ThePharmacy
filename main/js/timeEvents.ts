@@ -74,14 +74,26 @@ window.timeEvents = (function (): TimeEventsApi {
         window.employees?.endOfDay?.();
         gameState.lastEndedDayIndex = gameState.dayIndex;
 
+        // The day goes into the history, then goals and the bank have their
+        // say (Phase 8). Three closings in a row in the red is bankruptcy,
+        // and the game ends here.
+        window.records?.recordDay();
+        const goals = window.goals?.check();
+        if (window.stakes?.closeDay()) {
+            window.updateUI('finances');
+            window.showGameOverModal?.();
+            return;
+        }
+
         // Show the daily summary, then wait for the user to start next day
+        // (after the winning dialog, the day all goals are reached)
+        const nextDay = (): void => skipToNextDay(gameState);
+        const afterSummary = goals?.won && window.showVictoryModal ? () => window.showVictoryModal(nextDay) : nextDay;
         if (window.showDailySummaryModal) {
-            window.showDailySummaryModal(() => {
-                skipToNextDay(gameState);
-            });
+            window.showDailySummaryModal(afterSummary);
         } else {
             // Fallback if the modal function is missing
-            skipToNextDay(gameState);
+            afterSummary();
         }
     }
 

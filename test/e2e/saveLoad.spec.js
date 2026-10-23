@@ -96,7 +96,10 @@ test('saving writes a real save file, and loading it restores game state', async
   // Frame-loop bookkeeping must not be persisted (C1)
   expect(saved.gameState.lastSimulationTime).toBeUndefined();
   // Only player state for static data (A2)
-  expect(saved.version).toBe(5);
+  expect(saved.version).toBe(6);
+  // The history (Phase 8): no day has closed yet
+  expect(saved.records.days).toEqual([]);
+  expect(Array.isArray(saved.records.visits)).toBe(true);
   // Ids come from a counter saved with the game (M9)
   expect(customerId).toMatch(/^cust-\d+$/);
   expect(saved.gameState.nextId).toBeGreaterThan(Number(customerId.split('-')[1]));

@@ -1263,6 +1263,27 @@ select {
   height: 260px;
 }
 
+/* Something the player must act on (in the red, game over, the win) */
+.callout {
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  border-left: 4px solid currentColor;
+}
+
+.callout.critical {
+  background: var(--critical-bg);
+  color: var(--critical-text);
+}
+
+.callout.good {
+  background: var(--good-bg);
+  color: var(--good-text);
+}
+
+.callout + .definition-grid {
+  margin-top: 10px;
+}
+
 .error-message {
   background: var(--critical-bg);
   color: var(--critical-text);

@@ -59,14 +59,18 @@ test('starting a new game reaches the game screen without console errors', async
 
   // Every page renders through showPage's PageScope (A5) without errors
   const pages = await page.$$eval('.nav-links .nav-item', (items) => items.map((item) => item.id));
-  // Placeholder pages are hidden until they have data behind them (findings U7)
+  // Placeholder pages are hidden until they have data behind them (findings
+  // U7); Dashboard, Customers and Statistics have the history (Phase 8)
   expect(pages).toEqual([
+    'dashboard-nav-item',
     'operations-nav-item',
+    'customers-nav-item',
     'inventory-nav-item',
     'marketplace-nav-item',
     'equipment-nav-item',
     'employees-nav-item',
     'finances-nav-item',
+    'statistics-nav-item',
     'research-nav-item',
     'settings-nav-item',
   ]);

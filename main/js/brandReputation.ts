@@ -23,9 +23,12 @@ window.brandReputation = {
         return Math.floor(base * repFactor * location * research * frequency);
     },
 
+    // Gains shrink as reputation grows: each is scaled by the room left
+    // below 100, so the last points are the hardest to earn. (Flat gains
+    // took a new pharmacy from 10 to about 80 in two days.)
     gainReputation(amount) {
-        this.reputationScore += amount;
-        if (this.reputationScore > 100) this.reputationScore = 100; // or no cap
+        this.reputationScore += amount * (1 - this.reputationScore / 100);
+        if (this.reputationScore > 100) this.reputationScore = 100;
     },
     loseReputation(amount) {
         this.reputationScore -= amount;
