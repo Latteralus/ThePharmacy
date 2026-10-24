@@ -1,6 +1,6 @@
 // /js/pages/operationsPage.js - the live view of the store: who is waiting
 // and how patient they are, what each employee is doing, and the work queue
-// with customer work ahead of restocks.
+// with customer work ahead of compounding for stock.
 
 window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScope): void {
     const kit = window.kit;
@@ -14,8 +14,8 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
     const inStoreTile = kit.statTile('Customers in store');
     const waitingTile = kit.statTile('Customer tasks waiting for staff');
     const idleTile = kit.statTile('Idle staff');
-    const restockTile = kit.statTile('Restocks queued');
-    kpis.append(inStoreTile.root, waitingTile.root, idleTile.root, restockTile.root);
+    const stockTile = kit.statTile('Compounding queued');
+    kpis.append(inStoreTile.root, waitingTile.root, idleTile.root, stockTile.root);
     root.appendChild(kpis);
 
     // --------------------- Customers and staff ---------------------
@@ -52,17 +52,17 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
     staffCard.body.appendChild(staffTable.root);
 
     // --------------------- Work queue ---------------------
-    let showAllRestocks = false;
-    const restockToggle = kit.button(
-        'Show all restocks',
+    let showAllStock = false;
+    const stockToggle = kit.button(
+        'Show all compounding',
         'ghost',
         () => {
-            showAllRestocks = !showAllRestocks;
+            showAllStock = !showAllStock;
             renderQueue();
         },
         { small: true },
     );
-    const queueCard = kit.card('Work queue', { flush: true, actions: [restockToggle] });
+    const queueCard = kit.card('Work queue', { flush: true, actions: [stockToggle] });
     root.appendChild(queueCard.root);
     const queueTable = kit.table([
         { label: 'Task' },
@@ -90,8 +90,15 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         return window.taskManager.tasks.filter((t) => t.status !== 'completed');
     }
 
-    function isRestock(task: Task): boolean {
+    function isForStock(task: Task): boolean {
         return task.type === 'compound' && !task.prescriptionId;
+    }
+
+    // Why a queued compound hasn't started: busy equipment or materials.
+    // ('' when it's only waiting for someone free.)
+    function waitReason(task: Task): string {
+        if (task.type !== 'compound' || task.status !== 'pending') return '';
+        return window.production?.compoundWaitReason(task) ?? '';
     }
 
     function taskCell(task: Task): HTMLElement {
@@ -233,9 +240,15 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
 
     // --------------------- Queue ---------------------
     function queueRow(task: Task): void {
-        const forWhom = isRestock(task) ? 'Stock' : customerName(task.customerId) || '—';
+        const forWhom = isForStock(task) ? 'Stock' : customerName(task.customerId) || '—';
         const status = words.taskStatus(task.status);
-        const statusCell = task.status === 'pending-dependent' ? kit.pill(status, 'warn') : status;
+        const reason = waitReason(task);
+        const statusCell =
+            task.status === 'pending-dependent'
+                ? kit.pill(status, 'warn')
+                : reason
+                  ? kit.primaryCell(status, reason)
+                  : status;
         const progress = task.status === 'inProgress' ? window.taskbars.createProgressBar(task) : '';
         queueTable.row(
             [taskCell(task), forWhom, statusCell, employeeName(task.assignedTo) || '—', progress],
@@ -253,10 +266,10 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         const tasks = activeTasks();
         queueCard.setCount(tasks.length || null);
 
-        const customerWork = tasks.filter((t) => !isRestock(t)).sort(byProgressThenAge);
-        const restocks = tasks.filter(isRestock).sort(byProgressThenAge);
-        restockToggle.style.display = restocks.some((t) => t.status !== 'inProgress') ? '' : 'none';
-        restockToggle.textContent = showAllRestocks ? 'Hide queued restocks' : 'Show all restocks';
+        const customerWork = tasks.filter((t) => !isForStock(t)).sort(byProgressThenAge);
+        const forStock = tasks.filter(isForStock).sort(byProgressThenAge);
+        stockToggle.style.display = forStock.some((t) => t.status !== 'inProgress') ? '' : 'none';
+        stockToggle.textContent = showAllStock ? 'Hide queued compounding' : 'Show all compounding';
 
         if (tasks.length === 0) {
             queueTable.empty('No active tasks at the moment.');
@@ -267,14 +280,17 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         if (customerWork.length === 0) queueTable.empty('Nothing waiting for customers.');
         customerWork.forEach(queueRow);
 
-        if (restocks.length > 0) {
-            queueTable.group(`Restocks · ${restocks.length}`);
-            const running = restocks.filter((t) => t.status === 'inProgress');
-            const queued = restocks.filter((t) => t.status !== 'inProgress');
-            (showAllRestocks ? restocks : running).forEach(queueRow);
-            if (!showAllRestocks && queued.length > 0) {
+        if (forStock.length > 0) {
+            queueTable.group(`Compounding for stock · ${forStock.length}`);
+            const running = forStock.filter((t) => t.status === 'inProgress');
+            const queued = forStock.filter((t) => t.status !== 'inProgress');
+            (showAllStock ? forStock : running).forEach(queueRow);
+            if (!showAllStock && queued.length > 0) {
                 const names = queued.map((t) => t.productName).filter(Boolean);
-                const summary = `${queued.length} queued: ${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''}`;
+                const reasons = [...new Set(queued.map(waitReason).filter(Boolean))];
+                const summary =
+                    `${queued.length} queued: ${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''}` +
+                    (reasons.length ? ` · ${reasons.join('; ')}` : '');
                 queueTable.note(summary);
             }
         }
@@ -287,7 +303,7 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         inStoreTile.set(fmt.int(customers.length), ready > 0 ? `${ready} ready to pay` : '');
 
         const tasks = activeTasks();
-        const waiting = tasks.filter((t) => !isRestock(t) && t.status === 'pending');
+        const waiting = tasks.filter((t) => !isForStock(t) && t.status === 'pending');
         const blocked = tasks.filter((t) => t.status === 'pending-dependent').length;
         waitingTile.set(
             fmt.int(waiting.length),
@@ -303,9 +319,9 @@ window.renderOperationsPage = function (mainContent: HTMLElement, page: PageScop
         ].filter(Boolean);
         idleTile.set(`${idle} of ${working}`, notes.join(' · '));
 
-        const restocks = tasks.filter(isRestock);
-        const running = restocks.filter((t) => t.status === 'inProgress').length;
-        restockTile.set(fmt.int(restocks.length), running > 0 ? `${running} being made` : '');
+        const forStock = tasks.filter(isForStock);
+        const running = forStock.filter((t) => t.status === 'inProgress').length;
+        stockTile.set(fmt.int(forStock.length), running > 0 ? `${running} being made` : '');
     }
 
     function renderAll(): void {

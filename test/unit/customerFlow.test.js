@@ -440,7 +440,7 @@ describe('compounding takes materials for the whole batch (H2)', () => {
     expect(product().inventory).toBe(3);
   });
 
-  test('a restock waits for a lab technician, so the pharmacist stays free to consult', () => {
+  test("a customer's compound goes to the pharmacist ahead of compounding for stock", () => {
     loadGame({ stock: 0, employees: [employee(CASHIER, 'Cashier'), employee(PHARMACIST, 'Pharmacist')] });
     const restock = window.production.createCompoundTask(product(), 5);
     const customer = window.customers.generateCustomer();

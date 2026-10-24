@@ -154,6 +154,22 @@ window.production = (function (): ProductionApi {
         return !!compound.materialsTaken || startableQuantity(compound, product) >= 1;
     }
 
+    // Why a queued compound hasn't started, for the Operations page:
+    // "Waiting for Tablet Press, Powder Blender" (in use), "Waiting for
+    // materials", or '' if it could start now (it's waiting for someone free).
+    function compoundWaitReason(compound: Task): string {
+        const product = window.productsData.find((p) => p.id === compound.productId);
+        if (!product) return '';
+        if (!canMake(product)) {
+            const text = missingEquipmentText(product);
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+        const busy = equipmentFor(product).filter((item) => inUse(item) >= item.owned * item.capacity);
+        if (busy.length) return `Waiting for ${busy.map((item) => item.name).join(', ')}`;
+        if (!compound.materialsTaken && startableQuantity(compound, product) < 1) return 'Waiting for materials';
+        return '';
+    }
+
     // Takes the whole batch's materials out of inventory when someone starts
     // the compound, so two compounds can't both count on the same stock and
     // inventory can't go negative (H2). True if it already holds them.
@@ -332,6 +348,7 @@ window.production = (function (): ProductionApi {
         repairEquipment,
         addEquipment,
         canStartCompound,
+        compoundWaitReason,
         takeMaterials,
         returnMaterials,
         createCompoundTask, // Expose this if you need to manually create compound tasks

@@ -124,6 +124,9 @@ interface ProductionApi {
     // Compound tasks: whether it could start now (its equipment owned,
     // working and free, and it holds its materials or they're on hand).
     canStartCompound: (compound: Task) => boolean;
+    // Compound tasks: why it hasn't started ("Waiting for Tablet Press",
+    // "Waiting for materials"), or '' if it could start now.
+    compoundWaitReason: (compound: Task) => string;
     // Compound tasks: takes the batch's materials out of inventory (true),
     // shrinking a restock to what the materials cover, or returns false if
     // it can't start. True if it already holds them.

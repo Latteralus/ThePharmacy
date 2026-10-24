@@ -219,7 +219,9 @@ describe('the UI kit (U5, 9.1)', () => {
     expect(words.customerStage('waitingForFill').label).toBe('Waiting for prescription');
     expect(words.taskLabel({ type: 'customerInteraction', interaction: 'checkout' })).toBe('Checkout');
     expect(words.taskLabel({ type: 'customerInteraction', interaction: 'checkIn' })).toBe('Check-in');
-    expect(words.taskLabel({ type: 'compound', productName: 'Aspirin', quantityToMake: 5 })).toBe('Restock Aspirin ×5');
+    expect(words.taskLabel({ type: 'compound', productName: 'Aspirin', quantityToMake: 5 })).toBe(
+      'Compound Aspirin ×5',
+    );
     expect(words.taskLabel({ type: 'compound', productName: 'Aspirin', prescriptionId: 'p', quantityNeeded: 2 })).toBe(
       'Compound Aspirin ×2',
     );
@@ -459,7 +461,7 @@ describe('the Operations page', () => {
     expect(text()).not.toContain('Ada Lovelace');
   });
 
-  test('puts customer work ahead of restocks and folds queued restocks into one line (U8, U9)', () => {
+  test('puts customer work ahead of compounding for stock and folds the queued batches into one line (U8, U9)', () => {
     window.customers.activeCustomers.push(customer);
     window.showPage('operations');
     window.taskManager.tasks.push(
@@ -491,9 +493,9 @@ describe('the Operations page', () => {
     expect(text()).toContain('2 queued: Metformin, Omeprazole');
     expect(text()).not.toContain('consult-cust-1');
 
-    [...main().querySelectorAll('button')].find((b) => b.textContent === 'Show all restocks').click();
+    [...main().querySelectorAll('button')].find((b) => b.textContent === 'Show all compounding').click();
     expect(main().querySelectorAll('.task-entry')).toHaveLength(3);
-    expect(text()).toContain('Restock Metformin ×5');
+    expect(text()).toContain('Compound Metformin ×5');
   });
 });
 

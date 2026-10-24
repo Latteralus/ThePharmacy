@@ -137,7 +137,7 @@ window.renderInventoryPage = function (mainContent: HTMLElement, page: PageScope
         liveFields = [];
         const table = kit.table([
             { label: 'Product' },
-            { label: 'Stock', width: '150px', title: 'In stock / target. Lab technicians restock up to the target.' },
+            { label: 'Stock', width: '150px', title: 'In stock / target. The lab compounds up to the target.' },
             { label: 'Target', num: true },
             { label: 'Cost', num: true, title: 'Materials for one unit at list price' },
             { label: 'Market', num: true, title: 'What customers expect to pay' },

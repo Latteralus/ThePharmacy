@@ -130,7 +130,7 @@ window.taskAssignment = (function (): TaskAssignmentApi {
      * 3) Consultation
      * 4) fillPrescription
      * 5) compound for a waiting customer's prescription
-     * 6) restock compound
+     * 6) compound for stock (restocks, Quick Compound)
      * 7) production
      */
     function sortTasksByPriority(unassignedTasks: Task[]): Task[] {
@@ -218,9 +218,6 @@ window.taskAssignment = (function (): TaskAssignmentApi {
         const availableEmployees = window.employeesData.filter(
             (emp) => !emp.currentTaskId && (window.employees?.canTakeWork(emp) ?? true),
         );
-        if (availableEmployees.length === 0) {
-            return;
-        }
 
         // First, handle prioritized tasks for Cashiers
         const cashiers = availableEmployees.filter((emp) => emp.role === 'Cashier');
@@ -247,16 +244,13 @@ window.taskAssignment = (function (): TaskAssignmentApi {
         // Eligible tasks the checkout pass didn't take
         const remainingTasks = unassignedTasks.filter((t) => !t.assignedTo && t.status === 'pending');
 
-        if (remainingTasks.length === 0 || availableEmployees.length === 0) {
-            return; // Exit if no more tasks or employees
-        }
-
         // Sort tasks by priority
         const prioritizedTasks = sortTasksByPriority(remainingTasks);
 
         for (const task of prioritizedTasks) {
-            // Try to find the best employee for this task
-            const employee = findBestEmployeeForTask(task, availableEmployees);
+            // The best free employee for this task, or a pharmacist
+            // pulled off compounding for stock
+            const employee = findBestEmployeeForTask(task, availableEmployees) ?? pullFillIn(task);
 
             // A compound whose materials an earlier compound in this round
             // just took fails here, and the employee stays free.
@@ -266,13 +260,35 @@ window.taskAssignment = (function (): TaskAssignmentApi {
                 if (index > -1) {
                     availableEmployees.splice(index, 1);
                 }
-
-                // Stop if we run out of employees
-                if (availableEmployees.length === 0) {
-                    break;
-                }
             }
         }
+    }
+
+    // Compounding for stock (a restock or Quick Compound), not for a customer
+    function isStockCompound(task: Task): boolean {
+        return task.type === 'compound' && !task.prescriptionId;
+    }
+
+    /**
+     * Pharmacists compound for stock only to fill idle time. Customer work
+     * with nobody free takes one of them off it; the batch goes back in the
+     * queue with its progress and materials, for a lab technician or
+     * whoever is free next.
+     */
+    function pullFillIn(task: Task): Employee | null {
+        if (isStockCompound(task)) return null;
+        const fillIns = window.employeesData.filter((emp) => {
+            if (emp.role !== 'Pharmacist' || !emp.currentTaskId) return false;
+            const current = window.taskManager.tasks.find((t) => t.id === emp.currentTaskId);
+            return !!current && isStockCompound(current) && (window.employees?.canTakeWork(emp) ?? true);
+        });
+        const employee = findBestEmployeeForTask(task, fillIns);
+        if (!employee) return null;
+        console.log(
+            `[autoAssignTasks] Taking ${employee.firstName} ${employee.lastName} off ${employee.currentTaskId} for ${task.id}`,
+        );
+        unassignTask(employee.currentTaskId!);
+        return employee;
     }
 
     /**
@@ -340,11 +356,11 @@ window.taskAssignment = (function (): TaskAssignmentApi {
             case 'fillPrescription':
                 return ['Lab Technician', 'Pharmacist'];
             case 'compound':
-                // Restocking (and Quick Compound) is lab work only. A batch
-                // can take the better part of an hour, and a pharmacist on
-                // one leaves every customer waiting for a consultation. A
-                // customer's own compound can still go to a pharmacist.
-                return task.prescriptionId ? ['Lab Technician', 'Pharmacist'] : ['Lab Technician'];
+                // An idle pharmacist helps with compounding for stock. A
+                // batch can take the better part of an hour, so customer
+                // work takes them off it (pullFillIn) rather than waiting
+                // for it to finish.
+                return ['Lab Technician', 'Pharmacist'];
             case 'production':
                 return ['Lab Technician', 'Pharmacist'];
             default:

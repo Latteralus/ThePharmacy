@@ -146,7 +146,7 @@ describe('realistic role limits (#3)', () => {
     expect(roles({ type: 'consultation' })).toEqual(['Pharmacist']);
     expect(roles({ type: 'fillPrescription' })).toEqual(['Lab Technician', 'Pharmacist']);
     expect(roles({ type: 'compound', prescriptionId: 'pres-1' })).toEqual(['Lab Technician', 'Pharmacist']);
-    expect(roles({ type: 'compound' })).toEqual(['Lab Technician']); // a restock
+    expect(roles({ type: 'compound' })).toEqual(['Lab Technician', 'Pharmacist']); // for stock
     expect(roles({ type: 'something new' })).toEqual([]);
   });
 
@@ -163,7 +163,7 @@ describe('realistic role limits (#3)', () => {
     expect(staff(CASHIER).currentTaskId).toBeNull();
   });
 
-  test('a pharmacist fills when no lab technician is free, but never restocks', () => {
+  test('a pharmacist fills when no lab technician is free, and compounds for stock only when idle', () => {
     loadGame({ employees: [employee(PHARMACIST, 'Pharmacist')], stock: 5 });
     const customer = window.customers.generateCustomer();
     const fill = task(`fill-${customer.prescriptionId}`);
@@ -171,6 +171,41 @@ describe('realistic role limits (#3)', () => {
     run(4); // check-in (anyone can), then the consultation or the fill
     expect([fill.assignedTo, task(`consult-${customer.id}`)?.assignedTo]).toContain(PHARMACIST);
     expect(r.assignedTo).toBeNull();
+  });
+
+  test('customer work takes a pharmacist off compounding for stock, and the batch keeps its progress', () => {
+    loadGame({ employees: [employee(PHARMACIST, 'Pharmacist')], stock: 5 });
+    const r = restock();
+    run(2);
+    expect(r.assignedTo).toBe(PHARMACIST);
+    const progress = r.progress;
+
+    window.customers.generateCustomer();
+    run(1 / 60);
+    expect(staff(PHARMACIST).currentTaskId).not.toBe(r.id);
+    expect(r).toMatchObject({ status: 'pending', assignedTo: null, materialsTaken: true });
+    expect(r.progress).toBeCloseTo(progress, 1); // plus the second it worked first
+  });
+
+  test('a batch says what it is waiting for', () => {
+    loadGame({ employees: [employee('a', 'Lab Technician'), employee('b', 'Lab Technician')] });
+    const first = restock();
+    const second = restock();
+    run(1 / 60);
+    expect(first.status).toBe('inProgress');
+    expect(second.status).toBe('pending'); // one Tablet Press, one batch at a time
+    expect(window.production.compoundWaitReason(second)).toBe(
+      'Waiting for Mortar and Pestle, Tablet Press, Powder Blender',
+    );
+  });
+
+  test('a lab technician takes compounding for stock ahead of a pharmacist', () => {
+    loadGame();
+    const r = restock();
+    run(1 / 60);
+    expect(r.assignedTo).toBe(LAB_TECH);
+    expect(staff(PHARMACIST).currentTaskId).toBeNull();
+    expect(staff(CASHIER).currentTaskId).toBeNull();
   });
 });
 

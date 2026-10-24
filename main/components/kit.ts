@@ -107,7 +107,7 @@ const EXPENSE_CATEGORIES = [
                 case 'compound': {
                     const qty = task.quantityToMake ?? task.quantityNeeded;
                     const units = qty ? ` ×${qty}` : '';
-                    return task.prescriptionId ? `Compound ${product}${units}` : `Restock ${product}${units}`;
+                    return `Compound ${product}${units}`;
                 }
                 case 'fillPrescription':
                     return `Fill ${product}`;

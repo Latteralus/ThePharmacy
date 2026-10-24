@@ -323,7 +323,8 @@ function renderEmployeesPage(mainContent: HTMLElement, page: PageScope): void {
             'p',
             'small muted',
             `Posting costs ${fmt.moneyWhole(HIRING_FEE)} whether or not you hire, and shows five candidates. ` +
-                'Pharmacists consult, lab technicians restock and compound, cashiers run the front desk. ' +
+                'Pharmacists consult, lab technicians fill and compound, cashiers run the front desk. ' +
+                'An idle pharmacist helps compound for stock. ' +
                 'More skilled staff work faster.',
         ),
     );
