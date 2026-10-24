@@ -541,14 +541,15 @@ describe('migrating v1 saves', () => {
     expect(window.customers.reconcileTasks).toHaveBeenCalledTimes(1);
   });
 
-  test("loading cancels the current session's customers who haven't arrived yet", () => {
+  test("a mid-hour save keeps the hour's customers who haven't arrived yet, not the session's", () => {
     playABit();
+    const now = window.gameState.currentDate.getTime();
+    window.gameState.customerArrivals = [now + 60000, now + 20 * 60000];
     const save = throughDisk(window.saveFile.serialize());
     loadModules();
-    window.timeEvents = { cancelPendingArrivals: jest.fn() };
+    window.gameState.customerArrivals = [now + 5000];
     window.saveFile.apply(save);
-    expect(window.timeEvents.cancelPendingArrivals).toHaveBeenCalledTimes(1);
-    delete window.timeEvents;
+    expect(window.gameState.customerArrivals).toEqual([now + 60000, now + 20 * 60000]);
   });
 
   test('rejects something that is not a save, or a save from a newer game', () => {

@@ -406,8 +406,7 @@ describe('the front door (#8)', () => {
     window.timeEvents.setFrontOpen(true);
     expect(window.gameState.frontClosedAt).toBeUndefined();
     window.timeEvents.hourlyCheck(window.gameState, 10);
-    run(5);
-    expect(window.customers.activeCustomers.length).toBeGreaterThan(0);
+    expect(window.gameState.customerArrivals.length).toBeGreaterThan(0);
 
     window.gameState.currentDate.setHours(15, 30, 0, 0);
     window.timeEvents.setFrontOpen(false);
@@ -518,16 +517,16 @@ describe('game speeds (#49)', () => {
 });
 
 describe('last entry an hour before closing (#50)', () => {
-  test('the 20:00 batch is the last', () => {
+  test("the 20:00 hour's customers are the last", () => {
     loadGame({ stock: 100 });
     window.gameState.currentDate.setHours(21, 0, 0, 0);
     window.timeEvents.hourlyCheck(window.gameState, 21);
-    run(5);
-    expect(window.customers.activeCustomers).toHaveLength(0);
+    expect(window.gameState.customerArrivals ?? []).toHaveLength(0);
 
     window.gameState.currentDate.setHours(20, 0, 0, 0);
     window.timeEvents.hourlyCheck(window.gameState, 20);
-    run(5);
-    expect(window.customers.activeCustomers.length).toBeGreaterThan(0);
+    const arrivals = window.gameState.customerArrivals;
+    expect(arrivals.length).toBeGreaterThan(0);
+    expect(Math.max(...arrivals)).toBeLessThan(new Date(2023, 0, 2, 21, 0).getTime());
   });
 });

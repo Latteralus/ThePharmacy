@@ -91,6 +91,7 @@ window.ui = (function (): UiApi {
         if (!window.financesData) return;
         show('currentCash', window.fmt.money(window.financesData.cash));
         show('dailyIncome', window.fmt.money(window.financesData.dailyIncome));
+        show('dailyInsurance', window.fmt.money(window.financesData.dailyInsurance));
         show('pendingInsurance', window.fmt.money(window.financesData.pendingInsuranceIncome));
     }
 

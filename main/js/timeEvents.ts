@@ -8,20 +8,13 @@ window.timeEvents = (function (): TimeEventsApi {
     const CONFIG: TimeEventsConfig = {
         OPENING_HOUR: 7, // Day starts at 7 AM
         CLOSING_HOUR: 22, // Day ends at 10 PM
-        // Last entry an hour before closing (#50): the 20:00 batch is the
-        // last, so everyone who comes in can be served before 22:00. Phase 14
+        // Last entry an hour before closing (#50): the 20:00 hour's customers
+        // are the last, so everyone who comes in can be served before 22:00. Phase 14
         // makes this each location's opening hours.
         LAST_ENTRY_HOUR: 21,
     };
 
-    // Game minutes between the customers of one hourly batch (was 500 ms of
-    // real time, which is half a game minute at 1x).
-    const CUSTOMER_ARRIVAL_SPACING_MINUTES = 0.5;
-
-    // Clock jobs for this hour's customers who haven't arrived yet. Loading
-    // a save cancels them (cancelPendingArrivals), so the old session's
-    // customers don't walk into the loaded game.
-    const pendingArrivals = new Set<number>();
+    const HOUR_MS = 60 * 60 * 1000;
 
     // The day the player was last told storage was too full to auto-order
     // (once a day)
@@ -135,6 +128,8 @@ window.timeEvents = (function (): TimeEventsApi {
     function closeDay(gameState: GameState): void {
         if (!gameState.isDayActive) return;
         gameState.isDayActive = false; // Stop advancing time
+        // Nobody still due this hour (End day mid-hour) walks in tomorrow
+        cancelPendingArrivals();
         if (gameState.lastEndedDayIndex === gameState.dayIndex) {
             skipToNextDay(gameState);
         } else {
@@ -299,7 +294,11 @@ window.timeEvents = (function (): TimeEventsApi {
     }
 
     // ---------------------------------------------------------
-    // Basic spawn logic for new customers each hour
+    // This hour's customers: how many is decided at the top of the hour,
+    // and each gets its own random arrival time within it, so they wander
+    // in over the hour instead of all at once. The times are kept on
+    // gameState (saved), and admitArrivals lets each customer in as their
+    // time comes.
     // ---------------------------------------------------------
     function spawnCustomersForHour(hour: number): void {
         // Skip if customers module isn't available
@@ -318,19 +317,30 @@ window.timeEvents = (function (): TimeEventsApi {
 
         console.log(`[timeEvents] Spawning ${count} customers for hour ${hour}`);
 
+        const start = window.clock.now();
+        const arrivals = window.gameState.customerArrivals ?? [];
         for (let i = 0; i < count; i++) {
-            // Space the arrivals out so they don't all walk in at once
-            const job = window.clock.after(i * CUSTOMER_ARRIVAL_SPACING_MINUTES, () => {
-                pendingArrivals.delete(job);
-                window.customers.generateCustomer();
-            });
-            pendingArrivals.add(job);
+            arrivals.push(start + Math.random() * HOUR_MS);
         }
+        arrivals.sort((a, b) => a - b);
+        window.gameState.customerArrivals = arrivals;
     }
 
+    // Lets in everyone whose arrival time has come. Checked every game
+    // second on the clock, so it stops while paused and between days.
+    function admitArrivals(): void {
+        const arrivals = window.gameState?.customerArrivals;
+        if (!arrivals?.length || !window.customers?.generateCustomer) return;
+        const now = window.clock.now();
+        while (arrivals.length > 0 && arrivals[0] <= now) {
+            arrivals.shift();
+            window.customers.generateCustomer();
+        }
+    }
+    window.clock.every(1 / 60, admitArrivals);
+
     function cancelPendingArrivals(): void {
-        pendingArrivals.forEach((job) => window.clock.cancel(job));
-        pendingArrivals.clear();
+        if (window.gameState) window.gameState.customerArrivals = [];
     }
 
     // ---------------------------------------------------------

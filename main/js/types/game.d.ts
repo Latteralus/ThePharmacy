@@ -58,6 +58,10 @@ interface GameState {
     frontClosedAt?: number;
     // Game time (ms) the player ended the day early (End day)
     closedEarlyAt?: number;
+    // Game times (ms, ascending) this hour's customers who haven't walked in
+    // yet will arrive. Saved, so a mid-hour save keeps the rest of the hour.
+    // Missing in older saves and before the first hour's arrivals.
+    customerArrivals?: number[];
 }
 
 // Options passed from the new-game form, through gameAPI, to
@@ -101,7 +105,8 @@ interface TimeEventsApi {
     minuteCheck: (gameState: GameState) => void;
     hourlyCheck: (gameState: GameState, hour: number) => void;
     spawnCustomersForHour: (hour: number) => void;
-    // Cancels this hour's arrivals that haven't happened yet (used on load).
+    // Cancels this hour's arrivals that haven't happened yet (front closed,
+    // day over).
     cancelPendingArrivals: () => void;
     autoOrderCheck: () => void;
     autoPurchaseEquipmentCheck: () => void;

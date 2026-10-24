@@ -99,9 +99,9 @@ describe('change announcements', () => {
   test('finances and time redraw the top bar with formatted money and the clock', () => {
     document.body.insertAdjacentHTML(
       'afterbegin',
-      '<span id="currentCash"></span><span id="dailyIncome"></span><span id="pendingInsurance"></span><span id="gameTime"></span><span id="gameDay"></span>',
+      '<span id="currentCash"></span><span id="dailyIncome"></span><span id="dailyInsurance"></span><span id="pendingInsurance"></span><span id="gameTime"></span><span id="gameDay"></span>',
     );
-    window.financesData = { cash: 1234.5, dailyIncome: 10, pendingInsuranceIncome: 2 };
+    window.financesData = { cash: 1234.5, dailyIncome: 10, dailyInsurance: 3, pendingInsuranceIncome: 2 };
 
     window.updateUI('finances');
     window.ui.updateTime();
@@ -109,6 +109,7 @@ describe('change announcements', () => {
 
     expect(document.getElementById('currentCash').textContent).toBe('$1,234.50');
     expect(document.getElementById('dailyIncome').textContent).toBe('$10.00');
+    expect(document.getElementById('dailyInsurance').textContent).toBe('$3.00');
     expect(document.getElementById('pendingInsurance').textContent).toBe('$2.00');
     expect(document.getElementById('gameTime').textContent).toBe('09:00');
     expect(document.getElementById('gameDay').textContent).toBe('Day 2 · Mon, Jan 2');
@@ -502,7 +503,12 @@ describe('the Operations page', () => {
 describe('the top bar (U1, U2)', () => {
   beforeEach(() => {
     loadUi();
-    window.financesData = { cash: 101905.65, dailyIncome: 1905.65, pendingInsuranceIncome: 1295 };
+    window.financesData = {
+      cash: 101905.65,
+      dailyIncome: 1905.65,
+      dailyInsurance: 412.5,
+      pendingInsuranceIncome: 1295,
+    };
     window.company.name = 'Barnett Family Pharmacy';
     let speed = 1;
     window.getGameSpeed = () => speed;
@@ -522,6 +528,9 @@ describe('the top bar (U1, U2)', () => {
     expect(bar.textContent).toContain('Barnett Family Pharmacy');
     expect(bar.textContent).toContain('Cash');
     expect(document.getElementById('currentCash').textContent).toBe('$101,905.65');
+    expect(bar.textContent).toContain('Insurance today');
+    expect(document.getElementById('dailyInsurance').textContent).toBe('$412.50');
+    expect(bar.textContent).toContain('Total insurance owed');
     expect(document.getElementById('storeStatus').textContent).toBe('Open');
   });
 

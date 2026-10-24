@@ -201,8 +201,14 @@ window.renderTopBar = function renderTopBar(): HTMLElement {
     figure('currentCash', 'Cash', window.financesData.cash, 'Cash on hand');
     figure('dailyIncome', 'Income today', window.financesData.dailyIncome, 'Everything taken in since opening');
     figure(
+        'dailyInsurance',
+        'Insurance today',
+        window.financesData.dailyInsurance,
+        'Claimed from insurers today. Paid on payday, every other week.',
+    );
+    figure(
         'pendingInsurance',
-        'Insurance owed',
+        'Total insurance owed',
         window.financesData.pendingInsuranceIncome,
         'Claims filed and not yet paid by insurers',
     );

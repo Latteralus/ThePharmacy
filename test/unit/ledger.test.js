@@ -221,6 +221,9 @@ describe('insurance claims', () => {
     expect(data.revenueCategories.insurance).toBe(0);
     expect(data.pendingInsuranceIncome).toBeCloseTo(total * 0.8);
     expect(data.insuranceReimbursements.pending).toBeCloseTo(total * 0.8);
+    // Claimed today, but not income today
+    expect(data.dailyInsurance).toBeCloseTo(total * 0.8);
+    expect(data.dailyIncome).toBeCloseTo(total * 0.2);
     // No "pending" income in the log: only money that arrived.
     expect(data.transactions.filter((t) => t.type === 'income')).toHaveLength(1);
 
@@ -332,12 +335,14 @@ describe('period rollover', () => {
 
   test('a new day resets "today" but not the week or month', () => {
     earn(100);
+    window.financesData.dailyInsurance = 40;
     window.finances.startNewDay(new Date(2023, 0, 2), new Date(2023, 0, 3)); // Mon -> Tue
 
     const { revenue, profit } = window.financesData;
     expect(revenue.today).toBe(0);
     expect(profit.today).toBe(0);
     expect(window.financesData.dailyIncome).toBe(0);
+    expect(window.financesData.dailyInsurance).toBe(0);
     expect(revenue.thisWeek).toBe(100);
     expect(revenue.thisMonth).toBe(100);
     expect(revenue.total).toBe(100);

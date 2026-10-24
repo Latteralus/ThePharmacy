@@ -49,6 +49,7 @@ function overtimePay(employee: Employee): number {
 window.financesData = {
     cash: 10000,
     dailyIncome: 0,
+    dailyInsurance: 0,
     pendingInsuranceIncome: 0,
     pendingOrders: 0,
     completedOrders: 0,
@@ -495,6 +496,7 @@ window.finances = {
     // Reset daily stats (called at start of day)
     resetDailyStats() {
         window.financesData.dailyIncome = 0;
+        window.financesData.dailyInsurance = 0;
         window.financesData.revenue.today = 0;
         window.financesData.expenses.today = 0;
         window.financesData.profit.today = 0;

@@ -82,6 +82,9 @@ interface Transaction extends TransactionInput {
 interface FinancesData {
     cash: number;
     dailyIncome: number;
+    // Claimed from insurers today (insuranceClaims.addClaim). Not income
+    // until payday, so it isn't in dailyIncome.
+    dailyInsurance: number;
     pendingInsuranceIncome: number;
     pendingOrders: number;
     completedOrders: number;

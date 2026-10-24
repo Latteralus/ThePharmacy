@@ -79,6 +79,7 @@ window.insuranceClaims = {
 
         this.pendingClaims.push(claim);
         adjustPending(claim.amountDue);
+        window.financesData.dailyInsurance += claim.amountDue;
         console.log(
             `[insuranceClaims.js] New claim added: ${claim.id} for ${insurancePlan.planName}, amount: $${claim.amountDue.toFixed(2)}`,
         );
@@ -144,6 +145,9 @@ window.insuranceClaims = {
             const claim = this.pendingClaims[index];
 
             adjustPending(-claim.amountDue);
+            if (claim.submittedDate.toDateString() === window.gameState.currentDate.toDateString()) {
+                window.financesData.dailyInsurance -= claim.amountDue;
+            }
 
             // Remove from pending
             this.pendingClaims.splice(index, 1);

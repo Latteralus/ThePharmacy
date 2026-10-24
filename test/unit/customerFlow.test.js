@@ -679,18 +679,39 @@ describe('loose ends from earlier phases', () => {
     expect(window.gameState.customersToday).toEqual({});
   });
 
-  test("loading a save cancels the old session's customers who haven't arrived yet", () => {
+  test("this hour's customers wander in at their own times through the hour", () => {
     loadGame();
     require('../../build/main/js/timeEvents.js');
     window.brandReputation.calcCustomers = () => 3;
+    const arrived = jest.spyOn(window.customers, 'generateCustomer');
+
+    // No extra customer, then arrivals 30, 6 and 54 minutes into the hour
+    const random = jest.spyOn(Math, 'random');
+    random.mockReturnValueOnce(0).mockReturnValueOnce(0.5).mockReturnValueOnce(0.1).mockReturnValueOnce(0.9);
+    window.timeEvents.spawnCustomersForHour(9);
+    random.mockRestore();
+
+    run(5, { autoAssign: false });
+    expect(arrived).toHaveBeenCalledTimes(0);
+    run(2, { autoAssign: false }); // 0:07
+    expect(arrived).toHaveBeenCalledTimes(1);
+    run(25, { autoAssign: false }); // 0:32
+    expect(arrived).toHaveBeenCalledTimes(2);
+    run(25, { autoAssign: false }); // 0:57
+    expect(arrived).toHaveBeenCalledTimes(3);
+    expect(window.gameState.customerArrivals).toEqual([]);
+  });
+
+  test("cancelling stops the hour's customers who haven't arrived yet", () => {
+    loadGame();
+    require('../../build/main/js/timeEvents.js');
+    window.brandReputation.calcCustomers = () => 3;
+    const arrived = jest.spyOn(window.customers, 'generateCustomer');
 
     window.timeEvents.spawnCustomersForHour(9);
-    run(0.25, { autoAssign: false });
-    expect(window.customers.activeCustomers).toHaveLength(1); // spaced half a minute apart
-
     window.timeEvents.cancelPendingArrivals();
-    run(5, { autoAssign: false });
-    expect(window.customers.activeCustomers).toHaveLength(1);
+    run(60, { autoAssign: false });
+    expect(arrived).not.toHaveBeenCalled();
   });
 });
 

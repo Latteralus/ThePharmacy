@@ -46,6 +46,7 @@ window.initializeNewGame = function (gameOptions: NewGameOptions): boolean {
         window.financesData = {
             cash: startingCash,
             dailyIncome: 0,
+            dailyInsurance: 0,
             pendingInsuranceIncome: 0,
             pendingOrders: 0,
             completedOrders: 0,

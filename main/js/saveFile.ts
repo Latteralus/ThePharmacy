@@ -429,6 +429,8 @@ window.saveFile = (function (): SaveFileApi {
         };
         const company = save.company;
         window.financesData = company.finances;
+        // Saves from before the top bar showed it
+        window.financesData.dailyInsurance ??= 0;
 
         // Merge rather than replace, so the module's methods survive.
         window.brandReputation.reputationScore = company.reputation;
@@ -438,10 +440,6 @@ window.saveFile = (function (): SaveFileApi {
             currentLevel: company.research.currentLevel,
             inProgress: company.research.inProgress,
         };
-
-        // Customers the current session has scheduled to arrive belong to
-        // it, not to the loaded game.
-        window.timeEvents?.cancelPendingArrivals();
 
         // Every location's lists, with the per-location globals (employeesData,
         // productsData, taskManager.tasks, ...) viewing the active one's
